@@ -139,3 +139,4 @@ out
 
 # Ignore text files
 *.txt
+dist-sidebyside/

@@ -64,7 +64,8 @@
     "start": "rollup -c rollup.config.dev.js --watch",
     "build": "npm run lint && npm run rollup",
     "lint": "eslint src/*.ts",
-    "rollup": "rollup -c"
+    "rollup": "rollup -c && node scripts/copy-decoders.js",
+    "sidebyside": "node scripts/make-sidebyside.js"
   },
   "overrides": {
     "tslib": "2.6.2"

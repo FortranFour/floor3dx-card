@@ -243,9 +243,9 @@ It does not change the UI; it simply activates a lighter, deterministic **render
 
 When enabled, the renderer switches to mobile‑friendly settings:
 
-- **Pixel ratio clamp** → forces `pixelRatio = 1` to reduce GPU load  
+- **Adaptive pixel ratio** → renders at `pixelRatio = 1` only while the camera is being dragged, then redraws one full‑resolution frame about 160 ms after it stops (`pixel_ratio: 1` restores the old permanent clamp)  
 - **Shadow tier reduction** → uses `BasicShadowMap` instead of PCF soft shadows  
-- **Antialias control** → disables expensive multisample antialiasing  
+- **Antialias control** → disables multisample antialiasing on screens with `devicePixelRatio >= 2`, where it is not visible; keeps it on lower‑density screens (`antialias: 'yes' | 'no'` overrides)  
 
 These adjustments apply only to rendering.  
 Mobile mode does **not** modify entity logic, interactions, editor behavior, UI layout, or logging features.  
@@ -256,6 +256,62 @@ Desktop behavior remains unchanged when the skill is disabled.
 ```yaml
 Pro_skill: mobile
 ```
+
+---
+
+### Compressed Models and Render Quality
+
+---
+
+**Compressed glTF.** `objfile` accepts `.glb` and `.gltf` files using any of these extensions. The card reads the file header and sets up only the decoders the model declares, so plain models load exactly as before.
+
+| Extension | What it compresses | Decoder |
+|---|---|---|
+| `KHR_draco_mesh_compression` | geometry | `dist/draco/` (worker pool) |
+| `EXT_meshopt_compression` + `KHR_mesh_quantization` | geometry, animation | bundled in the card, no extra files |
+| `EXT_texture_webp` | textures (download size) | browser native |
+| `KHR_texture_basisu` (KTX2) | textures (download size and GPU memory) | `dist/basis/` (worker pool) |
+
+Decoder folders are resolved in this order: the `draco_path` / `basis_path` option, then a `draco/` or `basis/` folder next to `floor3dpro-card.js`, then jsDelivr. For an installation with no internet dependency, copy `dist/draco/` and `dist/basis/` next to the card file (for a manual install, `/config/www/community/floor3dpro-card/`), or point the options at wherever you keep them:
+
+```yaml
+draco_path: /local/draco/
+basis_path: /local/basis/
+```
+
+Compress with tools that keep node names, because the card binds entities to object names:
+
+```bash
+gltf-transform webp   home.glb  tmp.glb      # optional: textures first
+gltf-transform draco  tmp.glb   home-draco.glb
+# or
+gltf-transform meshopt tmp.glb  home-meshopt.glb
+```
+
+Do **not** use `gltf-transform optimize` or `gltfpack` without `-kn`: their join/flatten/merge steps rename or remove the objects your entities refer to.
+
+**Render quality options**
+
+| Option | Values | Default |
+|---|---|---|
+| `pixel_ratio` | `device`, `adaptive`, or a number | `device` (`adaptive` when `Pro_skill: mobile`) |
+| `antialias` | `yes`, `no` | `yes` (see mobile profile above) |
+| `anisotropy` | `1`–`16` | `8` |
+
+**One light for a multi-part fixture.** A `type3d: light` entry creates one light per object in its `object_id` group, and every light costs GPU time on every frame, lit or not. `light_object` keeps the whole group clickable (click-to-toggle) but creates a single light on the named object, which may be a member of the group or any other object in the model:
+
+```yaml
+- entity: switch.closet
+  type3d: light
+  object_id: <frcloset>          # all four strips toggle the switch when clicked
+  light:
+    light_object: Fluorescent_strip_2   # only this one emits light
+    lumens: '900'
+```
+
+The canvas now tracks its container in every view type (previously only panel and sidebar views), so a card that finishes loading while hidden or before layout settles no longer keeps a small stretched drawing buffer. It also redraws when `devicePixelRatio` changes (browser zoom, moving the window to another monitor).
+
+With `Pro_log: engine`, each load reports file size, download time, decode time, and the extensions found.
 
 ---
 

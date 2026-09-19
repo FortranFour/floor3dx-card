@@ -852,7 +852,7 @@ When `Pro_skill: mobile` is active, the renderer switches into a mobile executio
 High devicePixelRatio values increase GPU load on mobile hardware.  
 Mobile mode enforces:
 
-- Mobile → `pixelRatio = 1`  
+- Mobile → `pixelRatio = 1` while the camera is dragged, full device ratio at rest (`pixel_ratio: 1` forces the permanent clamp)  
 - Desktop → native `window.devicePixelRatio`  
 
 ---
@@ -872,7 +872,7 @@ Mobile mode reduces shadow complexity:
 Multisample antialiasing is costly on tablets.  
 Mobile mode disables it deterministically:
 
-- Mobile → antialias OFF  
+- Mobile → antialias OFF when `devicePixelRatio >= 2`, ON otherwise (`antialias` option overrides)  
 - Desktop → antialias ON  
 
 ---

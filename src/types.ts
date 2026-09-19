@@ -96,6 +96,7 @@ export interface Floor3dCardConfig {
   camera_target: any;
   light_direction: any;
   light_target: string;
+  light_object?: string;
   radius: number;
   sky: string;
   north: any;
@@ -115,6 +116,12 @@ export interface Floor3dCardConfig {
 // Faz-0 PRO Backbone: pro-skill / pro-log
   pro_skill?: ProSkillConfig;
   pro_log?: ProLogConfig;
+// Compressed models + render quality
+  draco_path?: string;
+  basis_path?: string;
+  pixel_ratio?: number | 'device' | 'adaptive';
+  antialias?: 'yes' | 'no';
+  anisotropy?: number;
 }
 
 export interface EntityFloor3dCardConfig {

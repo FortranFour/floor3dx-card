@@ -2332,6 +2332,13 @@ export class Floor3dCardEditor extends LitElement implements LovelaceCardEditor 
                               .configAttribute=${'light_target'}
                               @input=${this._valueChanged}
                             ></floor3dpro-textfield>
+                            <floor3dpro-textfield
+                              label="Single Light Object (one light for the whole group)"
+                              .value=${config.light.light_object ? config.light.light_object : ''}
+                              .configObject=${config.light}
+                              .configAttribute=${'light_object'}
+                              @input=${this._valueChanged}
+                            ></floor3dpro-textfield>
                             <floor3dpro-formfield alignEnd label="Angle degrees (spot)">
                               <floor3dpro-textfield
                                 type="number"

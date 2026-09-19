@@ -30,14 +30,17 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader';
 import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader';
-import { GLTFLoader, GLTF } from 'three/examples/jsm/loaders/GLTFLoader';
+import { GLTF } from 'three/examples/jsm/loaders/GLTFLoader';
+import { loadCompressedGLTF, applyTextureQuality } from './model-loader';
 import { Sky } from 'three/examples/jsm/objects/Sky';
 import { Object3D } from 'three';
 import '../elements/button';
 
 /* eslint no-console: 0 */
+// Shown in the browser console so it is obvious which file the browser is actually running.
+const BUILD_ID = 'build 2026-09-19.7';
 const title = '  FLOOR3D[PRO]-CARD ';
-const version = `  ${localize('common.version')} ${CARD_VERSION}    `;
+const version = `  ${localize('common.version')} ${CARD_VERSION} · ${BUILD_ID}    `;
 
 // En uzun satırı baz al
 const width = Math.max(title.length, version.length);
@@ -95,7 +98,8 @@ function __deepCloneObject(source: THREE.Object3D): THREE.Object3D {
     if (node.isMesh) {
       // Faz-0 (weak-device stabilization):
       // - Materials must be per-instance (mutated by apply layer)
-      // - Geometry/Textures are immutable in this card → keep shared to avoid heap/VRAM growth
+      // - Geometry/Textures stay shared to avoid heap/VRAM growth. Geometry is NOT immutable:
+      //   door/rotate/cover/room setup re-centres it, so those meshes take a private copy (_ownGeometry)
       if (node.material) {
         if (Array.isArray(node.material)) {
           node.material = node.material.map((m: THREE.Material) => m.clone());
@@ -200,6 +204,11 @@ export class Floor3dCard extends LitElement {
   // Faz-0 Engine Backbone: (Stabil.Patch.0.0) deterministic render scheduler
   private _renderRaf?: number;
   private _renderPending: boolean;
+  // Render quality: adaptive resolution (fast frames while moving, full-resolution frame at rest)
+  private _interactiveUntil = 0;
+  private _settleTimeout?: number;
+  private _dprQuery?: MediaQueryList;
+  private _dprListener: () => void;
   private _isConnected: boolean;
   //private _coverBootstrapped: boolean;
   private _lastResizeW: number | null;
@@ -238,6 +247,11 @@ export class Floor3dCard extends LitElement {
     this._resizeObserver = new ResizeObserver(() => {
       this._resizeCanvasDebounce();
     });
+    this._dprListener = () => {
+      // browser zoom / window dragged to another monitor: re-arm for the new ratio and redraw
+      this._watchDevicePixelRatio();
+      this._requestRender('pixel_ratio');
+    };
     this._performActionListener = (evt) => {
       this._performAction(evt);
     };
@@ -277,9 +291,10 @@ export class Floor3dCard extends LitElement {
     this._isConnected = true;
 
     if (this._modelready) {
-      if (this._ispanel() || this._issidebar()) {
-        this._resizeObserver.observe(this._card);
-      }
+      // Every layout (not just panel/sidebar) must track its box, otherwise the drawing buffer
+      // keeps its load-time size and the browser stretches it: a blurry, low-resolution picture.
+      this._resizeObserver.observe(this._content);
+      this._watchDevicePixelRatio();
       // Faz-0 Engine Backbone: (Stabil.Patch.0.0)
       window.clearInterval(this._zIndexInterval);
       this._zIndexInterval = window.setInterval(() => {
@@ -291,9 +306,7 @@ export class Floor3dCard extends LitElement {
         this._renderer.setAnimationLoop(() => this._animationLoop());
       }
 
-      if (this._ispanel() || this._issidebar()) {
-        this._resizeCanvas();
-      }
+      this._resizeCanvas();
       // Faz-0 Engine Backbone: (Stabil.Patch.0.0) Wake frame: visible + ready -> always draw at least once deterministically
       this._requestRender('connected');
     }
@@ -306,6 +319,8 @@ export class Floor3dCard extends LitElement {
     this._cancelScheduledRender();
 
     this._resizeObserver.disconnect();
+    this._unwatchDevicePixelRatio();
+    window.clearTimeout(this._settleTimeout);
     window.clearInterval(this._zIndexInterval);
 
     if (this._modelready) {
@@ -475,7 +490,11 @@ export class Floor3dCard extends LitElement {
       this._renderer.setAnimationLoop(null);
     }
     this._resizeObserver.disconnect();
+    window.clearTimeout(this._settleTimeout);
     window.clearInterval(this._zIndexInterval);
+    // force a fresh drawing-buffer size on the new renderer
+    this._lastResizeW = null;
+    this._lastResizeH = null;
 
     if (this._renderer && this._renderer.domElement) {
       this._renderer.domElement.remove();
@@ -597,7 +616,82 @@ export class Floor3dCard extends LitElement {
       this._camera.getWorldDirection(this._torch.target.position);
       //console.log(this._renderer.info);
     }
+
+    // Render quality: cheap frames while moving, one full-resolution frame once things are still
+    const idleRatio = this._pixelRatioIdle();
+    const movingRatio = this._pixelRatioInteractive();
+    const moving = movingRatio !== idleRatio && performance.now() < this._interactiveUntil;
+    const ratio = moving ? movingRatio : idleRatio;
+    if (this._renderer.getPixelRatio() !== ratio) {
+      this._renderer.setPixelRatio(ratio);
+    }
+
     this._renderer.render(this._scene, this._camera);
+
+    if (moving) {
+      window.clearTimeout(this._settleTimeout);
+      this._settleTimeout = window.setTimeout(() => this._requestRender('settle'), 160);
+    }
+  }
+
+  // Render quality helpers
+  private _pixelRatioIdle(): number {
+    const device = window.devicePixelRatio || 1;
+    const configured = this._config ? this._config.pixel_ratio : undefined;
+    if (typeof configured === 'number' && configured > 0) {
+      return Math.min(configured, Math.max(device, 1) * 2);
+    }
+    return device;
+  }
+
+  private _pixelRatioInteractive(): number {
+    const configured = this._config ? this._config.pixel_ratio : undefined;
+    const adaptive = configured === 'adaptive' || (configured === undefined && this._proSkillEnabled('mobile'));
+    return adaptive ? Math.min(1, this._pixelRatioIdle()) : this._pixelRatioIdle();
+  }
+
+  private _useAntialias(): boolean {
+    if (this._config && this._config.antialias) {
+      return this._config.antialias !== 'no';
+    }
+    // Mobile profile: skip MSAA only where the pixel density already hides the edges
+    return this._proSkillEnabled('mobile') ? (window.devicePixelRatio || 1) < 2 : true;
+  }
+
+  // One warning per bad entry, not one per state update: a dashboard with many unbound
+  // entries otherwise writes hundreds of console lines on every Home Assistant state change.
+  private _missingEntityWarned: Set<string> = new Set();
+  private _warnMissingEntityOnce(entity: any): void {
+    // Gesture entries are click targets that call a service; they legitimately have no entity.
+    if (entity && entity.type3d === 'gesture' && !entity.entity) return;
+    const key = String(entity && entity.entity) + '|' + String(entity && entity.object_id);
+    if (this._missingEntityWarned.has(key)) return;
+    this._missingEntityWarned.add(key);
+    if (entity && (entity.entity === undefined || entity.entity === null || entity.entity === '')) {
+      console.warn(
+        'floor3d-card: entities entry has no "entity:" key' +
+          (entity.object_id ? ' (object_id: ' + entity.object_id + ')' : '') +
+          ' - it is ignored',
+      );
+    } else {
+      console.warn('floor3d-card: entity <' + entity.entity + '> not found in Home Assistant');
+    }
+  }
+
+  private _watchDevicePixelRatio(): void {
+    this._unwatchDevicePixelRatio();
+    if (!window.matchMedia) return;
+    this._dprQuery = window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
+    if (this._dprQuery.addEventListener) {
+      this._dprQuery.addEventListener('change', this._dprListener);
+    }
+  }
+
+  private _unwatchDevicePixelRatio(): void {
+    if (this._dprQuery && this._dprQuery.removeEventListener) {
+      this._dprQuery.removeEventListener('change', this._dprListener);
+    }
+    this._dprQuery = undefined;
   }
   // Faz-0 PRO Backbone: pro-skill / pro-log Functions Starts
   private _proApplyConfig(): void {
@@ -716,6 +810,10 @@ export class Floor3dCard extends LitElement {
 
       this._proEngineLog(`render-skip | ${missing.join(' ')}`, `render-skip:${_reason}`);
       return;
+    }
+    // Only camera drags count as motion: a ceiling fan spinning all day must not pin the view at low resolution
+    if (_reason === 'controls') {
+      this._interactiveUntil = performance.now() + 120;
     }
     if (this._renderPending) {
       return;
@@ -1104,7 +1202,6 @@ export class Floor3dCard extends LitElement {
     this._lastResizeW = w;
     this._lastResizeH = h;
 
-    console.log('Resize canvas start');
     this._camera.aspect = w / h;
     this._camera.updateProjectionMatrix();
     this._renderer.setSize(
@@ -1113,7 +1210,6 @@ export class Floor3dCard extends LitElement {
       !this._issidebar(),
     );
     this._requestRender('resize');
-    console.log('Resize canvas end');
   }
 
   private _statewithtemplate(entity: Floor3dCardConfig): string {
@@ -1296,7 +1392,7 @@ export class Floor3dCard extends LitElement {
                 this._brightness[j] = hass.states[entity.entity].attributes['brightness'];
               }
             } else {
-              console.log('Entity <' + entity.entity + '> not found');
+              this._warnMissingEntityOnce(entity);
             }
           });
           this._firstcall = false;
@@ -1481,7 +1577,7 @@ export class Floor3dCard extends LitElement {
                 }
               }
             } else {
-              console.log('Entity <' + entity.entity + '> not found');
+              this._warnMissingEntityOnce(entity);
             }
           });
           if (torerender) {
@@ -1673,7 +1769,13 @@ export class Floor3dCard extends LitElement {
     // create and initialize renderer
 
     // Faz-1 PRO Skill: MOBILE optimization
-    this._renderer = new THREE.WebGLRenderer({ antialias: !this._proSkillEnabled('mobile'), logarithmicDepthBuffer: true, alpha: true });
+    // Render quality: MSAA stays on unless the screen is dense enough (DPR >= 2) to hide the stair-stepping.
+    this._renderer = new THREE.WebGLRenderer({
+      antialias: this._useAntialias(),
+      logarithmicDepthBuffer: true,
+      alpha: true,
+      powerPreference: 'high-performance',
+    });
     this._maxtextureimage = this._renderer.capabilities.maxTextures;
     console.log('Max Texture Image Units: ' + this._maxtextureimage);
     console.log('Max Texture Image Units: number of lights casting shadow should be less than the above number');
@@ -1720,6 +1822,9 @@ export class Floor3dCard extends LitElement {
 
       const cacheKey = __assetCacheKey(path, objfile, mtlfile);
 
+      // Model type must be known on every path, including asset-cache hits (second card instance).
+      this._modeltype = objfile.split('?')[0].split('.').pop().toLowerCase() == 'obj' ? ModelSource.OBJ : ModelSource.GLB;
+
       const useSource = (source: THREE.Object3D) => {
         // Faz-0 PRO Backbone: pro-log (asset cache)
         this._proEngineLog(`assetCache: clone-start | key=${cacheKey}`, `assetCache:clone-start:${cacheKey}`);
@@ -1750,7 +1855,7 @@ export class Floor3dCard extends LitElement {
         );
 
         const loadPromise = new Promise<THREE.Object3D>((resolve, reject) => {
-          let fileExt = objfile.split('?')[0].split('.').pop();
+          const fileExt = objfile.split('?')[0].split('.').pop().toLowerCase();
 
           if (fileExt == 'obj') {
             //waterfront format
@@ -1793,19 +1898,15 @@ export class Floor3dCard extends LitElement {
                 },
               );
             }
-            this._modeltype = ModelSource.OBJ;
-          } else if (fileExt == 'glb') {
-            //glb format
-            const loader = new GLTFLoader().setPath(path);
-            loader.load(
-              objfile,
-              (gltf) => resolve(gltf.scene),
-              this._onloadedGLTF3DProgress.bind(this),
-              function (error: ErrorEvent): void {
-                reject(new Error(error.error));
-              },
-            );
-            this._modeltype = ModelSource.GLB;
+          } else if (fileExt == 'glb' || fileExt == 'gltf') {
+            //glb format (plain, Draco, Meshopt, KTX2, WebP)
+            loadCompressedGLTF(path, objfile, {
+              dracoPath: this._config.draco_path,
+              basisPath: this._config.basis_path,
+              renderer: this._renderer,
+              onProgress: this._onloadedGLTF3DProgress.bind(this),
+              log: (message) => this._proEngineLog(`model: ${message}`, `model:${message}`),
+            }).then((gltf) => resolve(gltf.scene), reject);
           } else {
             reject(new Error('Unsupported model format'));
           }
@@ -1835,6 +1936,9 @@ export class Floor3dCard extends LitElement {
               `assetCache: ERROR | key=${cacheKey} | ${msg}`,
               `assetCache:error:${cacheKey}`,
             );
+            if (this._content) {
+              this._content.innerText = 'Model load error: ' + msg;
+            }
 
             throw err;
           });
@@ -1850,7 +1954,10 @@ export class Floor3dCard extends LitElement {
   }
 
   private _onloadedGLTF3DProgress(_progress: ProgressEvent): void {
-    this._content.innerText = 'Loading: ' + Math.round((_progress.loaded / _progress.total) * 100) + '%';
+    // total is 0 when the server compresses the response on the fly
+    this._content.innerText = _progress.total
+      ? 'Loading: ' + Math.round((_progress.loaded / _progress.total) * 100) + '%'
+      : 'Loading: ' + (_progress.loaded / 1048576).toFixed(1) + ' MB';
   }
 
   private _onLoadMaterialProgress(_progress: ProgressEvent): void {
@@ -1871,6 +1978,11 @@ export class Floor3dCard extends LitElement {
     // Object Loaded Event: last root object passed to the function
 
     console.log('Object loaded start');
+
+    // Render quality: anisotropic filtering keeps floor/wall textures sharp at shallow angles.
+    // Must run before _initobjects, which re-parents every node out of this root.
+    const anisotropy = typeof this._config.anisotropy === 'number' ? this._config.anisotropy : 8;
+    applyTextureQuality(object, this._renderer, anisotropy);
 
     this._initobjects(object);
 
@@ -1942,7 +2054,8 @@ export class Floor3dCard extends LitElement {
       this._controls = new OrbitControls(this._camera, this._renderer.domElement);
 
       // Faz-1 PRO Skill: MOBILE optimization
-      this._renderer.setPixelRatio(this._proSkillEnabled('mobile') ? 1 : window.devicePixelRatio);
+      // Start at full resolution; mobile mode only drops it while the scene is moving (see _render)
+      this._renderer.setPixelRatio(this._pixelRatioIdle());
 
       this._controls.maxPolarAngle = (0.85 * Math.PI) / 2;
       this._controls.addEventListener('change', this._changeListener);
@@ -1994,9 +2107,9 @@ export class Floor3dCard extends LitElement {
         this._zIndexChecker();
       }, 250);
 
-      if (this._ispanel() || this._issidebar()) {
-        this._resizeObserver.observe(this._card);
-      }
+      // All layouts: keep the drawing buffer in step with the card box (see connectedCallback)
+      this._resizeObserver.observe(this._content);
+      this._watchDevicePixelRatio();
 
       // Faz-0 Engine Backbone: (Upgraded) Wake frame: model just became ready -> draw once deterministically
       this._requestRender('model_loaded');
@@ -2623,10 +2736,7 @@ export class Floor3dCard extends LitElement {
 
                 this._object_ids[i].objects.forEach((element) => {
                   let _obj: any = this._scene.getObjectByName(element.object_id);
-                  this._centerobjecttopivot(_obj, this._pivot[i]);
-                  _obj.geometry.applyMatrix4(
-                    new THREE.Matrix4().makeTranslation(-this._pivot[i].x, -this._pivot[i].y, -this._pivot[i].z),
-                  );
+                  this._recenterOnPivot(_obj, this._pivot[i]);
                 });
               }
               if (entity.type3d == 'door') {
@@ -2732,11 +2842,7 @@ export class Floor3dCard extends LitElement {
                   this._object_ids[i].objects.forEach((element) => {
                     let _obj: any = this._scene.getObjectByName(element.object_id);
 
-                    this._centerobjecttopivot(_obj, this._pivot[i]);
-
-                    _obj.geometry.applyMatrix4(
-                      new THREE.Matrix4().makeTranslation(-this._pivot[i].x, -this._pivot[i].y, -this._pivot[i].z),
-                    );
+                    this._recenterOnPivot(_obj, this._pivot[i]);
                   });
 
                   // console.log("End Add Door Swing");
@@ -2749,10 +2855,7 @@ export class Floor3dCard extends LitElement {
                     let _obj: any = this._scene.getObjectByName(element.object_id);
                     let objbbox = new THREE.Box3().setFromObject(_obj);
                     this._slidingdoorposition[i].push(objbbox.min);
-                    this._centerobjecttopivot(_obj, objbbox.min);
-                    _obj.geometry.applyMatrix4(
-                      new THREE.Matrix4().makeTranslation(-objbbox.min.x, -objbbox.min.y, -objbbox.min.z),
-                    );
+                    this._recenterOnPivot(_obj, objbbox.min);
                   });
 
                   // console.log("End Add Door Slide");
@@ -2766,10 +2869,7 @@ export class Floor3dCard extends LitElement {
                     let _obj: any = this._scene.getObjectByName(element.object_id);
                     let objbbox = new THREE.Box3().setFromObject(_obj);
                     this._slidingdoorposition[i].push(objbbox.min);
-                    this._centerobjecttopivot(_obj, objbbox.min);
-                    _obj.geometry.applyMatrix4(
-                      new THREE.Matrix4().makeTranslation(-objbbox.min.x, -objbbox.min.y, -objbbox.min.z),
-                    );
+                    this._recenterOnPivot(_obj, objbbox.min);
                   });
 
                   let boxpane: THREE.Box3 = new THREE.Box3().setFromObject(pane);
@@ -2834,8 +2934,12 @@ export class Floor3dCard extends LitElement {
               }
               if (entity.type3d == 'light') {
                 // Add Virtual Light Objects
-                this._object_ids[i].objects.forEach((element) => {
+                // light_object: the whole object_id group stays clickable, but only this one object emits light
+                this._lightObjects(entity, i).forEach((element) => {
                   const _foundobject: any = this._scene.getObjectByName(element.object_id);
+                  if (!_foundobject && entity.light && entity.light.light_object) {
+                    console.warn('floor3d-card: light_object <' + element.object_id + '> not found in the model');
+                  }
                   if (_foundobject) {
                     const box: THREE.Box3 = new THREE.Box3();
                     box.setFromObject(_foundobject);
@@ -3085,10 +3189,7 @@ export class Floor3dCard extends LitElement {
 
         if (_roomMesh.geometry instanceof THREE.BufferGeometry) {
           let oldRoomBox = new THREE.Box3().setFromObject(_roomMesh);
-          this._centerobjecttopivot(_roomMesh, oldRoomBox.min);
-          _roomMesh.geometry.applyMatrix4(
-            new THREE.Matrix4().makeTranslation(-oldRoomBox.min.x, -oldRoomBox.min.y, -oldRoomBox.min.z),
-          );
+          this._recenterOnPivot(_roomMesh, oldRoomBox.min);
 
           let newRoomBox: THREE.Box3 = new THREE.Box3().setFromObject(_roomMesh);
 
@@ -3361,7 +3462,7 @@ export class Floor3dCard extends LitElement {
   private _updatelight(entity: Floor3dCardConfig, i: number): void {
     // Illuminate the light object when, for the bound device, one of its attribute gets modified in HA. See set hass property
 
-    this._object_ids[i].objects.forEach((element) => {
+    this._lightObjects(entity, i).forEach((element) => {
       const light: any = this._scene.getObjectByName(element.object_id + '_light');
 
       if (!light) {
@@ -3401,6 +3502,71 @@ export class Floor3dCard extends LitElement {
       }
       this._renderer.shadowMap.needsUpdate = true;
     });
+  }
+
+  // Objects that carry an actual THREE light for a light entry.
+  // Default: one light per object in the entry's object_id (original behaviour).
+  // With light.light_object: exactly one light, placed on that object. It may be a member of the
+  // group or any other named object in the model (e.g. something at the centre of the fixture).
+  // The model cache shares geometry between card instances (every visit to the view builds a new
+  // instance from the cached model). Door, rotate, cover and room setup re-centres geometry in place,
+  // so without a private copy the second instance starts from already-shifted geometry, computes a
+  // wrong pivot and shifts it again: doors and windows end up far from the house.
+  // Copy-on-write keeps the other meshes shared.
+  private _ownedGeometries: WeakSet<THREE.BufferGeometry> = new WeakSet();
+  private _ownGeometry(mesh: any): void {
+    if (!mesh || !mesh.geometry || this._ownedGeometries.has(mesh.geometry)) return;
+    mesh.geometry = mesh.geometry.clone();
+    this._ownedGeometries.add(mesh.geometry);
+  }
+
+  // Move a mesh's origin to `pivot` (so it can rotate/slide around it) WITHOUT moving the mesh.
+  // Works on a private geometry copy (see _ownGeometry) and then verifies the invariant: the mesh
+  // must occupy the same world-space box after the operation as before it. If it does not - shared
+  // or already-shifted geometry, setup running twice, a node with its own transform - the geometry is
+  // shifted back by the measured error and the event is reported once per object.
+  private _recenterWarned: Set<string> = new Set();
+  private _recenterOnPivot(mesh: any, pivot: THREE.Vector3): void {
+    if (!mesh || !mesh.geometry) return;
+
+    const worldMin = (): THREE.Vector3 => {
+      mesh.updateWorldMatrix(true, false);
+      if (mesh.geometry.boundingBox === null) mesh.geometry.computeBoundingBox();
+      return mesh.geometry.boundingBox.clone().applyMatrix4(mesh.matrixWorld).min;
+    };
+
+    const before = worldMin();
+
+    this._centerobjecttopivot(mesh, pivot);
+    this._ownGeometry(mesh);
+    mesh.geometry.applyMatrix4(new THREE.Matrix4().makeTranslation(-pivot.x, -pivot.y, -pivot.z));
+
+    const error = worldMin().sub(before);
+    if (error.length() > 0.01) {
+      // express the world-space error in the mesh's local frame (rotation/scale of the node, if any)
+      mesh.updateWorldMatrix(true, false);
+      const inverse = new THREE.Matrix4().copy(mesh.matrixWorld).invert();
+      // linear part of the inverse applied to the error vector
+      const local = error.clone().applyMatrix4(inverse).sub(new THREE.Vector3(0, 0, 0).applyMatrix4(inverse));
+      mesh.geometry.applyMatrix4(new THREE.Matrix4().makeTranslation(-local.x, -local.y, -local.z));
+
+      if (!this._recenterWarned.has(mesh.name)) {
+        this._recenterWarned.add(mesh.name);
+        console.warn(
+          'floor3d-card ' + BUILD_ID + ': object <' + mesh.name + '> moved by (' +
+            [error.x, error.y, error.z].map((v) => Math.round(v)).join(', ') +
+            ') during door/pivot setup and was put back. Please report this line.',
+        );
+      }
+    }
+  }
+
+  private _lightObjects(entity: Floor3dCardConfig, i: number): { object_id: string }[] {
+    const single = entity.light ? entity.light.light_object : undefined;
+    if (single !== undefined && single !== null && String(single) !== '') {
+      return [{ object_id: String(single) }];
+    }
+    return this._object_ids[i].objects;
   }
 
   private _manage_light_shadows(entity: Floor3dCardConfig, light: THREE.Light): void {
