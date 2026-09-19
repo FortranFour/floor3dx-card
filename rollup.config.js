@@ -5,6 +5,7 @@ import babel from 'rollup-plugin-babel';
 import { terser } from 'rollup-plugin-terser';
 import serve from 'rollup-plugin-serve';
 import json from '@rollup/plugin-json';
+import forkIdentity from './rollup-fork-identity.js';
 import ignore from "./rollup-ignore-plugin.js";
 
 const dev = process.env.ROLLUP_WATCH;
@@ -27,6 +28,7 @@ const plugins = [
   babel({
     exclude: 'node_modules/**',
   }),
+  forkIdentity(),
   dev && serve(serveopts),
   !dev && terser(),
   ignore({
@@ -48,8 +50,9 @@ export default [
     input: 'src/floor3dpro-card.ts',
     context: 'globalThis',
     output: {
-      dir: 'dist',
+      file: 'dist/floor3dx-card.js',
       format: 'es',
+      inlineDynamicImports: true,
     },
     plugins: [...plugins],
   },

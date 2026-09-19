@@ -38,8 +38,8 @@ import '../elements/button';
 
 /* eslint no-console: 0 */
 // Shown in the browser console so it is obvious which file the browser is actually running.
-const BUILD_ID = 'build 2026-09-19.7';
-const title = '  FLOOR3D[PRO]-CARD ';
+const BUILD_ID = 'build __FLOOR3DX_BUILD__';
+const title = '  FLOOR3DX-CARD (floor3dpro-card fork) ';
 const version = `  ${localize('common.version')} ${CARD_VERSION} · ${BUILD_ID}    `;
 
 // En uzun satırı baz al
@@ -57,9 +57,10 @@ console.info(
 (window as any).customCards = (window as any).customCards || [];
 (window as any).customCards.push({
   type: 'floor3dpro-card',
-  name: 'Floor3D Pro Card',
+  name: 'Floor3DX Card',
   preview: false,
-  description: 'Floor3D Pro Card – Game Engine Backbone Edition',
+  description: 'Floor3D Pro fork: Draco / Meshopt / KTX2 models, full-resolution rendering, door-cache fix',
+  documentationURL: 'https://github.com/FortranFour/floor3dx-card',
 });
 class ModelSource {
   public static OBJ = 0;

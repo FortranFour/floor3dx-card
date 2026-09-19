@@ -1,5 +1,7 @@
-/* Copies the Draco and Basis decoders that match the bundled three.js into dist/,
- * so the card can load compressed models without any CDN access. */
+/* Copies the Draco and Basis decoders that match the bundled three.js into dist/, so the card can
+ * load compressed models without any CDN access.
+ * The files go directly into dist/ (no sub-folders): HACS downloads only the files that sit
+ * directly inside dist/ (or the assets of a release), never sub-directories. */
 const fs = require('fs');
 const path = require('path');
 
@@ -13,10 +15,10 @@ const sets = {
 
 Object.keys(sets).forEach((name) => {
   const [from, files] = sets[name];
-  const to = path.join(dist, name);
+  const to = dist;
   fs.mkdirSync(to, { recursive: true });
   files.forEach((file) => {
     fs.copyFileSync(path.join(from, file), path.join(to, file));
-    console.log(`dist/${name}/${file}`);
+    console.log(`dist/${file}  (${name})`);
   });
 });

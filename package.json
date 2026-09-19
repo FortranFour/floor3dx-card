@@ -1,7 +1,7 @@
 {
-  "name": "floor3dpro-card",
-  "version": "1.5.3-Pro.Faz.2.1",
-  "description": "Floor3D Pro Card – Game Engine Backbone Edition",
+  "name": "floor3dx-card",
+  "version": "1.0.0",
+  "description": "Floor3DX Card: a fork of floor3dpro-card (itself based on floor3d-card) with compressed-model support, full-resolution rendering and a fix for the shared-geometry door bug",
   "keywords": [
     "home-assistant",
     "homeassistant",
@@ -10,9 +10,9 @@
     "lovelace",
     "custom-cards"
   ],
-  "module": "floor3dpro-card.js",
-  "repository": "https://github.com/levonisyas/floor3dpro-card",
-  "author": "levonisyas (forked from Andrea Di Zanni)",
+  "module": "floor3dx-card.js",
+  "repository": "https://github.com/FortranFour/floor3dx-card",
+  "author": "FortranFour",
   "license": "MIT",
   "dependencies": {
     "@lit-labs/scoped-registry-mixin": "^1.0.0",
@@ -64,10 +64,13 @@
     "start": "rollup -c rollup.config.dev.js --watch",
     "build": "npm run lint && npm run rollup",
     "lint": "eslint src/*.ts",
-    "rollup": "rollup -c && node scripts/copy-decoders.js",
-    "sidebyside": "node scripts/make-sidebyside.js"
+    "rollup": "rollup -c && node scripts/copy-decoders.js"
   },
   "overrides": {
     "tslib": "2.6.2"
-  }
+  },
+  "contributors": [
+    "Levent ERDEM (levonisyas) - floor3dpro-card",
+    "Andrea Di Zanni (adizanni) - floor3d-card"
+  ]
 }

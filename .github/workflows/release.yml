@@ -1,0 +1,32 @@
+name: Release
+
+# Push a tag like v1.0.1 to build and publish a release.
+# HACS installs every asset attached to the release, so the card and its decoders travel together.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            dist/floor3dx-card.js
+            dist/draco_wasm_wrapper.js
+            dist/draco_decoder.wasm
+            dist/draco_decoder.js
+            dist/basis_transcoder.js
+            dist/basis_transcoder.wasm

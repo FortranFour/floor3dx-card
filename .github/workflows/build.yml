@@ -1,0 +1,27 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Check the bundle registers the fork's element names only
+        run: |
+          test -f dist/floor3dx-card.js
+          ! grep -q '<floor3dpro-' dist/floor3dx-card.js
+          for f in draco_wasm_wrapper.js draco_decoder.wasm draco_decoder.js basis_transcoder.js basis_transcoder.wasm; do test -f "dist/$f"; done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: floor3dx-card
+          path: dist/

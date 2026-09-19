@@ -139,4 +139,10 @@ out
 
 # Ignore text files
 *.txt
-dist-sidebyside/
+
+# Python
+__pycache__/
+*.pyc
+
+# local symlink or folder
+node_modules

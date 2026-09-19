@@ -1,0 +1,30 @@
+<!doctype html>
+<!-- Minimal stand-in for a Home Assistant dashboard: just enough DOM and a fake hass object for the card to run.
+     Query parameters: js, tag, path, model, skill, pr, draco_path, late, style. Served by run.py from the repository root. --><html><head><style>body{margin:0} #host{width:800px;height:500px} ha-card{display:block}</style></head>
+<body><home-assistant></home-assistant><div id="host"></div>
+<script type="module">
+const p = new URLSearchParams(location.search);
+customElements.define('home-assistant', class extends HTMLElement{constructor(){super();this.attachShadow({mode:'open'})}});
+{ // minimal Home Assistant DOM skeleton the card walks through
+  const ha=document.querySelector('home-assistant');
+  const main=document.createElement('home-assistant-main'); main.attachShadow({mode:'open'}); ha.shadowRoot.appendChild(main);
+  const drawer=document.createElement('ha-drawer'); main.shadowRoot.appendChild(drawer);
+  let cur=drawer; for (const t of ['partial-panel-resolver','ha-panel-lovelace','hui-root','hui-view']){const e=document.createElement(t);cur.appendChild(e);cur=e;}
+}
+window.__logs=[]; const ol=console.log; console.log=(...a)=>{window.__logs.push(a.join(' ')); ol(...a)};
+window.__t0 = performance.now();
+await import(p.get('js') || '/dist/floor3dx-card.js');
+const card = document.createElement(p.get('tag')||'floor3dx-card');
+const cfg = { type:'custom:'+(p.get('tag')||'floor3dx-card'), path:p.get('path')||'/demo/', objfile:p.get('model')||'demo.glb', name:'t',
+  style: p.get('style') || 'overflow:hidden;width:100%;height:500px;position:relative;display:block',
+  backgroundColor:'#224', globalLightPower:0.8, entities:[], object_groups:[], zoom_areas:[], pro_log:'all' };
+if (p.get('skill')) cfg.pro_skill = p.get('skill');
+if (p.get('pr')) cfg.pixel_ratio = isNaN(+p.get('pr')) ? p.get('pr') : +p.get('pr');
+if (p.get('draco_path')) cfg.draco_path = p.get('draco_path');
+card.setConfig(cfg);
+card.hass = { states:{}, language:'en', themes:{}, config:{}, user:{}, callService(){}, };
+const host=document.getElementById('host');
+if (p.get('late')) { host.style.display='none'; }
+host.appendChild(card);
+window.card = card;
+</script></body></html>

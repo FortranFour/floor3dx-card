@@ -4,12 +4,14 @@ import babel from "rollup-plugin-babel";
 import serve from "rollup-plugin-serve";
 import { terser } from "rollup-plugin-terser";
 import json from '@rollup/plugin-json';
+import forkIdentity from "./rollup-fork-identity.js";
 
 export default {
   input: ["src/floor3dpro-card.ts"],
   output: {
-    dir: "./dist",
+    file: "./dist/floor3dx-card.js",
     format: "es",
+    inlineDynamicImports: true,
   },
   plugins: [
     resolve(),
@@ -18,6 +20,7 @@ export default {
     babel({
       exclude: "node_modules/**",
     }),
+    forkIdentity(),
     terser(),
     serve({
       contentBase: "./dist",

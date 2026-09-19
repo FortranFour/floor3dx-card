@@ -69,6 +69,7 @@ async function probe(url: string): Promise<boolean> {
 
 /**
  * Pick the decoder folder: explicit config > folder next to the card > CDN.
+ * "Next to the card" means the card's own folder first, then a draco/ or basis/ sub-folder.
  * An explicit path is trusted as-is so a wrong path gives a clear error instead of a silent CDN hit.
  */
 function resolveDecoderPath(
@@ -88,10 +89,13 @@ function resolveDecoderPath(
       (async () => {
         const base = moduleBase();
         if (base) {
-          const local = `${base}${kind}/`;
-          if (await probe(local + probeFile)) {
-            log(`${kind} decoder: local (${local})`);
-            return local;
+          // 1) same folder as the card (HACS only downloads files directly inside dist/)
+          // 2) a draco/ or basis/ sub-folder (manual installs)
+          for (const local of [base, `${base}${kind}/`]) {
+            if (await probe(local + probeFile)) {
+              log(`${kind} decoder: local (${local})`);
+              return local;
+            }
           }
         }
         log(`${kind} decoder: not found next to the card, using CDN (${cdn})`);
