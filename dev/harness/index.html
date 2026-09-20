@@ -12,6 +12,8 @@ customElements.define('home-assistant', class extends HTMLElement{constructor(){
   let cur=drawer; for (const t of ['partial-panel-resolver','ha-panel-lovelace','hui-root','hui-view']){const e=document.createElement(t);cur.appendChild(e);cur=e;}
 }
 window.__logs=[]; const ol=console.log; console.log=(...a)=>{window.__logs.push(a.join(' ')); ol(...a)};
+// ?cores=N: pretend to have N CPU cores (the Draco decoder starts up to 4 workers on a multi-core machine)
+if (p.get('cores')) Object.defineProperty(navigator,'hardwareConcurrency',{value:+p.get('cores'),configurable:true});
 window.__t0 = performance.now();
 await import(p.get('js') || '/dist/floor3dx-card.js');
 const card = document.createElement(p.get('tag')||'floor3dx-card');

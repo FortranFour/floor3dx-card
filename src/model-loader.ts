@@ -199,6 +199,8 @@ export async function loadCompressedGLTF(
     });
   });
 
+  restoreFileOrder(gltf);
+
   const t2 = performance.now();
   log(
     `${file}: ${(data.byteLength / 1048576).toFixed(2)} MB | download ${Math.round(t1 - t0)} ms | decode ${Math.round(
@@ -207,6 +209,38 @@ export async function loadCompressedGLTF(
   );
 
   return gltf;
+}
+
+/**
+ * Put every object back in the order the file lists it.
+ *
+ * GLTFLoader adds a node to its parent when that node's mesh has finished decoding. Draco meshes are
+ * decoded by a pool of workers, so they finish in a different order on every load, and the order of
+ * `children` - and with it the three.js object ids handed out when the card clones the model - changes
+ * from load to load. three.js breaks depth ties between transparent objects by id, and models exported
+ * with baked vertices (every node at the origin, e.g. Sweet Home 3D) tie constantly: a lamp shade made of
+ * two coincident glass surfaces would show one or the other at random. File order makes it repeatable,
+ * and identical to what the same model gives uncompressed.
+ */
+function restoreFileOrder(gltf: GLTF): void {
+  const associations: Map<any, { type: string; index: number }> | undefined = (gltf as any).parser?.associations;
+  if (!associations) return;
+
+  const nodeIndex = (o: THREE.Object3D): number => {
+    const ref = associations.get(o);
+    return ref && ref.type === 'nodes' ? ref.index : Number.MAX_SAFE_INTEGER;
+  };
+
+  const roots: THREE.Object3D[] = gltf.scenes && gltf.scenes.length ? gltf.scenes : [gltf.scene];
+  roots.forEach((root) => {
+    root.traverse((parent) => {
+      if (parent.children.length < 2) return;
+      // objects that are not glTF nodes (primitives of a multi-primitive mesh) keep their relative order
+      const keyed = parent.children.map((child, position) => ({ child, key: nodeIndex(child), position }));
+      keyed.sort((a, b) => a.key - b.key || a.position - b.position);
+      parent.children = keyed.map((k) => k.child);
+    });
+  });
 }
 
 /**

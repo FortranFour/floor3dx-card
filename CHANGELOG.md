@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.1
+
+### Fixed
+- Draco models came out in a different object order on every load, because meshes are decoded by a pool of workers and were added to the scene as each one finished. three.js breaks depth ties between transparent objects by object id, and models with baked vertices (every node at the origin, as Sweet Home 3D exports them) tie constantly, so overlapping transparent surfaces swapped at random: a lamp shade made of two coincident glass meshes showed its colour on some loads and not on others. Objects are now put back in file order after decoding, which also makes a Draco model render the same as the uncompressed one. Uncompressed and Meshopt models were not affected.
+
+### Added
+- `dev/harness/test_load_order.py`, and a `cores=` parameter in the harness page to run the Draco decoder with several workers.
+
 ## 1.0.0
 
 First release of the fork. Based on floor3dpro-card 1.5.3-Pro.Faz.2.1 (upstream commit e9ba665).
