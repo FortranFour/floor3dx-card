@@ -30,16 +30,16 @@ JS = """async ()=>{
   const wait=(ms)=>new Promise(r=>setTimeout(r,ms));
   const make=async(open)=>{const c=document.createElement('floor3dx-card');c.setConfig(JSON.parse(JSON.stringify(cfg)));c.hass=mk(open);
     const h=document.createElement('div');h.style.cssText='width:500px;height:350px';document.body.appendChild(h);h.appendChild(c);
-    await new Promise(r=>{const t=setInterval(()=>{if(c._modelready){clearInterval(t);r()}},50)});c.hass=mk(open);await wait(1800);return [c,h]};
+    await new Promise(r=>{const t=setInterval(()=>{if(c._modelready){clearInterval(t);r()}},50)});c.hass=mk(open);await wait(3500);return [c,h]};
   const out={};
   // reference poses from a first, cold visit
   const [c1,h1]=await make([]);      out.ref_closed=snap(c1);
-  c1.hass=mk([1,2]); await wait(1800); out.ref_open12=snap(c1);
+  c1.hass=mk([1,2]); await wait(3500); out.ref_open12=snap(c1);
   h1.remove();                                                   // leave while windows 1,2 are open
   const [c2,h2]=await make([1,2]);   out.v2_open12=snap(c2);     // return (new card, cached model), still open
-  c2.hass=mk([]); await wait(1800);  out.v2_closed=snap(c2);
+  c2.hass=mk([]); await wait(3500);  out.v2_closed=snap(c2);
   // same card kept by the dashboard's view cache: detach, state changes while away, re-attach
-  const par=h2.parentNode; h2.remove(); await wait(300); par.appendChild(h2); c2.hass=mk([1,2]); await wait(1800); out.v2_reattach_open12=snap(c2);
+  const par=h2.parentNode; h2.remove(); await wait(300); par.appendChild(h2); c2.hass=mk([1,2]); await wait(3500); out.v2_reattach_open12=snap(c2);
   h2.remove();
   const [c3,h3]=await make([]);      out.v3_closed=snap(c3);     // third visit
   return {v2_open_ok: out.v2_open12===out.ref_open12, v2_closed_ok: out.v2_closed===out.ref_closed, reattach_ok: out.v2_reattach_open12===out.ref_open12, v3_closed_ok: out.v3_closed===out.ref_closed, open_differs_from_closed: out.ref_open12!==out.ref_closed, doorObjects: doorObjs.length};

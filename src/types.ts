@@ -97,6 +97,7 @@ export interface Floor3dCardConfig {
   light_direction: any;
   light_target: string;
   light_object?: string;
+  follow_entity?: string;
   radius: number;
   sky: string;
   north: any;

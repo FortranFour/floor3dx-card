@@ -73,6 +73,30 @@ A `type3d: light` entry creates one light per object in its `object_id` group. E
     lumens: '900'
 ```
 
+### Light colour and brightness from the entity
+
+A virtual light takes its brightness and colour from the Home Assistant entity while the entity is on. A dimmer scales the intensity between 0 and `lumens`; a colour or tunable-white light also sets the light's colour. A switch or a plain on/off light reports neither, so it uses `lumens` and `color` from the configuration. `follow_entity` chooses what is taken from the entity:
+
+```yaml
+- entity: light.dining_chandelier
+  type3d: light
+  object_id: <chandelier>
+  light:
+    light_object: '158_3'
+    lumens: '3000'
+    color: '#FFB830'
+    follow_entity: brightness     # dim with the dimmer, keep the warm colour
+```
+
+| `follow_entity` | brightness | colour |
+|---|---|---|
+| `yes` (default) | from the entity | from the entity |
+| `brightness` | from the entity | `light.color` |
+| `color` | `light.lumens` | from the entity |
+| `no` | `light.lumens` | `light.color` |
+
+Upstream intended `yes` but the code compared colour arrays by reference and assigned where it meant to compare, so a light with a `color_mode` attribute was re-lit and the whole scene re-rendered on every state change anywhere in Home Assistant. That is fixed.
+
 ## Options added by this fork
 
 | Option | Values | Default |
@@ -83,6 +107,7 @@ A `type3d: light` entry creates one light per object in its `object_id` group. E
 | `antialias` | `yes`, `no` | `yes`; see the mobile profile above |
 | `anisotropy` | 1 to 16 | 8 |
 | `light.light_object` | an object name | not set: one light per object in the group |
+| `light.follow_entity` | `yes`, `brightness`, `color`, `no` | `yes` |
 
 ## Installation
 

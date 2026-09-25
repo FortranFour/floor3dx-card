@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.1.0
+
+### Added
+- Option `light.follow_entity` (`yes`, `brightness`, `color`, `no`): what a virtual light takes from the Home Assistant entity while it is on. The default, `yes`, follows the entity's brightness and colour, which is what upstream intended.
+- Colour temperature is read from `color_temp_kelvin` when Home Assistant does not also provide `rgb_color`.
+- `dev/harness/test_follow_entity.py`.
+
+### Fixed
+- A light entity's colour and brightness were compared by reference and `color_mode` was assigned instead of compared, so every hass update re-lit the light and re-rendered the scene. Values are now compared by value and the scene only redraws when something changed.
+- `rgb_color` values that are not integers no longer produce an invalid colour string.
+- `dev/harness/test_lifecycle.py` waits longer between steps; it failed at random under a loaded software renderer.
+
 ## 1.0.1
 
 ### Fixed

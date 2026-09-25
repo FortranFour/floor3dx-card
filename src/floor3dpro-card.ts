@@ -1375,23 +1375,9 @@ export class Floor3dCard extends LitElement {
               } else {
                 this._lights.push('');
               }
-              let i = this._color.push([255, 255, 255]) - 1;
-              if (hass.states[entity.entity].attributes['color_mode']) {
-                if ((hass.states[entity.entity].attributes['color_mode'] = 'color_temp')) {
-                  this._color[i] = this._TemperatureToRGB(
-                    parseInt(hass.states[entity.entity].attributes['color_temp']),
-                  );
-                }
-              }
-              if ((hass.states[entity.entity].attributes['color_mode'] = 'rgb')) {
-                if (hass.states[entity.entity].attributes['rgb_color'] !== this._color[i]) {
-                  this._color[i] = hass.states[entity.entity].attributes['rgb_color'];
-                }
-              }
-              let j = this._brightness.push(-1) - 1;
-              if (hass.states[entity.entity].attributes['brightness']) {
-                this._brightness[j] = hass.states[entity.entity].attributes['brightness'];
-              }
+              const fromEntity = this._lightFromEntity(entity, hass.states[entity.entity]);
+              this._color.push(fromEntity.color);
+              this._brightness.push(fromEntity.brightness);
             } else {
               this._warnMissingEntityOnce(entity);
             }
@@ -1474,30 +1460,16 @@ export class Floor3dCard extends LitElement {
                   this._states[i] = state;
                   toupdate = true;
                 }
-                if (hass.states[entity.entity].attributes['color_mode']) {
-                  if ((hass.states[entity.entity].attributes['color_mode'] = 'color_temp')) {
-                    if (
-                      this._TemperatureToRGB(parseInt(hass.states[entity.entity].attributes['color_temp'])) !==
-                      this._color[i]
-                    ) {
-                      toupdate = true;
-                      this._color[i] = this._TemperatureToRGB(
-                        parseInt(hass.states[entity.entity].attributes['color_temp']),
-                      );
-                    }
-                  }
-                  if ((hass.states[entity.entity].attributes['color_mode'] = 'rgb')) {
-                    if (hass.states[entity.entity].attributes['rgb_color'] !== this._color[i]) {
-                      toupdate = true;
-                      this._color[i] = hass.states[entity.entity].attributes['rgb_color'];
-                    }
-                  }
+                // Compare by value: the upstream code compared arrays by reference (always different) and
+                // assigned instead of comparing color_mode, so every hass update re-lit and re-rendered.
+                const fromEntity = this._lightFromEntity(entity, hass.states[entity.entity]);
+                if (JSON.stringify(fromEntity.color) !== JSON.stringify(this._color[i])) {
+                  this._color[i] = fromEntity.color;
+                  toupdate = true;
                 }
-                if (hass.states[entity.entity].attributes['brightness']) {
-                  if (hass.states[entity.entity].attributes['brightness'] !== this._brightness[i]) {
-                    toupdate = true;
-                    this._brightness[i] = hass.states[entity.entity].attributes['brightness'];
-                  }
+                if (fromEntity.brightness !== this._brightness[i]) {
+                  this._brightness[i] = fromEntity.brightness;
+                  toupdate = true;
                 }
                 if (toupdate) {
                   this._updatelight(entity, i);
@@ -3440,9 +3412,10 @@ export class Floor3dCard extends LitElement {
 
   private _RGBToHex(r: number, g: number, b: number): string {
     // RGB Color array to hex string converter
-    let rs: string = r.toString(16);
-    let gs: string = g.toString(16);
-    let bs: string = b.toString(16);
+    const clamp = (v: number): number => Math.max(0, Math.min(255, Math.round(v)));
+    let rs: string = clamp(r).toString(16);
+    let gs: string = clamp(g).toString(16);
+    let bs: string = clamp(b).toString(16);
 
     if (rs.length == 1) rs = '0' + rs;
     if (gs.length == 1) gs = '0' + gs;
@@ -3458,6 +3431,50 @@ export class Floor3dCard extends LitElement {
       this._updateTextCanvas(entity.text, canvas, state + uom);
       this._applyTextCanvas(canvas, _foundobject);
     }
+  }
+
+  // light.follow_entity: what the virtual light takes from the Home Assistant entity while it is on.
+  //   yes (default)  brightness and colour, whichever the entity reports (dimmers, colour and tunable-white lights)
+  //   brightness     brightness only; the colour is light.color
+  //   color          colour only; the intensity is light.lumens
+  //   no             nothing; light.lumens and light.color, the entity only switches the light on and off
+  // A switch or a plain on/off light reports neither, so all four behave the same for it.
+  private _followEntity(entity: Floor3dCardConfig): { brightness: boolean; color: boolean } {
+    const mode = entity.light && entity.light.follow_entity !== undefined ? String(entity.light.follow_entity) : 'yes';
+    switch (mode) {
+      case 'no':
+        return { brightness: false, color: false };
+      case 'brightness':
+        return { brightness: true, color: false };
+      case 'color':
+        return { brightness: false, color: true };
+      default:
+        return { brightness: true, color: true };
+    }
+  }
+
+  // Brightness (0-255, or -1 for "not reported") and colour ([r, g, b], or null for "use light.color")
+  // that the entity currently reports, filtered by light.follow_entity.
+  private _lightFromEntity(entity: Floor3dCardConfig, stateObj: any): { brightness: number; color: number[] | null } {
+    const follow = this._followEntity(entity);
+    const attrs = stateObj && stateObj.attributes ? stateObj.attributes : {};
+    let brightness = -1;
+    if (follow.brightness && typeof attrs['brightness'] === 'number') {
+      brightness = Math.max(0, Math.min(255, Math.round(attrs['brightness'])));
+    }
+    let color: number[] | null = null;
+    if (follow.color) {
+      const rgb = attrs['rgb_color'];
+      if (Array.isArray(rgb) && rgb.length >= 3 && rgb.every((c) => typeof c === 'number')) {
+        // Home Assistant derives rgb_color for every colour mode, colour temperature included
+        color = [Math.round(rgb[0]), Math.round(rgb[1]), Math.round(rgb[2])];
+      } else if (typeof attrs['color_temp_kelvin'] === 'number' && attrs['color_temp_kelvin'] > 0) {
+        color = this._TemperatureToRGB(1000000 / attrs['color_temp_kelvin']);
+      } else if (typeof attrs['color_temp'] === 'number' && attrs['color_temp'] > 0) {
+        color = this._TemperatureToRGB(attrs['color_temp']);
+      }
+    }
+    return { brightness, color };
   }
 
   private _updatelight(entity: Floor3dCardConfig, i: number): void {

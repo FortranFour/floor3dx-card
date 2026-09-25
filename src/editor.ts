@@ -2339,6 +2339,21 @@ export class Floor3dCardEditor extends LitElement implements LovelaceCardEditor 
                               .configAttribute=${'light_object'}
                               @input=${this._valueChanged}
                             ></floor3dpro-textfield>
+                            <ha-select
+                              label="Follow entity (<yes>/brightness/color/no)"
+                              @selected=${this._valueChanged}
+                              .value=${config.light.follow_entity ? config.light.follow_entity : null}
+                              .configObject=${config.light}
+                              .configAttribute=${'follow_entity'}
+                              .ignoreNull=${false}
+                              @closed=${(ev) => ev.stopPropagation()}
+                            >
+                              <ha-list-item></ha-list-item>
+                              <ha-list-item value="yes">yes (brightness and colour)</ha-list-item>
+                              <ha-list-item value="brightness">brightness only</ha-list-item>
+                              <ha-list-item value="color">color only</ha-list-item>
+                              <ha-list-item value="no">no (lumens and color from config)</ha-list-item>
+                            </ha-select>
                             <floor3dpro-formfield alignEnd label="Angle degrees (spot)">
                               <floor3dpro-textfield
                                 type="number"
