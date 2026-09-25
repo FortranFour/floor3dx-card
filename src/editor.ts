@@ -389,6 +389,14 @@ export class Floor3dCardEditor extends LitElement implements LovelaceCardEditor 
       visible: false,
     };
 
+    const imageOptions = {
+      icon: 'image',
+      name: 'Image',
+      secondary: 'Image options: picture, animated GIF or video on the object.',
+      show: false,
+      visible: false,
+    };
+
     const doorOptions = {
       icon: 'door',
       name: 'Door',
@@ -445,6 +453,7 @@ export class Floor3dCardEditor extends LitElement implements LovelaceCardEditor 
         hide: { ...hideOptions },
         show: { ...showOptions },
         text: { ...textOptions },
+        image: { ...imageOptions },
         door: { ...doorOptions },
         cover: { ...coverOptions },
         rotate: { ...rotateOptions },
@@ -1030,7 +1039,7 @@ export class Floor3dCardEditor extends LitElement implements LovelaceCardEditor 
               <div class="options">
                 ${this._createTypeElement(index)} ${this._createLightElement(index)} ${this._createRoomElement(index)}
                 ${this._createColorConditionElement(index)} ${this._createHideElement(index)}
-                ${this._createShowElement(index)} ${this._createTextElement(index)} ${this._createGestureElement(index)}
+                ${this._createShowElement(index)} ${this._createTextElement(index)} ${this._createImageElement(index)} ${this._createGestureElement(index)}
                 ${this._createDoorElement(index)} ${this._createCoverElement(index)} ${this._createRotateElement(index)}
               </div>
             `
@@ -1775,6 +1784,7 @@ export class Floor3dCardEditor extends LitElement implements LovelaceCardEditor 
                   <ha-list-item value="hide">hide</ha-list-item>
                   <ha-list-item value="show">show</ha-list-item>
                   <ha-list-item value="text">text</ha-list-item>
+                  <ha-list-item value="image">image</ha-list-item>
                   <ha-list-item value="door">door</ha-list-item>
                   <ha-list-item value="cover">cover</ha-list-item>
                   <ha-list-item value="rotate">rotate</ha-list-item>
@@ -2687,6 +2697,154 @@ export class Floor3dCardEditor extends LitElement implements LovelaceCardEditor 
     `;
   }
 
+  private _createImageElement(index): TemplateResult {
+    const options = this._options.entities.options.entities[index].options.image;
+    const config = this._configArray[index];
+    const visible: boolean = config.type3d ? config.type3d === 'image' : false;
+    if (visible) {
+      config.image = { ...config.image };
+    }
+    return html`
+      ${visible
+        ? html`
+            <div class="category" id="image">
+              <div
+                class="sub-category"
+                @click=${this._toggleThing}
+                .options=${options}
+                .optionsTarget=${this._options.entities.options.entities[index].options}
+              >
+                <div class="row">
+                  <ha-icon .icon=${`mdi:${options.icon}`}></ha-icon>
+                  <div class="title">${options.name}</div>
+                  <ha-icon
+                    .icon=${options.show ? `mdi:chevron-up` : `mdi:chevron-down`}
+                    style="margin-left: auto;"
+                  ></ha-icon>
+                </div>
+                <div class="secondary">${options.secondary}</div>
+              </div>
+              ${options.show
+                ? html`
+                    <div class="card-options" style="display: flex; flex-direction: column; align-items: left;">
+                      ${index !== null ? html` ${this._createImageSubElement(config.image)} ` : ''}
+                    </div>
+                  `
+                : ''}
+            </div>
+          `
+        : ''}
+    `;
+  }
+
+  private _createImageSubElement(subconfig: any): TemplateResult {
+    return html`
+      <ha-select
+        label="Source (<entity_picture>/attribute/state/url)"
+        @selected=${this._valueChanged}
+        .value=${subconfig.source ? subconfig.source : null}
+        .configObject=${subconfig}
+        .configAttribute=${'source'}
+        .ignoreNull=${false}
+        @closed=${(ev) => ev.stopPropagation()}
+      >
+        <ha-list-item></ha-list-item>
+        <ha-list-item value="entity_picture">entity_picture attribute</ha-list-item>
+        <ha-list-item value="attribute">another attribute</ha-list-item>
+        <ha-list-item value="state">the state</ha-list-item>
+        <ha-list-item value="url">a URL</ha-list-item>
+      </ha-select>
+      <floor3dpro-textfield
+        label="Attribute (for source: attribute)"
+        fullwidth
+        .value=${subconfig.attribute ? subconfig.attribute : ''}
+        .configObject=${subconfig}
+        .configAttribute=${'attribute'}
+        @input=${this._valueChanged}
+      ></floor3dpro-textfield>
+      <floor3dpro-textfield
+        label="URL (for source: url; {state} and {attr:name} are replaced)"
+        fullwidth
+        .value=${subconfig.url ? subconfig.url : ''}
+        .configObject=${subconfig}
+        .configAttribute=${'url'}
+        @input=${this._valueChanged}
+      ></floor3dpro-textfield>
+      <floor3dpro-formfield alignEnd label="Refresh (seconds, 0 = never)">
+        <floor3dpro-textfield
+          type="number"
+          min="0"
+          .value=${subconfig.refresh ? subconfig.refresh : null}
+          .configObject=${subconfig}
+          .configAttribute=${'refresh'}
+          .ignoreNull=${false}
+          @input=${this._valueChanged}
+        ></floor3dpro-textfield>
+      </floor3dpro-formfield>
+      <ha-select
+        label="Fit (<contain>/cover/stretch)"
+        @selected=${this._valueChanged}
+        .value=${subconfig.fit ? subconfig.fit : null}
+        .configObject=${subconfig}
+        .configAttribute=${'fit'}
+        .ignoreNull=${false}
+        @closed=${(ev) => ev.stopPropagation()}
+      >
+        <ha-list-item></ha-list-item>
+        <ha-list-item value="contain">contain</ha-list-item>
+        <ha-list-item value="cover">cover</ha-list-item>
+        <ha-list-item value="stretch">stretch</ha-list-item>
+      </ha-select>
+      <floor3dpro-textfield
+        label="Background colour behind a letterboxed picture (<transparent>)"
+        .value=${subconfig.background ? subconfig.background : ''}
+        .configObject=${subconfig}
+        .configAttribute=${'background'}
+        @input=${this._valueChanged}
+      ></floor3dpro-textfield>
+      <floor3dpro-formfield alignEnd label="Aspect (object width / height; measured if empty)">
+        <floor3dpro-textfield
+          type="number"
+          min="0"
+          step="0.01"
+          .value=${subconfig.aspect ? subconfig.aspect : null}
+          .configObject=${subconfig}
+          .configAttribute=${'aspect'}
+          .ignoreNull=${false}
+          @input=${this._valueChanged}
+        ></floor3dpro-textfield>
+      </floor3dpro-formfield>
+      <ha-select
+        label="Rotate (<0>/90/180/270)"
+        @selected=${this._valueChanged}
+        .value=${subconfig.rotate ? String(subconfig.rotate) : null}
+        .configObject=${subconfig}
+        .configAttribute=${'rotate'}
+        .ignoreNull=${false}
+        @closed=${(ev) => ev.stopPropagation()}
+      >
+        <ha-list-item></ha-list-item>
+        <ha-list-item value="0">0</ha-list-item>
+        <ha-list-item value="90">90</ha-list-item>
+        <ha-list-item value="180">180</ha-list-item>
+        <ha-list-item value="270">270</ha-list-item>
+      </ha-select>
+      <floor3dpro-formfield alignEnd label="Max texture size (px, <1024>)">
+        <floor3dpro-textfield
+          type="number"
+          min="64"
+          max="4096"
+          step="64"
+          .value=${subconfig.max_size ? subconfig.max_size : null}
+          .configObject=${subconfig}
+          .configAttribute=${'max_size'}
+          .ignoreNull=${false}
+          @input=${this._valueChanged}
+        ></floor3dpro-textfield>
+      </floor3dpro-formfield>
+    `;
+  }
+
   private _createDoorElement(index): TemplateResult {
     const options = this._options.entities.options.entities[index].options.door;
     const config = this._configArray[index];
@@ -3218,6 +3376,10 @@ export class Floor3dCardEditor extends LitElement implements LovelaceCardEditor 
               let { text, ...textObject } = ev.target.configObject;
               newobject = textObject;
               break;
+            case 'image':
+              let { image, ...imageObject } = ev.target.configObject;
+              newobject = imageObject;
+              break;
             case 'rotate':
               let { rotate, ...rotateObject } = ev.target.configObject;
               newobject = rotateObject;
@@ -3259,6 +3421,9 @@ export class Floor3dCardEditor extends LitElement implements LovelaceCardEditor 
 
     if (ev.target.optionTgt.text) {
       ev.target.optionTgt.text.visible = false;
+    }
+    if (ev.target.optionTgt.image) {
+      ev.target.optionTgt.image.visible = false;
     }
 
     if (ev.target.optionTgt.cover) {

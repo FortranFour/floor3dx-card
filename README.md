@@ -97,6 +97,45 @@ A virtual light takes its brightness and colour from the Home Assistant entity w
 
 Upstream intended `yes` but the code compared colour arrays by reference and assigned where it meant to compare, so a light with a `color_mode` attribute was re-lit and the whole scene re-rendered on every state change anywhere in Home Assistant. That is fixed.
 
+### Pictures on model objects (`type3d: image`)
+
+`type3d: text` paints a state onto an object. `type3d: image` paints a picture onto it: a still image, an animated GIF, or a video file. The picture comes from the entity's `entity_picture` attribute by default (a camera snapshot, a person's photo, a media player's album art), from any other attribute, from the state, or from a URL that can include the state.
+
+```yaml
+- entity: camera.driveway            # camera snapshot on a picture frame, refreshed every 10 s
+  type3d: image
+  object_id: Frame7_1
+  image:
+    refresh: 10
+
+- entity: media_player.family_room   # album art on the TV screen
+  type3d: image
+  object_id: '1_21'
+  image:
+    fit: contain
+    background: '#000000'
+
+- entity: weather.home               # an animated GIF chosen by the state
+  type3d: image
+  object_id: Frame3_1
+  image:
+    url: /local/weather/{state}.gif
+```
+
+| `image.` | Values | Default |
+|---|---|---|
+| `source` | `entity_picture`, `attribute`, `state`, `url` | `entity_picture`, or `url`/`attribute` when one of those is set |
+| `attribute` | attribute name, for `source: attribute` | |
+| `url` | a URL; `{state}` and `{attr:name}` are replaced from the entity | |
+| `refresh` | seconds between re-fetches of an unchanged URL | 0, never |
+| `fit` | `contain`, `cover`, `stretch` | `contain` |
+| `background` | CSS colour behind a letterboxed picture | transparent |
+| `aspect` | object width divided by height | measured from the object |
+| `rotate` | 0, 90, 180, 270 | 0 |
+| `max_size` | longest side of the texture, in pixels | 1024 |
+
+Animated GIFs are decoded in the card, so they animate in every browser and keep the scene's animation loop running while they show. Video files (`.mp4`, `.webm`) play muted in a loop. The card re-draws the object when the URL changes, when `refresh` fires, and on every animation frame while a GIF or video is showing. `/api/` URLs without an access token are fetched with the dashboard's credentials, so `entity_picture` of a camera works as is. An entity is required; use any entity, `sun.sun` for example, for a fixed picture.
+
 ## Options added by this fork
 
 | Option | Values | Default |
@@ -108,6 +147,7 @@ Upstream intended `yes` but the code compared colour arrays by reference and ass
 | `anisotropy` | 1 to 16 | 8 |
 | `light.light_object` | an object name | not set: one light per object in the group |
 | `light.follow_entity` | `yes`, `brightness`, `color`, `no` | `yes` |
+| `type3d: image` | see above | |
 
 ## Installation
 

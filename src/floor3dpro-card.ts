@@ -10,6 +10,7 @@ import {
 } from 'custom-card-helpers'; // This is a community maintained npm module with common helper functions/types
 import './editor';
 import { HassEntity } from 'home-assistant-js-websocket';
+import { ImageFrame, ImageFit } from './image-frame';
 import {
   createConfigArray,
   createObjectGroupConfigArray,
@@ -153,6 +154,10 @@ export class Floor3dCard extends LitElement {
   private _canvas?: HTMLCanvasElement[];
   private _unit_of_measurement?: string[];
   private _text?: string[];
+  // type3d: image - one ImageFrame per entity index (null for other types), the URL last shown, refresh timers
+  private _imageFrames: (ImageFrame | null)[] = [];
+  private _imageUrls: string[] = [];
+  private _imageTimers: number[] = [];
   private _spritetext?: string[];
   private _objposition: number[][];
   private _slidingdoorposition: THREE.Vector3[][];
@@ -308,6 +313,7 @@ export class Floor3dCard extends LitElement {
       }
 
       this._resizeCanvas();
+      this._startImageRefresh();
       // Faz-0 Engine Backbone: (Stabil.Patch.0.0) Wake frame: visible + ready -> always draw at least once deterministically
       this._requestRender('connected');
     }
@@ -323,6 +329,7 @@ export class Floor3dCard extends LitElement {
     this._unwatchDevicePixelRatio();
     window.clearTimeout(this._settleTimeout);
     window.clearInterval(this._zIndexInterval);
+    this._stopImageRefresh();
 
     if (this._modelready) {
       if (this._to_animate) {
@@ -1321,6 +1328,11 @@ export class Floor3dCard extends LitElement {
               } else {
                 this._text.push('');
               }
+              if (entity.type3d == 'image') {
+                this._imageUrls.push(this._imageUrlFor(entity, hass.states[entity.entity]));
+              } else {
+                this._imageUrls.push('');
+              }
               if (entity.type3d == 'room') {
                 this._rooms.push(entity.object_id + '_room');
                 this._sprites.push(entity.object_id + '_sprites');
@@ -1496,6 +1508,13 @@ export class Floor3dCard extends LitElement {
                 if (this._canvas[i] && toupdate) {
                   this._updatetext(entity, this._text[i], this._canvas[i], this._unit_of_measurement[i]);
                   torerender = true;
+                }
+              } else if (entity.type3d == 'image') {
+                this._states[i] = state;
+                const url = this._imageUrlFor(entity, hass.states[entity.entity]);
+                if (url !== this._imageUrls[i]) {
+                  this._imageUrls[i] = url;
+                  this._loadImage(i, false);
                 }
               } else if (entity.type3d == 'rotate') {
                 this._states[i] = state;
@@ -3073,6 +3092,8 @@ export class Floor3dCard extends LitElement {
             } else if (entity.type3d == 'text') {
               this._canvas[i] = this._createTextCanvas(entity.text, this._text[i], this._unit_of_measurement[i]);
               this._updatetext(entity, this._text[i], this._canvas[i], this._unit_of_measurement[i]);
+            } else if (entity.type3d == 'image') {
+              this._createImage(entity, i);
             } else if (entity.type3d == 'rotate') {
               this._rotatecalc(entity, i);
             } else if (entity.type3d == 'room') {
@@ -3081,6 +3102,7 @@ export class Floor3dCard extends LitElement {
             }
           }
         });
+        this._startImageRefresh();
       }
       console.log('Add 3D Object End');
     } catch (e) {
@@ -3422,6 +3444,115 @@ export class Floor3dCard extends LitElement {
     if (bs.length == 1) bs = '0' + bs;
 
     return '#' + rs + gs + bs;
+  }
+
+  // ---- type3d: image ----------------------------------------------------------------------------
+  // image:
+  //   source     entity_picture (default) | attribute | state | url
+  //   attribute  attribute name for source: attribute
+  //   url        for source: url; {state} and {attr:name} are replaced from the entity
+  //   refresh    seconds between re-fetches of the same URL (camera snapshots); 0 = never
+  //   fit        contain (default) | cover | stretch
+  //   background CSS colour behind a letterboxed picture; default transparent
+  //   aspect     object width / height; default measured from the object's bounding box
+  //   rotate     0 | 90 | 180 | 270
+  //   max_size   longest side of the texture in pixels; default 1024
+
+  private _imageUrlFor(entity: Floor3dCardConfig, stateObj: any): string {
+    const cfg = entity.image || {};
+    const source = cfg.source ? String(cfg.source) : cfg.url ? 'url' : cfg.attribute ? 'attribute' : 'entity_picture';
+    const attrs = stateObj && stateObj.attributes ? stateObj.attributes : {};
+    let url = '';
+    switch (source) {
+      case 'url':
+        url = String(cfg.url || '');
+        url = url.replace(/\{state\}/g, stateObj ? String(stateObj.state) : '');
+        url = url.replace(/\{attr:([^}]+)\}/g, (_m, name) => (attrs[name] !== undefined ? String(attrs[name]) : ''));
+        break;
+      case 'attribute':
+        url = attrs[cfg.attribute] !== undefined ? String(attrs[cfg.attribute]) : '';
+        break;
+      case 'state':
+        url = stateObj ? String(stateObj.state) : '';
+        break;
+      default:
+        url = attrs['entity_picture'] ? String(attrs['entity_picture']) : '';
+    }
+    if (url === 'unknown' || url === 'unavailable' || url === 'None') url = '';
+    return url;
+  }
+
+  private _imageAspect(entity: Floor3dCardConfig, object: THREE.Object3D): number {
+    const cfg = entity.image || {};
+    if (cfg.aspect && parseFloat(cfg.aspect) > 0) return parseFloat(cfg.aspect);
+    const box = new THREE.Box3().setFromObject(object);
+    const size = box.getSize(new THREE.Vector3());
+    // the thinnest dimension is the frame's depth; of the other two, Y is the height if it is among them
+    const dims = [
+      { axis: 'x', v: size.x },
+      { axis: 'y', v: size.y },
+      { axis: 'z', v: size.z },
+    ].sort((a, b) => b.v - a.v);
+    const [a, b] = dims;
+    if (!(b.v > 0)) return 1;
+    if (a.axis === 'y') return b.v / a.v;
+    if (b.axis === 'y') return a.v / b.v;
+    return a.v / b.v; // flat, lying object: longer side is the width
+  }
+
+  private _createImage(entity: Floor3dCardConfig, i: number): void {
+    const object: any = this._scene.getObjectByName(entity.object_id);
+    if (!object || !(object instanceof THREE.Mesh)) {
+      console.warn('floor3d-card: image object <' + entity.object_id + '> not found in the model');
+      return;
+    }
+    const cfg = entity.image || {};
+    const fileExt = this._config.objfile.split('?')[0].split('.').pop();
+    const hass: any = this._hass;
+    const frame = new ImageFrame({
+      fit: (['contain', 'cover', 'stretch'].includes(cfg.fit) ? cfg.fit : 'contain') as ImageFit,
+      background: cfg.background ? String(cfg.background) : 'transparent',
+      maxSize: cfg.max_size ? Math.max(64, parseInt(cfg.max_size)) : 1024,
+      aspect: this._imageAspect(entity, object),
+      rotate: [0, 90, 180, 270].includes(parseInt(cfg.rotate)) ? parseInt(cfg.rotate) : 0,
+      flipY: fileExt !== 'glb',
+      fetch: (url: string) =>
+        url.startsWith('/api/') && !url.includes('access_token') && hass && typeof hass.fetchWithAuth === 'function'
+          ? hass.fetchWithAuth(url)
+          : fetch(url, { credentials: 'same-origin' }),
+    } as any);
+    this._imageFrames[i] = frame;
+    const material = new THREE.MeshBasicMaterial({ map: frame.texture, transparent: true });
+    material.name = 'f3dmat' + object.name;
+    object.material = material;
+    this._loadImage(i, false);
+  }
+
+  private _loadImage(i: number, force: boolean): void {
+    const frame = this._imageFrames[i];
+    if (!frame) return;
+    frame.load(this._imageUrls[i], force).then((ok) => {
+      if (ok) {
+        this._startOrStopAnimationLoop();
+        this._requestRender('image');
+      }
+    });
+  }
+
+  private _startImageRefresh(): void {
+    this._stopImageRefresh();
+    this._config.entities.forEach((entity, i) => {
+      if (entity.type3d !== 'image' || !this._imageFrames[i]) return;
+      const seconds = entity.image && entity.image.refresh ? parseFloat(entity.image.refresh) : 0;
+      if (seconds > 0) {
+        this._imageTimers[i] = window.setInterval(() => this._loadImage(i, true), seconds * 1000);
+      }
+    });
+  }
+
+  private _stopImageRefresh(): void {
+    this._imageTimers.forEach((t) => window.clearInterval(t));
+    this._imageTimers = [];
   }
 
   private _updatetext(entity: Floor3dCardConfig, state: string, canvas: HTMLCanvasElement, uom: string): void {
@@ -3911,8 +4042,12 @@ export class Floor3dCard extends LitElement {
   }
 
   private _needsAnimationLoop() {
-    // Check rotations and Tween.getAll()
-    return this._rotation_state.some((item) => item !== 0) || TWEEN.getAll().length > 0;
+    // Check rotations, Tween.getAll() and animated pictures (GIF, video)
+    return (
+      this._rotation_state.some((item) => item !== 0) ||
+      TWEEN.getAll().length > 0 ||
+      this._imageFrames.some((f) => f && f.animated)
+    );
   }
 
   // If every rotating entity and Tween is stopped, disable animation
@@ -3955,6 +4090,11 @@ export class Floor3dCard extends LitElement {
     });
 
     TWEEN.update();
+
+    const now = performance.now();
+    this._imageFrames.forEach((f) => {
+      if (f) f.tick(now);
+    });
 
     this._renderer.shadowMap.needsUpdate = true;
     // Faz-0 Engine Backbone: (Stabil.Patch.0.0)

@@ -83,6 +83,7 @@ export interface Floor3dCardConfig {
   hinge: string;
   pane: string;
   text: any;
+  image: any;
   gesture: any;
   rotate: any;
   round_per_second: number;

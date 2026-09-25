@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.0
+
+### Added
+- `type3d: image`: a picture on a model object. Still images, animated GIFs (decoded in the card with gifuct-js, so they animate in every browser) and video files. The picture comes from `entity_picture`, another attribute, the state, or a URL with `{state}` and `{attr:name}` placeholders. Options `refresh`, `fit`, `background`, `aspect`, `rotate`, `max_size`. Editor section included.
+- `dev/harness/test_image.py` and two small test assets.
+
 ## 1.1.0
 
 ### Added
