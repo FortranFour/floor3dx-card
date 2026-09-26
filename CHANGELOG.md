@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.0
+
+### Added
+- `type3d: color` conditions accept `color: entity` (the light's colour, darkened by its brightness) and `color: entity_color` (the light's colour at full strength). The object is re-coloured on any colour or brightness change. `dev/harness/test_entity_color.py`.
+
 ## 1.2.1
 
 ### Added

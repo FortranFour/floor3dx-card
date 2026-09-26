@@ -158,6 +158,8 @@ export class Floor3dCard extends LitElement {
   private _imageFrames: (ImageFrame | null)[] = [];
   private _imageUrls: string[] = [];
   private _imageTimers: number[] = [];
+  // type3d: color with a colorcondition colour of `entity` / `entity_color`: last applied colour signature
+  private _colorSignature: string[] = [];
   private _spritetext?: string[];
   private _objposition: number[][];
   private _slidingdoorposition: THREE.Vector3[][];
@@ -1507,6 +1509,16 @@ export class Floor3dCard extends LitElement {
                 }
                 if (this._canvas[i] && toupdate) {
                   this._updatetext(entity, this._text[i], this._canvas[i], this._unit_of_measurement[i]);
+                  torerender = true;
+                }
+              } else if (entity.type3d == 'color' && this._usesEntityColor(entity)) {
+                // the mesh follows the light's own colour and brightness, so re-colour on any change of
+                // those, not only on a state change
+                const signature = state + '|' + this._entityColorSignature(hass.states[entity.entity]);
+                if (this._colorSignature[i] !== signature) {
+                  this._colorSignature[i] = signature;
+                  this._states[i] = state;
+                  this._updatecolor(entity, i);
                   torerender = true;
                 }
               } else if (entity.type3d == 'image') {
@@ -3964,6 +3976,41 @@ export class Floor3dCard extends LitElement {
     }
   }
 
+  // colorcondition colour values that read the entity itself:
+  //   entity        the light's rgb_color, darkened by its brightness (a dim bulb is a dark bulb)
+  //   entity_color  the light's rgb_color at full strength, brightness ignored
+  // Both fall back to the entity's colour temperature, then to white, when no colour is reported.
+  private _usesEntityColor(entity: Floor3dCardConfig): boolean {
+    return (
+      Array.isArray(entity.colorcondition) &&
+      entity.colorcondition.some((c) => c && (c.color === 'entity' || c.color === 'entity_color'))
+    );
+  }
+
+  private _entityColorSignature(stateObj: any): string {
+    const a = stateObj && stateObj.attributes ? stateObj.attributes : {};
+    return JSON.stringify([a['rgb_color'], a['color_temp_kelvin'], a['color_temp'], a['brightness']]);
+  }
+
+  private _entityColor(value: any, stateObj: any): string | null {
+    if (value !== 'entity' && value !== 'entity_color') return null;
+    const a = stateObj && stateObj.attributes ? stateObj.attributes : {};
+    let rgb: number[] = [255, 255, 255];
+    if (Array.isArray(a['rgb_color']) && a['rgb_color'].length >= 3) {
+      rgb = [a['rgb_color'][0], a['rgb_color'][1], a['rgb_color'][2]];
+    } else if (typeof a['color_temp_kelvin'] === 'number' && a['color_temp_kelvin'] > 0) {
+      rgb = this._TemperatureToRGB(1000000 / a['color_temp_kelvin']);
+    } else if (typeof a['color_temp'] === 'number' && a['color_temp'] > 0) {
+      rgb = this._TemperatureToRGB(a['color_temp']);
+    }
+    if (value === 'entity' && typeof a['brightness'] === 'number') {
+      // keep a floor so a bulb at 1% still reads as lit, not black
+      const k = 0.2 + 0.8 * Math.max(0, Math.min(255, a['brightness'])) / 255;
+      rgb = rgb.map((c) => c * k);
+    }
+    return this._RGBToHex(rgb[0], rgb[1], rgb[2]);
+  }
+
   private _updatecolor(item: any, index: number): void {
     // Change the color of the object when, for the bound device, the state matches the condition
 
@@ -3976,9 +4023,12 @@ export class Floor3dCard extends LitElement {
         let defaultcolor = true;
         for (i in item.colorcondition) {
           if (this._states[index] == item.colorcondition[i].state) {
-            const colorarray = item.colorcondition[i].color.split(',');
+            const colorarray = String(item.colorcondition[i].color).split(',');
             let color = '';
-            if (colorarray.length == 3) {
+            const fromEntity = this._entityColor(item.colorcondition[i].color, this._hass.states[item.entity]);
+            if (fromEntity) {
+              color = fromEntity;
+            } else if (colorarray.length == 3) {
               color = this._RGBToHex(Number(colorarray[0]), Number(colorarray[1]), Number(colorarray[2]));
             } else {
               color = item.colorcondition[i].color;
