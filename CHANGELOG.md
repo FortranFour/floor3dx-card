@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.3
+
+### Added
+- `image.url` accepts a map of state to URL (with `default`), so different states can use different files and file types: a video while on, a still while off.
+
 ## 1.3.2
 
 ### Added

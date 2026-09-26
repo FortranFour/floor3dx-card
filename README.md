@@ -170,6 +170,16 @@ A light sits at the centre of its object, so an object that should be lit from i
     fit: contain
     background: '#000000'
 
+- entity: switch.arcade              # a looping video while on, a dark still while off
+  type3d: image
+  object_id: arcade_screen
+  image:
+    url:
+      'on': /local/arcade/attract.mp4
+      'off': /local/arcade/screen-off.jpg
+    fit: contain
+    background: '#000000'
+
 - entity: weather.home               # an animated GIF chosen by the state
   type3d: image
   object_id: Frame3_1
@@ -181,7 +191,7 @@ A light sits at the centre of its object, so an object that should be lit from i
 |---|---|---|
 | `source` | `entity_picture`, `attribute`, `state`, `url` | `entity_picture`, or `url`/`attribute` when one of those is set |
 | `attribute` | attribute name, for `source: attribute` | |
-| `url` | a URL; `{state}` and `{attr:name}` are replaced from the entity | |
+| `url` | a URL; `{state}` and `{attr:name}` are replaced from the entity. Or a map of state to URL, with an optional `default` | |
 | `refresh` | seconds between re-fetches of an unchanged URL | 0, never |
 | `fit` | `contain`, `cover`, `stretch` | `contain` |
 | `background` | CSS colour behind a letterboxed picture | transparent |

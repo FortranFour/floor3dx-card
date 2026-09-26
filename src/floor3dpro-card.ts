@@ -3500,14 +3500,22 @@ export class Floor3dCard extends LitElement {
   private _imageUrlFor(entity: Floor3dCardConfig, stateObj: any): string {
     const cfg = entity.image || {};
     const source = cfg.source ? String(cfg.source) : cfg.url ? 'url' : cfg.attribute ? 'attribute' : 'entity_picture';
+    // (a url given as a state map counts as source: url)
     const attrs = stateObj && stateObj.attributes ? stateObj.attributes : {};
     let url = '';
     switch (source) {
-      case 'url':
-        url = String(cfg.url || '');
+      case 'url': {
+        // url may be a single template or a map of state -> url with an optional `default`
+        let raw = cfg.url || '';
+        if (raw && typeof raw === 'object') {
+          const st = stateObj ? String(stateObj.state) : '';
+          raw = raw[st] !== undefined ? raw[st] : raw['default'] !== undefined ? raw['default'] : '';
+        }
+        url = String(raw || '');
         url = url.replace(/\{state\}/g, stateObj ? String(stateObj.state) : '');
         url = url.replace(/\{attr:([^}]+)\}/g, (_m, name) => (attrs[name] !== undefined ? String(attrs[name]) : ''));
         break;
+      }
       case 'attribute':
         url = attrs[cfg.attribute] !== undefined ? String(attrs[cfg.attribute]) : '';
         break;
