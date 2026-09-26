@@ -2710,8 +2710,21 @@ export class Floor3dCard extends LitElement {
             this._slidingdoorposition.push([]);
             if (this._hass.states[entity.entity]) {
               if (entity.type3d == 'rotate') {
-                this._round_per_seconds.push(entity.rotate.round_per_second);
-                this._axis_to_rotate.push(entity.rotate.axis);
+                // YAML 1.1 parsers (the dashboard editor among them) read a bare `y` as the boolean true, and
+                // the animation loop's switch then matches nothing: the entry silently never turns. Accept
+                // true as y, any case, and default to y; complain about anything else.
+                const rps = parseFloat(entity.rotate.round_per_second);
+                this._round_per_seconds.push(isNaN(rps) ? 1 : rps);
+                let axis: any = entity.rotate.axis;
+                if (axis === true || axis === undefined || axis === null || axis === '') axis = 'y';
+                axis = String(axis).trim().toLowerCase();
+                if (!['x', 'y', 'z'].includes(axis)) {
+                  console.warn(
+                    'floor3d-card: rotate axis <' + entity.rotate.axis + '> for ' + entity.entity + ' is not x, y or z; using y',
+                  );
+                  axis = 'y';
+                }
+                this._axis_to_rotate.push(axis);
                 this._rotation_state.push(0);
                 this._rotation_index.push(i);
                 let bbox: THREE.Box3;
@@ -2958,6 +2971,14 @@ export class Floor3dCard extends LitElement {
                       }
                     }
 
+                    // light.offset: move the light away from the object's centre (model units), for a light
+                    // that should sit in front of or beside the object it belongs to
+                    if (entity.light.offset) {
+                      x += Number(entity.light.offset.x) || 0;
+                      y += Number(entity.light.offset.y) || 0;
+                      z += Number(entity.light.offset.z) || 0;
+                    }
+
                     let decay: number;
                     let distance: number;
 
@@ -3038,6 +3059,12 @@ export class Floor3dCard extends LitElement {
                     } else {
                       light.castShadow = true;
                       light.shadow.bias = -0.0001;
+                      // light.shadow_map_size: resolution of this light's shadow map (default 512); crisp
+                      // shadows of thin objects, slats or railings, need 1024 or 2048
+                      const mapSize = parseInt(entity.light.shadow_map_size);
+                      if (mapSize >= 128 && mapSize <= 4096) {
+                        light.shadow.mapSize.set(mapSize, mapSize);
+                      }
                     }
                     light.name = element.object_id + '_light';
                   }

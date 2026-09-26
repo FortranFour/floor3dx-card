@@ -97,6 +97,23 @@ A virtual light takes its brightness and colour from the Home Assistant entity w
 
 Upstream intended `yes` but the code compared colour arrays by reference and assigned where it meant to compare, so a light with a `color_mode` attribute was re-lit and the whole scene re-rendered on every state change anywhere in Home Assistant. That is fixed.
 
+### Shadows cast by the light's own object
+
+A light sits at the centre of its object, so an object that should be lit from in front (a slatted headboard, a railing, a sculpture) needs the light moved out: `light.offset` shifts it by a fixed amount in model units. With `shadow: 'yes'` on the card and on the entry, the object then throws its shadow on the wall behind it; `shadow_map_size: 2048` keeps thin shadows crisp, and `angle` (the cone's half-angle in degrees, default 18) sets how much of the wall is lit. Use `light_object` to name one part of a group as the source, because the source itself never casts a shadow.
+
+```yaml
+- entity: light.headboard_strip
+  type3d: light
+  object_id: <headboard>
+  light:
+    light_object: top_rail
+    shadow: 'yes'
+    shadow_map_size: '2048'
+    angle: '60'
+    offset: { x: -70, 'y': -20, z: 0 }     # out in front of the headboard
+    light_direction: { x: 5, 'y': 0, z: 0 } # pointing back at the wall
+```
+
 ### Pictures on model objects (`type3d: image`)
 
 `type3d: text` paints a state onto an object. `type3d: image` paints a picture onto it: a still image, an animated GIF, or a video file. The picture comes from the entity's `entity_picture` attribute by default (a camera snapshot, a person's photo, a media player's album art), from any other attribute, from the state, or from a URL that can include the state.
@@ -147,6 +164,8 @@ Animated GIFs are decoded in the card, so they animate in every browser and keep
 | `anisotropy` | 1 to 16 | 8 |
 | `light.light_object` | an object name | not set: one light per object in the group |
 | `light.follow_entity` | `yes`, `brightness`, `color`, `no` | `yes` |
+| `light.offset` | `{x, y, z}` in model units, added to the object's centre | 0 |
+| `light.shadow_map_size` | 128 to 4096 | 512 |
 | `type3d: image` | see above | |
 
 ## Installation

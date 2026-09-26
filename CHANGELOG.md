@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.1
+
+### Added
+- `light.offset`: move a light away from its object's centre, so an object can be lit from in front and cast its own shadow on what is behind it.
+- `light.shadow_map_size`: per-light shadow map resolution (default 512).
+
+### Fixed
+- `rotate.axis: y` never turned anything. The dashboard editor's YAML parser reads a bare `y` as the boolean `true` (YAML 1.1), and the animation loop's axis switch then matched nothing, silently. The card now accepts `true` as `y`, any case, defaults to `y`, and warns on anything else. `round_per_second` is parsed as a number with a default of 1. Present in floor3d-card and floor3dpro-card as well.
+
 ## 1.2.0
 
 ### Added

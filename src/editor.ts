@@ -2364,6 +2364,18 @@ export class Floor3dCardEditor extends LitElement implements LovelaceCardEditor 
                               <ha-list-item value="color">color only</ha-list-item>
                               <ha-list-item value="no">no (lumens and color from config)</ha-list-item>
                             </ha-select>
+                            <floor3dpro-formfield alignEnd label="Shadow map size (px, <512>)">
+                              <floor3dpro-textfield
+                                type="number"
+                                min="128"
+                                max="4096"
+                                .value=${config.light.shadow_map_size ? config.light.shadow_map_size : null}
+                                .configObject=${config.light}
+                                .configAttribute=${'shadow_map_size'}
+                                .ignoreNull=${false}
+                                @input=${this._valueChanged}
+                              ></floor3dpro-textfield>
+                            </floor3dpro-formfield>
                             <floor3dpro-formfield alignEnd label="Angle degrees (spot)">
                               <floor3dpro-textfield
                                 type="number"
