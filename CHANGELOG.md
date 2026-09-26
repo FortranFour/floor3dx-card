@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.2
+
+### Added
+- `type3d: image` on objects without texture coordinates: the card generates a flat mapping across the face, oriented from the face normal so the picture reads correctly from in front. Options `mirror` and `planar_uv`.
+
 ## 1.3.1
 
 ### Added

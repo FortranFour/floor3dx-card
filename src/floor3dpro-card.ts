@@ -3561,10 +3561,74 @@ export class Floor3dCard extends LitElement {
           : fetch(url, { credentials: 'same-origin' }),
     } as any);
     this._imageFrames[i] = frame;
+    // Many exported objects (Sweet Home 3D panels, plain boxes) carry no UV coordinates, and a texture on
+    // such a mesh does not show at all. Give them a planar mapping across the object's two largest axes.
+    this._ensurePlanarUv(object, cfg, frame);
     const material = new THREE.MeshBasicMaterial({ map: frame.texture, transparent: true });
     material.name = 'f3dmat' + object.name;
     object.material = material;
     this._loadImage(i, false);
+  }
+
+  // Planar UVs for a mesh that has none. u runs left-to-right and v bottom-to-top as seen from the
+  // side the face points at (its average normal), so a picture reads correctly from in front of a
+  // panel, a screen or a wall. A face lying flat gets x as u and -z as v (top of the picture towards
+  // -z). `rotate` and `mirror` in the image options adjust the rest.
+  private _ensurePlanarUv(object: THREE.Mesh, cfg: any, frame: ImageFrame): void {
+    const geometry: any = object.geometry;
+    const force = cfg.planar_uv === true || cfg.planar_uv === 'yes';
+    if (!geometry || !geometry.attributes || !geometry.attributes.position) return;
+    if (geometry.attributes.uv && !force) return;
+    const pos = geometry.attributes.position;
+    // average face normal
+    let n = new THREE.Vector3();
+    if (geometry.attributes.normal) {
+      const nrm = geometry.attributes.normal;
+      for (let k = 0; k < nrm.count; k++) n.add(new THREE.Vector3().fromBufferAttribute(nrm, k));
+    }
+    if (n.lengthSq() < 1e-6 && pos.count >= 3) {
+      const p0 = new THREE.Vector3().fromBufferAttribute(pos, 0);
+      const p1 = new THREE.Vector3().fromBufferAttribute(pos, 1);
+      const p2 = new THREE.Vector3().fromBufferAttribute(pos, 2);
+      n = p1.sub(p0).cross(p2.sub(p0));
+    }
+    if (n.lengthSq() < 1e-6) n.set(1, 0, 0);
+    n.normalize();
+    const up = new THREE.Vector3(0, 1, 0);
+    let uDir: THREE.Vector3;
+    let vDir: THREE.Vector3;
+    if (Math.abs(n.y) > 0.9) {
+      // flat: seen from above, x to the right, picture top towards -z
+      uDir = new THREE.Vector3(1, 0, 0);
+      vDir = new THREE.Vector3(0, 0, -1);
+      if (n.y < 0) uDir.x = -1; // seen from below
+    } else {
+      uDir = new THREE.Vector3().crossVectors(up, n).normalize(); // screen-right for a viewer facing the face
+      vDir = up;
+    }
+    const mirror = cfg.mirror === true || cfg.mirror === 'yes';
+    if (mirror) uDir.negate();
+    let uMin = Infinity, uMax = -Infinity, vMin = Infinity, vMax = -Infinity;
+    const proj: number[] = [];
+    for (let k = 0; k < pos.count; k++) {
+      const p = new THREE.Vector3().fromBufferAttribute(pos, k);
+      const u = p.dot(uDir);
+      const v = p.dot(vDir);
+      proj.push(u, v);
+      uMin = Math.min(uMin, u); uMax = Math.max(uMax, u);
+      vMin = Math.min(vMin, v); vMax = Math.max(vMax, v);
+    }
+    const ru = uMax - uMin || 1;
+    const rv = vMax - vMin || 1;
+    const uv = new Float32Array(pos.count * 2);
+    for (let k = 0; k < pos.count; k++) {
+      uv[2 * k] = (proj[2 * k] - uMin) / ru;
+      uv[2 * k + 1] = (proj[2 * k + 1] - vMin) / rv;
+    }
+    geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    // v = 0 is the bottom of the face here, so the picture's first row must land at v = 1
+    frame.texture.flipY = true;
+    frame.texture.needsUpdate = true;
   }
 
   private _loadImage(i: number, force: boolean): void {
