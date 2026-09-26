@@ -1749,6 +1749,14 @@ export class Floor3dCardEditor extends LitElement implements LovelaceCardEditor 
                   .configObject=${config}
                   @input=${this._valueChanged}
                 ></floor3dpro-textfield>
+                <floor3dpro-textfield
+                  label="Color entity (supplies colour and brightness; light and color types)"
+                  fullwidth
+                  .value=${config.color_entity ? config.color_entity : ''}
+                  .configAttribute=${'color_entity'}
+                  .configObject=${config}
+                  @input=${this._valueChanged}
+                ></floor3dpro-textfield>
                 <ha-select
                   label="Action"
                   @selected=${this._valueChanged}

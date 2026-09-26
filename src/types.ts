@@ -53,6 +53,7 @@ export interface Floor3dCardConfig {
   tap_action?: ActionConfig;
   double_tap_action?: ActionConfig;
   entity: string;
+  color_entity?: string;
   entity_template: string;
   cover: any;
   type3d: string;

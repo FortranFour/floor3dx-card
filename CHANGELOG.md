@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.1
+
+### Added
+- `color_entity` on `type3d: light` and `type3d: color` entries: a second entity that supplies brightness and colour while `entity` supplies the state, for colour bulbs behind wall switches. Falls back to the configured colour and lumens while the bulb is unavailable.
+
 ## 1.3.0
 
 ### Added

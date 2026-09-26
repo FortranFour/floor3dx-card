@@ -97,6 +97,29 @@ A virtual light takes its brightness and colour from the Home Assistant entity w
 
 Upstream intended `yes` but the code compared colour arrays by reference and assigned where it meant to compare, so a light with a `color_mode` attribute was re-lit and the whole scene re-rendered on every state change anywhere in Home Assistant. That is fixed.
 
+### A switch for the state, a bulb for the colour
+
+A colour bulb behind a wall switch has its colour on one entity and its power on another, and the bulb goes `unavailable` whenever the switch is off. `color_entity` on an entry, for `type3d: light` and `type3d: color`, names the entity that supplies brightness and colour while `entity` keeps supplying the state. When the colour entity is unavailable or reports no colour, the entry uses its configured `color` and `lumens`; changes to the colour entity alone re-light and re-colour the object.
+
+```yaml
+- entity: switch.kitchen_sink
+  color_entity: light.kitchen_sink_bulb
+  type3d: light
+  object_id: sink_light
+  light:
+    lumens: '900'
+    color: '#FFB830'
+- entity: switch.kitchen_sink
+  color_entity: light.kitchen_sink_bulb
+  type3d: color
+  object_id: sink_light
+  colorcondition:
+    - state: 'off'
+      color: LightSteelBlue
+    - state: 'on'
+      color: entity
+```
+
 ### Mesh colour from the light itself
 
 A `type3d: color` condition can take its colour from the entity instead of a fixed value: `color: entity` uses the light's current colour darkened by its brightness (a dim bulb is a dark bulb), `color: entity_color` uses the colour at full strength. The mesh is re-coloured whenever the light's colour or brightness changes, not only when it switches on or off. Colour comes from `rgb_color`, or from the colour temperature when that is all the light reports, or white.
@@ -181,6 +204,7 @@ Animated GIFs are decoded in the card, so they animate in every browser and keep
 | `light.follow_entity` | `yes`, `brightness`, `color`, `no` | `yes` |
 | `light.offset` | `{x, y, z}` in model units, added to the object's centre | 0 |
 | `light.shadow_map_size` | 128 to 4096 | 512 |
+| `color_entity` | an entity id, on `light` and `color` entries | `entity` |
 | `colorcondition[].color` | `entity`, `entity_color` in addition to any colour | |
 | `type3d: image` | see above | |
 

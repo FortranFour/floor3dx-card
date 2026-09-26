@@ -1389,7 +1389,7 @@ export class Floor3dCard extends LitElement {
               } else {
                 this._lights.push('');
               }
-              const fromEntity = this._lightFromEntity(entity, hass.states[entity.entity]);
+              const fromEntity = this._lightFromEntity(entity, this._colorSource(entity, hass));
               this._color.push(fromEntity.color);
               this._brightness.push(fromEntity.brightness);
             } else {
@@ -1476,7 +1476,7 @@ export class Floor3dCard extends LitElement {
                 }
                 // Compare by value: the upstream code compared arrays by reference (always different) and
                 // assigned instead of comparing color_mode, so every hass update re-lit and re-rendered.
-                const fromEntity = this._lightFromEntity(entity, hass.states[entity.entity]);
+                const fromEntity = this._lightFromEntity(entity, this._colorSource(entity, hass));
                 if (JSON.stringify(fromEntity.color) !== JSON.stringify(this._color[i])) {
                   this._color[i] = fromEntity.color;
                   toupdate = true;
@@ -1514,7 +1514,7 @@ export class Floor3dCard extends LitElement {
               } else if (entity.type3d == 'color' && this._usesEntityColor(entity)) {
                 // the mesh follows the light's own colour and brightness, so re-colour on any change of
                 // those, not only on a state change
-                const signature = state + '|' + this._entityColorSignature(hass.states[entity.entity]);
+                const signature = state + '|' + this._entityColorSignature(this._colorSource(entity, hass));
                 if (this._colorSignature[i] !== signature) {
                   this._colorSignature[i] = signature;
                   this._states[i] = state;
@@ -3980,6 +3980,19 @@ export class Floor3dCard extends LitElement {
   //   entity        the light's rgb_color, darkened by its brightness (a dim bulb is a dark bulb)
   //   entity_color  the light's rgb_color at full strength, brightness ignored
   // Both fall back to the entity's colour temperature, then to white, when no colour is reported.
+  // color_entity: a second entity that supplies brightness and colour while `entity` supplies the state.
+  // For a colour bulb behind a wall switch: the switch is the entity, the bulb the color_entity. When the
+  // bulb is unavailable or reports nothing, the entry falls back to its configured colour and lumens.
+  private _colorSource(entity: Floor3dCardConfig, hass: any): any {
+    const states = hass && hass.states ? hass.states : {};
+    if (entity.color_entity && states[entity.color_entity]) {
+      const source = states[entity.color_entity];
+      if (source.state !== 'unavailable' && source.state !== 'unknown') return source;
+      return { state: source.state, attributes: {} };
+    }
+    return states[entity.entity];
+  }
+
   private _usesEntityColor(entity: Floor3dCardConfig): boolean {
     return (
       Array.isArray(entity.colorcondition) &&
@@ -4025,7 +4038,7 @@ export class Floor3dCard extends LitElement {
           if (this._states[index] == item.colorcondition[i].state) {
             const colorarray = String(item.colorcondition[i].color).split(',');
             let color = '';
-            const fromEntity = this._entityColor(item.colorcondition[i].color, this._hass.states[item.entity]);
+            const fromEntity = this._entityColor(item.colorcondition[i].color, this._colorSource(item, this._hass));
             if (fromEntity) {
               color = fromEntity;
             } else if (colorarray.length == 3) {
