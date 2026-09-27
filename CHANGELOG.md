@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.4
+
+### Added
+- `type3d: shade`: a roller or cellular shade whose fabric shrinks and grows with the cover position, with an optional second motor for the top edge (top-down/bottom-up shades) and `invert` for covers that report 100 as closed. Animated. `dev/harness/test_shade.py`.
+
 ## 1.3.3
 
 ### Added

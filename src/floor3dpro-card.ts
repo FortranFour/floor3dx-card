@@ -160,6 +160,9 @@ export class Floor3dCard extends LitElement {
   private _imageTimers: number[] = [];
   // type3d: color with a colorcondition colour of `entity` / `entity_color`: last applied colour signature
   private _colorSignature: string[] = [];
+  // type3d: shade - per entity index: the fabric's resting bottom edge and full height, last applied span
+  private _shadeBase: { y0: number; height: number }[] = [];
+  private _shadeSignature: string[] = [];
   private _spritetext?: string[];
   private _objposition: number[][];
   private _slidingdoorposition: THREE.Vector3[][];
@@ -1509,6 +1512,15 @@ export class Floor3dCard extends LitElement {
                 }
                 if (this._canvas[i] && toupdate) {
                   this._updatetext(entity, this._text[i], this._canvas[i], this._unit_of_measurement[i]);
+                  torerender = true;
+                }
+              } else if (entity.type3d == 'shade') {
+                this._states[i] = state;
+                const span = this._shadeSpan(entity, hass);
+                const signature = span.bottom + '|' + span.top;
+                if (this._shadeSignature[i] !== signature) {
+                  this._shadeSignature[i] = signature;
+                  this._updateShade(entity, i, span);
                   torerender = true;
                 }
               } else if (entity.type3d == 'color' && this._usesEntityColor(entity)) {
@@ -2878,6 +2890,9 @@ export class Floor3dCard extends LitElement {
                   // console.log("End Add Door Slide");
                 }
               }
+              if (entity.type3d == 'shade') {
+                this._setupShade(entity, i);
+              }
               if (entity.type3d == 'cover') {
                 const pane: THREE.Mesh = this._scene.getObjectByName(entity.cover.pane) as THREE.Mesh;
 
@@ -3328,6 +3343,74 @@ export class Floor3dCard extends LitElement {
 
       this._applyTextCanvasSprite(_roomCanvas, roomsprite);
     }
+  }
+
+  // ---- type3d: shade ----------------------------------------------------------------------------
+  // A roller or cellular shade whose fabric shrinks and grows with the cover position, instead of
+  // sliding out of the window as type3d: cover does. `entity` is the motor that moves the bottom
+  // edge (position 100 = fully raised, the Home Assistant convention); shade.top_entity, optional, is
+  // a second motor that lowers the top edge (top-down/bottom-up shades). shade.invert: yes for covers
+  // that report 100 as closed. The object is the fabric; a headrail or window stays untouched.
+
+  private _shadePosition(stateObj: any, invert: boolean): number {
+    if (!stateObj) return 0;
+    let pos = stateObj.attributes ? stateObj.attributes['current_position'] : undefined;
+    if (pos === undefined || pos === null) {
+      pos = stateObj.state === 'open' ? 100 : 0;
+    }
+    pos = Math.max(0, Math.min(100, parseFloat(pos) || 0)) / 100;
+    return invert ? 1 - pos : pos;
+  }
+
+  private _shadeSpan(entity: Floor3dCardConfig, hass: any): { bottom: number; top: number } {
+    const cfg = entity.shade || {};
+    const invert = cfg.invert === true || cfg.invert === 'yes';
+    const states = hass && hass.states ? hass.states : {};
+    const bottom = this._shadePosition(states[entity.entity], invert); // fraction raised from the bottom
+    const top = cfg.top_entity ? this._shadePosition(states[cfg.top_entity], invert) : 0; // fraction lowered from the top
+    return { bottom, top };
+  }
+
+  private _setupShade(entity: Floor3dCardConfig, i: number): void {
+    const targets = this._object_ids[i] && this._object_ids[i].objects ? this._object_ids[i].objects : [{ object_id: entity.object_id }];
+    targets.forEach((element) => {
+      const mesh: any = this._scene.getObjectByName(element.object_id);
+      if (!mesh || !mesh.geometry) {
+        console.warn('floor3d-card: shade object <' + element.object_id + '> not found in the model');
+        return;
+      }
+      const box = new THREE.Box3().setFromObject(mesh);
+      // pivot at the fabric's bottom edge so scaling in y keeps the bottom where it is
+      const pivot = new THREE.Vector3((box.min.x + box.max.x) / 2, box.min.y, (box.min.z + box.max.z) / 2);
+      this._recenterOnPivot(mesh, pivot);
+      this._shadeBase[i] = { y0: mesh.position.y, height: box.max.y - box.min.y };
+    });
+    const span = this._shadeSpan(entity, this._hass);
+    this._shadeSignature[i] = span.bottom + '|' + span.top;
+    this._updateShade(entity, i, span, false);
+  }
+
+  private _updateShade(entity: Floor3dCardConfig, i: number, span: { bottom: number; top: number }, animate = true): void {
+    const base = this._shadeBase[i];
+    if (!base) return;
+    const visible = Math.max(0.01, 1 - span.bottom - span.top);
+    const targetY = base.y0 + span.bottom * base.height;
+    const targets = this._object_ids[i] && this._object_ids[i].objects ? this._object_ids[i].objects : [{ object_id: entity.object_id }];
+    targets.forEach((element) => {
+      const mesh: any = this._scene.getObjectByName(element.object_id);
+      if (!mesh) return;
+      if (!animate) {
+        mesh.scale.y = visible;
+        mesh.position.y = targetY;
+        return;
+      }
+      // both tweens finish in the same update; check the loop once TWEEN has removed them
+      const settle = () => window.setTimeout(() => this._startOrStopAnimationLoop(), 0);
+      new TWEEN.Tween(mesh.scale).to({ y: visible }, 1500).easing(TWEEN.Easing.Cubic.InOut).onComplete(settle).start();
+      new TWEEN.Tween(mesh.position).to({ y: targetY }, 1500).easing(TWEEN.Easing.Cubic.InOut).onComplete(settle).start();
+    });
+    this._renderer.shadowMap.needsUpdate = true;
+    if (animate) this._startOrStopAnimationLoop();
   }
 
   private _updatecover(item: Floor3dCardConfig, state: string, i: number): void {

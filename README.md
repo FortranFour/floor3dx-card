@@ -120,6 +120,18 @@ A colour bulb behind a wall switch has its colour on one entity and its power on
       color: entity
 ```
 
+### Shades that shrink with their position (`type3d: shade`)
+
+`type3d: cover` slides an object out of the way; a roller or cellular shade should shrink instead. `type3d: shade` scales the fabric object in height from its bottom edge: `entity` is the motor that raises the bottom edge (Home Assistant's `current_position`, 100 = fully raised), and `shade.top_entity`, optional, is a second motor that lowers the top edge, for top-down/bottom-up shades. Changes animate over 1.5 s. `shade.invert: yes` for a cover that reports 100 as closed. Point the entry at the fabric only; headrail and window stay where they are.
+
+```yaml
+- entity: cover.bedroom_shade_bottom
+  type3d: shade
+  object_id: shade_fabric
+  shade:
+    top_entity: cover.bedroom_shade_top
+```
+
 ### Mesh colour from the light itself
 
 A `type3d: color` condition can take its colour from the entity instead of a fixed value: `color: entity` uses the light's current colour darkened by its brightness (a dim bulb is a dark bulb), `color: entity_color` uses the colour at full strength. The mesh is re-coloured whenever the light's colour or brightness changes, not only when it switches on or off. Colour comes from `rgb_color`, or from the colour temperature when that is all the light reports, or white.
@@ -218,6 +230,7 @@ Animated GIFs are decoded in the card, so they animate in every browser and keep
 | `light.follow_entity` | `yes`, `brightness`, `color`, `no` | `yes` |
 | `light.offset` | `{x, y, z}` in model units, added to the object's centre | 0 |
 | `light.shadow_map_size` | 128 to 4096 | 512 |
+| `type3d: shade` | `shade.top_entity`, `shade.invert` | |
 | `color_entity` | an entity id, on `light` and `color` entries | `entity` |
 | `colorcondition[].color` | `entity`, `entity_color` in addition to any colour | |
 | `type3d: image` | see above | |
