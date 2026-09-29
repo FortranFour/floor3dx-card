@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.5
+
+### Added
+- `daylight`: time-of-day lighting for a roofless plan from `sun.sun` and a selectable weather entity: ambient level and colour, hemisphere light, background colour, window sun spots that follow the sun round the house, a separate exterior ambient that goes dark at night, glass glow after dark, and a time override for tuning. `dev/harness/test_daylight.py`.
+
 ## 1.3.4
 
 ### Added

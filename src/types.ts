@@ -57,6 +57,7 @@ export interface Floor3dCardConfig {
   entity_template: string;
   cover: any;
   shade: any;
+  daylight?: any;
   type3d: string;
   object_id: string;
   object_groups: any;

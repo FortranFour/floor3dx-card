@@ -11,6 +11,7 @@ import {
 import './editor';
 import { HassEntity } from 'home-assistant-js-websocket';
 import { ImageFrame, ImageFit } from './image-frame';
+import { Daylight } from './daylight';
 import {
   createConfigArray,
   createObjectGroupConfigArray,
@@ -163,6 +164,8 @@ export class Floor3dCard extends LitElement {
   // type3d: shade - per entity index: the fabric's resting bottom edge and full height, last applied span
   private _shadeBase: { y0: number; height: number }[] = [];
   private _shadeSignature: string[] = [];
+  // daylight: time-of-day lighting for a roofless plan
+  private _daylight: Daylight | null = null;
   private _spritetext?: string[];
   private _objposition: number[][];
   private _slidingdoorposition: THREE.Vector3[][];
@@ -845,6 +848,7 @@ export class Floor3dCard extends LitElement {
     mouse.x = (e.offsetX / this._content.clientWidth) * 2 - 1;
     mouse.y = -(e.offsetY / this._content.clientHeight) * 2 + 1;
     const raycaster: THREE.Raycaster = new THREE.Raycaster();
+    raycaster.layers.enableAll(); // exterior objects live on their own layer under daylight
     raycaster.setFromCamera(mouse, this._camera);
     const intersects: THREE.Intersection[] = raycaster.intersectObjects(this._raycasting, false);
     return intersects;
@@ -1602,10 +1606,53 @@ export class Floor3dCard extends LitElement {
           }
         }
       }
+      if (this._daylight && this._modelready && this._daylight.update(hass.states)) {
+        this._renderer.shadowMap.needsUpdate = true;
+        this._requestRender('daylight');
+      }
     } catch (e) {
       console.log(e);
       throw new Error('Error in hass: ' + e);
     }
+  }
+
+  // Objects for an id: a plain object name, or <group> from object_groups.
+  private _resolveObjects(id: string): THREE.Mesh[] {
+    if (!id) return [];
+    const out: THREE.Mesh[] = [];
+    const push = (name: string) => {
+      const o: any = this._scene.getObjectByName(name);
+      if (o && o.isMesh) out.push(o);
+    };
+    if (id.charAt(0) == '<' && id.charAt(id.length - 1) == '>') {
+      const name = id.substr(1, id.length - 2);
+      (this._config.object_groups || []).forEach((g) => {
+        if (g.object_group == name) (g.objects || []).forEach((o) => push(o.object_id));
+      });
+    } else {
+      push(id);
+    }
+    return out;
+  }
+
+  private _initDaylight(): void {
+    if (!this._config.daylight || this._daylight) return;
+    let base = 0.5;
+    const glp: any = this._config.globalLightPower;
+    if (this._hass.states[glp] && !isNaN(Number(this._hass.states[glp].state))) base = Number(this._hass.states[glp].state);
+    else if (glp !== undefined && !isNaN(Number(glp))) base = Number(glp);
+    const cfg = Object.assign({ north: this._config.north }, this._config.daylight);
+    this._daylight = new Daylight(cfg, {
+      scene: this._scene,
+      camera: this._camera,
+      resolve: (id) => this._resolveObjects(id),
+      ambient: this._ambient_light,
+      torch: this._torch,
+      baseIntensity: base,
+      baseBackground: this._scene.background instanceof THREE.Color ? this._scene.background : null,
+    });
+    this._daylight.update(this._hass.states);
+    this._renderer.shadowMap.needsUpdate = true;
   }
 
   private _initSky(): void {
@@ -2098,6 +2145,8 @@ export class Floor3dCard extends LitElement {
       }
 
       this._initAmbient();
+
+      this._initDaylight();
 
       this._getOverlay();
 

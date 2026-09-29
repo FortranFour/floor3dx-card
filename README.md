@@ -120,6 +120,36 @@ A colour bulb behind a wall switch has its colour on one entity and its power on
       color: entity
 ```
 
+### Time of day on a roofless plan (`daylight`)
+
+`sky: 'yes'` puts a real sun in the scene, which needs a roof to stop it. `daylight` is for a plan you look into from above: it reads the sun's elevation and azimuth from `sun.sun` and a condition from any weather entity, and turns them into a light level and colour (cool by day, orange at the horizon, dim blue at night), a hemisphere light with sky and ground colours, a background colour, a sun spot outside each listed window that only shines when the sun is on that side of the house, a separate ambient for exterior objects that goes nearly dark at night, and a glow on glass when the room light is on after dark. Everything is a card-level option; the interior light entries need no change.
+
+```yaml
+daylight:
+  weather_entity: weather.home        # any weather integration; the state is the condition
+  time_entity: input_number.preview_hour   # optional: 0-24 replaces the real sun, for tuning
+  ambient:
+    day: 0.8                          # default: globalLightPower
+    night: 0.15                       # default: a fifth of day
+  colors: { day: '#e9f0ff', dusk: '#ff9a4a', night: '#8a9bc4', ground: '#7a7068' }
+  background: { day: '#9fc5e8', dusk: '#f2a45c', night: '#1c2438' }   # or 'no'
+  hemisphere: 'yes'
+  weather: { cloudy: 0.6, rainy: 0.45 }   # condition -> daylight factor; merged over defaults
+  windows:
+    - object_id: <living_room_glass>  # pane object or group; the thin axis is the window's normal
+      lumens: 3000
+      angle: 35
+      shadow: 'no'
+  exterior: [<driveway>, <garden>, <outer_walls>]
+  exterior_night: 0.08
+  glow:
+    - object_id: <living_room_glass>
+      entity: light.living_room
+      color: '#ffd27a'
+```
+
+`north` (the card's existing option) tells the card which way the model faces, so the window spots follow the real sun. `time_entity` accepts a number 0 to 24 (6 sunrise, 12 noon, 18 sunset) or any entity with `elevation` and `azimuth` attributes. Exterior objects are moved to their own render layer so that only the exterior ambient lights them; they remain clickable. YAML only for now; no editor section.
+
 ### Shades that shrink with their position (`type3d: shade`)
 
 `type3d: cover` slides an object out of the way; a roller or cellular shade should shrink instead. `type3d: shade` scales the fabric object in height from its bottom edge: `entity` is the motor that raises the bottom edge (Home Assistant's `current_position`, 100 = fully raised), and `shade.top_entity`, optional, is a second motor that lowers the top edge, for top-down/bottom-up shades. Changes animate over 1.5 s. `shade.invert: yes` for a cover that reports 100 as closed. Point the entry at the fabric only; headrail and window stay where they are.
@@ -230,6 +260,7 @@ Animated GIFs are decoded in the card, so they animate in every browser and keep
 | `light.follow_entity` | `yes`, `brightness`, `color`, `no` | `yes` |
 | `light.offset` | `{x, y, z}` in model units, added to the object's centre | 0 |
 | `light.shadow_map_size` | 128 to 4096 | 512 |
+| `daylight` | see above | off |
 | `type3d: shade` | `shade.top_entity`, `shade.invert` | |
 | `color_entity` | an entity id, on `light` and `color` entries | `entity` |
 | `colorcondition[].color` | `entity`, `entity_color` in addition to any colour | |
