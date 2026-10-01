@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.7
+
+### Added
+- `daylight.sun_colors`: a separate day/dusk/dawn colour set for the window beams, so the room light can stay neutral while the sun changes colour. Omitted, the beams follow `colors` as before.
+
 ## 1.3.6
 
 ### Changed

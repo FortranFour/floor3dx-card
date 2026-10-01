@@ -132,6 +132,7 @@ daylight:
     day: 0.8                          # default: globalLightPower
     night: 0.15                       # default: a fifth of day
   colors: { day: '#e9f0ff', dusk: '#ff9a4a', dawn: '#ff8a4a', night: '#8a9bc4', ground: '#7a7068' }
+  sun_colors: { day: '#fff3dc', dusk: '#ff8a3a', dawn: '#ffb070' }   # beams only; omit to follow colors
   gradient: { night: -8, dusk: 0, day: 15 }   # elevation stops: fully night at or below -8, the horizon colour at 0, fully day from 15
   background: { day: '#9fc5e8', dusk: '#f2a45c', night: '#1c2438' }   # or 'no'
   hemisphere: 'yes'
@@ -149,7 +150,7 @@ daylight:
       color: '#ffd27a'
 ```
 
-The light colour and the background run along a gradient by sun elevation: the night colour at or below the `night` stop, the dusk (or dawn, when the sun is rising) colour at the `dusk` stop, the day colour at or above the `day` stop, blended smoothly in between, so the low sun is fully orange and both sides of it fade out of it gradually. `north` (the card's existing option) tells the card which way the model faces, so the window spots follow the real sun. `time_entity` accepts a number 0 to 24 (6 sunrise, 12 noon, 18 sunset) or any entity with `elevation` and `azimuth` attributes. Exterior objects are moved to their own render layer so that only the exterior ambient lights them; they remain clickable. YAML only for now; no editor section.
+`colors` tints the room light (ambient, hemisphere and camera light); `sun_colors`, when given, tints only the window beams, so the house can stay neutral grey while the sun goes orange. The light colour and the background run along a gradient by sun elevation: the night colour at or below the `night` stop, the dusk (or dawn, when the sun is rising) colour at the `dusk` stop, the day colour at or above the `day` stop, blended smoothly in between, so the low sun is fully orange and both sides of it fade out of it gradually. `north` (the card's existing option) tells the card which way the model faces, so the window spots follow the real sun. `time_entity` accepts a number 0 to 24 (6 sunrise, 12 noon, 18 sunset) or any entity with `elevation` and `azimuth` attributes. Exterior objects are moved to their own render layer so that only the exterior ambient lights them; they remain clickable. YAML only for now; no editor section.
 
 ### Shades that shrink with their position (`type3d: shade`)
 

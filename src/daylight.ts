@@ -21,7 +21,8 @@ export interface DaylightConfig {
   time_entity?: string; // optional override: numeric hour 0-24, or an entity with elevation/azimuth attributes
   north?: { x: number; z: number }; // scene direction of north, from the card's `north`
   ambient?: { day?: number; night?: number }; // ambient/torch intensity; default day = globalLightPower, night = day * 0.2
-  colors?: { day?: string; dusk?: string; dawn?: string; night?: string; ground?: string }; // dawn defaults to dusk
+  colors?: { day?: string; dusk?: string; dawn?: string; night?: string; ground?: string }; // room light; dawn defaults to dusk
+  sun_colors?: { day?: string; dusk?: string; dawn?: string }; // window beams and glass glow only; default: follow colors
   // elevation stops, degrees: fully night at or below `night`, the dusk/dawn colour at `dusk`, fully day at or above `day`
   gradient?: { night?: number; dusk?: number; day?: number };
   background?: boolean | string | { day?: string; dusk?: string; night?: string }; // default yes
@@ -92,6 +93,9 @@ export class Daylight {
   private duskColor: THREE.Color;
   private dawnColor: THREE.Color;
   private stops: { night: number; dusk: number; day: number };
+  private sunDay: THREE.Color | null = null;
+  private sunDusk: THREE.Color | null = null;
+  private sunDawn: THREE.Color | null = null;
   private nightColor: THREE.Color;
   private groundColor: THREE.Color;
   private bg: { day: THREE.Color; dusk: THREE.Color; night: THREE.Color } | null = null;
@@ -107,6 +111,12 @@ export class Daylight {
     this.dayColor = new THREE.Color(colors.day || '#e9f0ff');
     this.duskColor = new THREE.Color(colors.dusk || '#ff9a4a');
     this.dawnColor = new THREE.Color(colors.dawn || colors.dusk || '#ff9a4a');
+    if (this.cfg.sun_colors) {
+      const sc = this.cfg.sun_colors;
+      this.sunDay = new THREE.Color(sc.day || '#fff3dc');
+      this.sunDusk = new THREE.Color(sc.dusk || '#ff8a3a');
+      this.sunDawn = new THREE.Color(sc.dawn || sc.dusk || '#ffb070');
+    }
     const g = this.cfg.gradient || {};
     this.stops = {
       night: g.night !== undefined ? Number(g.night) : -8,
@@ -222,6 +232,13 @@ export class Daylight {
     const horizon = sun.rising ? this.dawnColor : this.duskColor;
     const color = this.gradient(this.nightColor, horizon, this.dayColor, sun.elevation);
     if (wf < 1) color.lerp(new THREE.Color('#c8ccd2'), (1 - wf) * f); // overcast greys the tint
+    // beam colour: its own gradient when sun_colors is given, else the room colour
+    let sunColor = color;
+    if (this.sunDay) {
+      const sunHorizon = sun.rising ? this.sunDawn : this.sunDusk;
+      sunColor = this.gradient(sunHorizon, sunHorizon, this.sunDay, sun.elevation);
+      if (wf < 1) sunColor.lerp(new THREE.Color('#d8d8d8'), (1 - wf) * f);
+    }
 
     const intensity = this.ambientNight + (this.ambientDay - this.ambientNight) * fe;
     this.d.ambient.intensity = this.hemi ? intensity * 0.5 : intensity;
@@ -251,7 +268,7 @@ export class Daylight {
       const facing = Math.max(0, s.outward.dot(sunDir));
       const low = smoothstep(0, 8, sun.elevation); // no beam until the sun is a little up
       s.light.intensity = 0.003 * s.lumens * facing * low * wf;
-      s.light.color.copy(s.color ? new THREE.Color(s.color) : color);
+      s.light.color.copy(s.color ? new THREE.Color(s.color) : sunColor);
     });
 
     // glass glow after dark

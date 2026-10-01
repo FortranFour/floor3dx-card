@@ -7,7 +7,7 @@ JS = r"""async () => {
   const names=[];window.card._scene.traverse(o=>{if(o.isMesh&&o.name){o.geometry.computeBoundingBox();const b=o.geometry.boundingBox;if(b.max.y-b.min.y>20)names.push(o.name)}});
   const cfg=Object.assign({},window.card._config,{type:'custom:floor3dx-card',pro_skill:'mobile',shadow:'no',globalLightPower:'0.8',backgroundColor:'#848C8F',object_groups:[{object_group:'ext',objects:[{object_id:names[2]}]}],
     entities:[],north:{x:0,z:-1},
-    daylight:{colors:{dawn:'#ff6a3a'},weather_entity:'weather.w',time_entity:'input_number.hour',ambient:{day:0.8,night:0.1},windows:[{object_id:names[0],lumens:2000}],exterior:['<ext>'],glow:[{object_id:names[1],entity:'light.g'}]}});
+    daylight:{colors:{dawn:'#ff6a3a'},sun_colors:{dusk:'#ff8a3a',day:'#fff3dc'},weather_entity:'weather.w',time_entity:'input_number.hour',ambient:{day:0.8,night:0.1},windows:[{object_id:names[0],lumens:2000}],exterior:['<ext>'],glow:[{object_id:names[1],entity:'light.g'}]}});
   const mk=(el,az,wx,hour,g)=>({states:{'sun.sun':{state:el>0?'above_horizon':'below_horizon',attributes:{elevation:el,azimuth:az}},'weather.w':{state:wx,attributes:{}},
      'input_number.hour':{state:hour,attributes:{}},'light.g':{state:g,attributes:{}}},language:'en',themes:{},config:{},user:{},callService(){}});
   const c=document.createElement('floor3dx-card');c.setConfig(JSON.parse(JSON.stringify(cfg)));c.hass=mk(50,180,'sunny','unavailable','off');
@@ -31,7 +31,7 @@ JS = r"""async () => {
   out.extLayer=c._scene.getObjectByName(names[2]).layers.mask; out.camLayers=c._camera.layers.mask;
   // gradient: horizon colour at 0 degrees, blends on both sides, dawn differs from dusk when given
   const colAt=async(el,rising)=>{const st=mk(el,180,'sunny','unavailable','off'); st.states['sun.sun'].attributes.rising=rising; c.hass=st; await wait(200); return '#'+c._ambient_light.color.getHexString();};
-  out.dusk0=await colAt(0,false); out.dusk4=await colAt(4,false); out.duskm4=await colAt(-4,false); out.dawn0=await colAt(0,true);
+  out.dusk0=await colAt(0,false); out.spotColDusk='#'+spot.color.getHexString(); await colAt(50,false); out.spotColDay='#'+spot.color.getHexString(); out.dusk4=await colAt(4,false); out.duskm4=await colAt(-4,false); out.dawn0=await colAt(0,true);
   return out;
 }"""
 
@@ -54,6 +54,7 @@ if __name__ == '__main__':
     check('exterior object on its own layer, camera sees both', r['extLayer'] == 2 and r['camLayers'] == 3)
     check('gradient: full horizon colour at 0 degrees, partial either side, dawn colour when rising',
           r['dusk0'] == '#ff9a4a' and r['dusk4'] not in ('#ff9a4a', '#e9f0ff') and r['duskm4'] not in ('#ff9a4a', '#8a9bc4') and r['dawn0'] == '#ff6a39')
+    check('sun_colors: beam has its own colour, orange at dusk and warm by day', r['spotColDusk'] == '#ff8a3a' and r['spotColDay'] == '#fff3dc')
     check('no page errors', not errors)
     for e in errors:
         print('  ', e)
