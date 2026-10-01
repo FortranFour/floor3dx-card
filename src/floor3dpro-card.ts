@@ -24,7 +24,8 @@ import {
   ProLogState,
 } from './helpers';
 import type { Floor3dCardConfig } from './types';
-import { CARD_VERSION } from './const';
+import { CARD_VERSION, EDITOR_EVENT, PREVIEW_EVENT } from './const';
+import { normalizeConfig, matchObjects, objectPattern } from './config';
 import { localize } from './localize/localize';
 //import three.js libraries for 3D rendering
 import * as TWEEN from '@tweenjs/tween.js';
@@ -166,6 +167,11 @@ export class Floor3dCard extends LitElement {
   private _shadeSignature: string[] = [];
   // daylight: time-of-day lighting for a roofless plan
   private _daylight: Daylight | null = null;
+  // Editor of the card (only in the preview): a tap picks an object, and some objects are highlighted.
+  @property({ attribute: false }) public preview?: boolean;
+  private _pickMode = false;
+  private _highlightHelpers: THREE.Object3D[] = [];
+  private _editorListener = (ev: Event): void => this._onEditor((ev as CustomEvent).detail);
   private _spritetext?: string[];
   private _objposition: number[][];
   private _slidingdoorposition: THREE.Vector3[][];
@@ -278,7 +284,11 @@ export class Floor3dCard extends LitElement {
 
       // Handle mouse click events that are less than 200ms in duration
       if (this._clickStart && Date.now() - this._clickStart < 200) {
-        if (this._config.click == 'yes' || this._selectionModeEnabled) {
+        if (this._pickMode) {
+          // Picking objects for the card editor: the object goes to the editor, no action runs.
+          const hit = this._getintersect(evt).find((i) => i.object.name);
+          if (hit) this._toEditor({ picked: hit.object.name });
+        } else if (this._config.click == 'yes' || this._selectionModeEnabled) {
           this._firEvent(evt);
         }
       }
@@ -301,6 +311,7 @@ export class Floor3dCard extends LitElement {
 
   public connectedCallback(): void {
     super.connectedCallback();
+    window.addEventListener(EDITOR_EVENT, this._editorListener);
     // Faz-0 Engine Backbone: (Stabil.Patch.0.0)
     this._isConnected = true;
 
@@ -329,6 +340,7 @@ export class Floor3dCard extends LitElement {
 
   public disconnectedCallback(): void {
     super.disconnectedCallback();
+    window.removeEventListener(EDITOR_EVENT, this._editorListener);
     // Faz-0 Engine Backbone: (Stabil.Patch.0.0)
     this._isConnected = false;
     this._cancelScheduledRender();
@@ -442,7 +454,8 @@ export class Floor3dCard extends LitElement {
       throw new Error(localize('common.invalid_configuration'));
     }
 
-    this._config = config;
+    // The editor may write the short forms (true/false switches, group objects as plain ids).
+    this._config = normalizeConfig(config);
     // Faz-0 PRO Backbone: pro-skill / pro-log
     this._proApplyConfig();
     this._configArray = createConfigArray(this._config);
@@ -1071,8 +1084,99 @@ export class Floor3dCard extends LitElement {
   }
 
   private _performAction(e: any): void {
+    if (this._pickMode) return;
     const intersects = this._getintersect(e);
     this._defaultaction(intersects);
+  }
+
+  // --- Editor (only the card in the preview of the card editor listens) ---------------------------
+  // Adapted from giosci1994/floor3d-card (MIT).
+
+  private _toEditor(detail: any): void {
+    window.dispatchEvent(new CustomEvent(PREVIEW_EVENT, { detail }));
+  }
+
+  private _onEditor(detail: any): void {
+    if (!this.preview || !detail) return;
+    if (detail.request === 'objects' && this._modelready) {
+      this._toEditor({ objects: this._modelObjectNames() });
+    }
+    if (detail.request === 'camera' && this._camera && this._controls) {
+      const { position, rotation } = this._camera;
+      const target = this._controls.target;
+      this._toEditor({
+        camera: {
+          camera_position: { x: position.x, y: position.y, z: position.z },
+          camera_target: { x: target.x, y: target.y, z: target.z },
+          camera_rotate: { x: rotation.x, y: rotation.y, z: rotation.z },
+        },
+      });
+    }
+    if ('pick' in detail) {
+      this._pickMode = !!detail.pick;
+      if (this._renderer) this._renderer.domElement.style.cursor = this._pickMode ? 'crosshair' : '';
+    }
+    if ('highlight' in detail) this._setHighlight(detail.highlight || []);
+    if (detail.request === 'reload') this.rerender();
+  }
+
+  // Names of the objects of the model, for the object menus of the editor.
+  private _modelObjectNames(): string[] {
+    const names = new Set<string>();
+    (this._raycastinglevels || []).forEach((level) => (level || []).forEach((o) => o.name && names.add(o.name)));
+    return Array.from(names);
+  }
+
+  // Object ids with * (Lamp_*) become the objects of the model they match, as for an object group.
+  // One that matches nothing stays as it is: the entity is then left out as for a missing object.
+  private _expandObjectPatterns(): void {
+    const names = this._modelObjectNames();
+    (this._object_ids || []).forEach((item) => {
+      if (!item.objects.some((o) => objectPattern(o.object_id))) return;
+      item.objects = item.objects.flatMap((o) => {
+        if (!objectPattern(o.object_id)) return [o];
+        const found = matchObjects(o.object_id, names);
+        if (found.length === 0) {
+          console.warn('floor3d-card: no object of the model matches <' + o.object_id + '> (' + item.entity + ')');
+          return [o];
+        }
+        return found.map((object_id) => ({ ...o, object_id }));
+      });
+    });
+  }
+
+  // A box around each object (a group <name> stands for its objects), drawn over everything.
+  private _setHighlight(ids: string[]): void {
+    if (!this._scene) return;
+    this._highlightHelpers.forEach((helper) => {
+      this._scene.remove(helper);
+      (helper as THREE.BoxHelper).geometry.dispose();
+      ((helper as THREE.BoxHelper).material as THREE.Material).dispose();
+    });
+    this._highlightHelpers = [];
+    const names = new Set<string>();
+    const modelNames = this._modelObjectNames();
+    const add = (id: string) => matchObjects(id, modelNames).forEach((name) => names.add(name));
+    ids.forEach((id) => {
+      const group = /^<(.*)>$/.exec(id);
+      if (!group) add(id);
+      else {
+        const found = (this._config.object_groups || []).find((g) => g.object_group === group[1]);
+        ((found && found.objects) || []).forEach((o) => add(o.object_id));
+      }
+    });
+    names.forEach((name) => {
+      const object = this._scene.getObjectByName(name);
+      if (!object) return;
+      const helper = new THREE.BoxHelper(object, 0x03a9f4);
+      const material = helper.material as THREE.LineBasicMaterial;
+      material.depthTest = false;
+      material.transparent = true;
+      helper.renderOrder = 999;
+      this._scene.add(helper);
+      this._highlightHelpers.push(helper);
+    });
+    this._requestRender('highlight');
   }
 
   // Faz-0 Deterministic Correction: (Fix) Canvas Obscured; stopping animation
@@ -2080,12 +2184,14 @@ export class Floor3dCard extends LitElement {
       this._renderer.shadowMap.enabled = false;
     }
 
+    this._expandObjectPatterns();
     this._add3dObjects();
 
     console.log('Object loaded end');
 
     if (this._content && this._renderer) {
       this._modelready = true;
+      if (this.preview) this._toEditor({ objects: this._modelObjectNames() });
       console.log('Show canvas');
       this._levelbar = document.createElement('div');
       this._zoombar = document.createElement('div');

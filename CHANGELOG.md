@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.4.0
+
+### Added
+- Visual editor built on Home Assistant's form components, adapted from giosci1994/floor3d-card: sections, sortable lists, per-type option pages, object menus from the model, pick-in-preview, highlight, use-current-view. Falls back to the previous editor without `ha-form`.
+- Object ids with `*` expand to every matching object of the model.
+- Short configuration forms: `true`/`false` switches and plain object ids in groups are accepted.
+- `dev/harness/test_editor.py` covers the preview protocol, normalisation and the fallback.
+
+### Not taken from that fork, on purpose
+- three.js 0.186 and Lit 3: the move to physical light units would change every `lumens` and `daylight` value in existing configurations; kept at 0.130 / Lit 2 for now.
+- Trackers, shower, info boxes, state colours and room maps, zoom menu and URL views: candidates for later releases.
+
 ## 1.3.10
 
 ### Changed

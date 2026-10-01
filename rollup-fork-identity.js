@@ -5,7 +5,7 @@
  *   - custom element names: floor3dpro-*  ->  floor3dx-*  (lets both cards live on one dashboard)
  *   - the build id shown in the browser console
  */
-const TAGS = ['card-editor', 'card', 'button', 'formfield', 'select', 'textfield'];
+const TAGS = ['card-editor-classic', 'card-editor', 'card-preview', 'card', 'button', 'formfield', 'select', 'textfield'];
 // Only real element references are renamed: markup (<tag, </tag), quoted selectors and type strings,
 // CSS selectors (leading whitespace) and the HACS install folder. Prose such as
 // "(floor3dpro-card fork)" and links to the upstream repository are left alone.
