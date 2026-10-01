@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.8
+
+### Changed
+- `daylight` window spots sit just inside the pane, so the beam no longer paints a halo on the outside wall. Default 500 lumens.
+- `daylight.exterior_sun`: a directional sun that lights only the `exterior` objects, so the facade facing the sun brightens as a whole.
+
 ## 1.3.7
 
 ### Added

@@ -144,13 +144,14 @@ daylight:
       shadow: 'no'
   exterior: [<driveway>, <garden>, <outer_walls>]
   exterior_night: 0.08
+  exterior_sun: 0.6                 # directional sun on the exterior objects only; the facade facing the sun brightens as a whole
   glow:
     - object_id: <living_room_glass>
       entity: light.living_room
       color: '#ffd27a'
 ```
 
-`colors` tints the room light (ambient, hemisphere and camera light); `sun_colors`, when given, tints only the window beams, so the house can stay neutral grey while the sun goes orange. The light colour and the background run along a gradient by sun elevation: the night colour at or below the `night` stop, the dusk (or dawn, when the sun is rising) colour at the `dusk` stop, the day colour at or above the `day` stop, blended smoothly in between, so the low sun is fully orange and both sides of it fade out of it gradually. `north` (the card's existing option) tells the card which way the model faces, so the window spots follow the real sun. `time_entity` accepts a number 0 to 24 (6 sunrise, 12 noon, 18 sunset) or any entity with `elevation` and `azimuth` attributes. Exterior objects are moved to their own render layer so that only the exterior ambient lights them; they remain clickable. YAML only for now; no editor section.
+`colors` tints the room light (ambient, hemisphere and camera light); `sun_colors`, when given, tints only the window beams, so the house can stay neutral grey while the sun goes orange. The light colour and the background run along a gradient by sun elevation: the night colour at or below the `night` stop, the dusk (or dawn, when the sun is rising) colour at the `dusk` stop, the day colour at or above the `day` stop, blended smoothly in between, so the low sun is fully orange and both sides of it fade out of it gradually. `north` (the card's existing option) tells the card which way the model faces, so the window spots follow the real sun. `time_entity` accepts a number 0 to 24 (6 sunrise, 12 noon, 18 sunset) or any entity with `elevation` and `azimuth` attributes. Exterior objects are moved to their own render layer: only the exterior ambient and `exterior_sun`, a directional light that follows the real sun, reach them, and the window spots never touch them; they remain clickable. Each window spot sits just inside its pane, so its cone opens into the room only. YAML only for now; no editor section.
 
 ### Shades that shrink with their position (`type3d: shade`)
 

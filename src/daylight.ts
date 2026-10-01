@@ -31,12 +31,13 @@ export interface DaylightConfig {
   windows?: DaylightWindow[]; // sun spots
   exterior?: string[]; // object ids or <group> names lit by the exterior ambient only
   exterior_night?: number; // exterior ambient at night, as a fraction of the day level; default 0.08
+  exterior_sun?: number; // directional sun on exterior objects only, as a fraction of the day level; default 0.6
   glow?: DaylightGlow[];
 }
 
 export interface DaylightWindow {
   object_id: string; // window pane object or <group>
-  lumens?: number; // default 1000
+  lumens?: number; // default 500
   color?: string; // default the current daylight colour
   distance?: number; // default 400
   angle?: number; // half angle, degrees; default 35
@@ -86,6 +87,7 @@ export class Daylight {
   private d: Deps;
   private hemi: THREE.HemisphereLight | null = null;
   private exteriorAmbient: THREE.AmbientLight | null = null;
+  private exteriorSun: THREE.DirectionalLight | null = null;
   private spots: { light: THREE.SpotLight; outward: THREE.Vector3; lumens: number; color: string | null }[] = [];
   private glows: { meshes: THREE.Mesh[]; entity: string; color: THREE.Color; intensity: number }[] = [];
   private lastSignature = '';
@@ -163,6 +165,12 @@ export class Daylight {
       this.exteriorAmbient = new THREE.AmbientLight(0xffffff, 0);
       this.exteriorAmbient.layers.set(EXTERIOR_LAYER);
       deps.scene.add(this.exteriorAmbient);
+      // the sun itself, but only for the exterior: the facades facing it brighten as a whole
+      this.exteriorSun = new THREE.DirectionalLight(0xffffff, 0);
+      this.exteriorSun.layers.set(EXTERIOR_LAYER);
+      this.exteriorSun.target.position.copy(this.modelCenter);
+      deps.scene.add(this.exteriorSun);
+      deps.scene.add(this.exteriorSun.target);
       deps.camera.layers.enable(EXTERIOR_LAYER);
     }
 
@@ -183,8 +191,9 @@ export class Daylight {
       const distance = w.distance !== undefined ? Number(w.distance) : 400;
       const angle = THREE.MathUtils.degToRad(w.angle !== undefined ? Number(w.angle) : 35);
       const light = new THREE.SpotLight(0xffffff, 0, distance, angle, 0.4, 1.0);
-      light.position.copy(center.clone().add(outward.clone().multiplyScalar(40)).add(new THREE.Vector3(0, 60, 0)));
-      light.target.position.copy(center.clone().sub(outward.clone().multiplyScalar(160)).sub(new THREE.Vector3(0, 150, 0)));
+      // just inside the pane, so the cone opens into the room and never touches the outside wall
+      light.position.copy(center.clone().sub(outward.clone().multiplyScalar(3)).add(new THREE.Vector3(0, size.y * 0.3, 0)));
+      light.target.position.copy(center.clone().sub(outward.clone().multiplyScalar(180)).sub(new THREE.Vector3(0, center.y + 20, 0)));
       light.name = 'daylight_' + w.object_id;
       if (this.yes(w.shadow, false)) {
         light.castShadow = true;
@@ -193,7 +202,7 @@ export class Daylight {
       }
       deps.scene.add(light);
       deps.scene.add(light.target);
-      this.spots.push({ light, outward, lumens: w.lumens !== undefined ? Number(w.lumens) : 1000, color: w.color || null });
+      this.spots.push({ light, outward, lumens: w.lumens !== undefined ? Number(w.lumens) : 500, color: w.color || null });
     });
 
     // glass glow
@@ -264,6 +273,12 @@ export class Daylight {
 
     // sun spots: bright only when the sun is above the horizon and on that window's side
     const sunDir = this.sunDirection(sun.elevation, sun.azimuth);
+    if (this.exteriorSun) {
+      const k = this.cfg.exterior_sun !== undefined ? Number(this.cfg.exterior_sun) : 0.6;
+      this.exteriorSun.position.copy(this.modelCenter.clone().add(sunDir.clone().multiplyScalar(2000)));
+      this.exteriorSun.intensity = this.ambientDay * k * smoothstep(0, 8, sun.elevation) * wf;
+      this.exteriorSun.color.copy(sunColor);
+    }
     this.spots.forEach((s) => {
       const facing = Math.max(0, s.outward.dot(sunDir));
       const low = smoothstep(0, 8, sun.elevation); // no beam until the sun is a little up
@@ -289,6 +304,10 @@ export class Daylight {
   dispose(): void {
     if (this.hemi) this.d.scene.remove(this.hemi);
     if (this.exteriorAmbient) this.d.scene.remove(this.exteriorAmbient);
+    if (this.exteriorSun) {
+      this.d.scene.remove(this.exteriorSun);
+      this.d.scene.remove(this.exteriorSun.target);
+    }
     this.spots.forEach((s) => {
       this.d.scene.remove(s.light);
       this.d.scene.remove(s.light.target);
