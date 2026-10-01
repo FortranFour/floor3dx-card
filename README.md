@@ -131,7 +131,8 @@ daylight:
   ambient:
     day: 0.8                          # default: globalLightPower
     night: 0.15                       # default: a fifth of day
-  colors: { day: '#e9f0ff', dusk: '#ff9a4a', night: '#8a9bc4', ground: '#7a7068' }
+  colors: { day: '#e9f0ff', dusk: '#ff9a4a', dawn: '#ff8a4a', night: '#8a9bc4', ground: '#7a7068' }
+  gradient: { night: -8, dusk: 0, day: 15 }   # elevation stops: fully night at or below -8, the horizon colour at 0, fully day from 15
   background: { day: '#9fc5e8', dusk: '#f2a45c', night: '#1c2438' }   # or 'no'
   hemisphere: 'yes'
   weather: { cloudy: 0.6, rainy: 0.45 }   # condition -> daylight factor; merged over defaults
@@ -148,7 +149,7 @@ daylight:
       color: '#ffd27a'
 ```
 
-`north` (the card's existing option) tells the card which way the model faces, so the window spots follow the real sun. `time_entity` accepts a number 0 to 24 (6 sunrise, 12 noon, 18 sunset) or any entity with `elevation` and `azimuth` attributes. Exterior objects are moved to their own render layer so that only the exterior ambient lights them; they remain clickable. YAML only for now; no editor section.
+The light colour and the background run along a gradient by sun elevation: the night colour at or below the `night` stop, the dusk (or dawn, when the sun is rising) colour at the `dusk` stop, the day colour at or above the `day` stop, blended smoothly in between, so the low sun is fully orange and both sides of it fade out of it gradually. `north` (the card's existing option) tells the card which way the model faces, so the window spots follow the real sun. `time_entity` accepts a number 0 to 24 (6 sunrise, 12 noon, 18 sunset) or any entity with `elevation` and `azimuth` attributes. Exterior objects are moved to their own render layer so that only the exterior ambient lights them; they remain clickable. YAML only for now; no editor section.
 
 ### Shades that shrink with their position (`type3d: shade`)
 

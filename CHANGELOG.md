@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.6
+
+### Changed
+- `daylight` colours now run along an explicit night → horizon → day gradient by sun elevation with configurable stops (`gradient: {night, dusk, day}`), so the low sun is fully the dusk colour and the transitions on both sides are smooth. `colors.dawn` gives the rising sun its own colour. Window sun spots default to 1000 lumens (was 3000).
+
 ## 1.3.5
 
 ### Added

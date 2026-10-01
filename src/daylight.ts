@@ -21,7 +21,9 @@ export interface DaylightConfig {
   time_entity?: string; // optional override: numeric hour 0-24, or an entity with elevation/azimuth attributes
   north?: { x: number; z: number }; // scene direction of north, from the card's `north`
   ambient?: { day?: number; night?: number }; // ambient/torch intensity; default day = globalLightPower, night = day * 0.2
-  colors?: { day?: string; dusk?: string; night?: string; ground?: string };
+  colors?: { day?: string; dusk?: string; dawn?: string; night?: string; ground?: string }; // dawn defaults to dusk
+  // elevation stops, degrees: fully night at or below `night`, the dusk/dawn colour at `dusk`, fully day at or above `day`
+  gradient?: { night?: number; dusk?: number; day?: number };
   background?: boolean | string | { day?: string; dusk?: string; night?: string }; // default yes
   hemisphere?: boolean | string; // default yes
   weather?: { [condition: string]: number }; // condition -> factor, merged over defaults
@@ -33,7 +35,7 @@ export interface DaylightConfig {
 
 export interface DaylightWindow {
   object_id: string; // window pane object or <group>
-  lumens?: number; // default 3000
+  lumens?: number; // default 1000
   color?: string; // default the current daylight colour
   distance?: number; // default 400
   angle?: number; // half angle, degrees; default 35
@@ -88,6 +90,8 @@ export class Daylight {
   private lastSignature = '';
   private dayColor: THREE.Color;
   private duskColor: THREE.Color;
+  private dawnColor: THREE.Color;
+  private stops: { night: number; dusk: number; day: number };
   private nightColor: THREE.Color;
   private groundColor: THREE.Color;
   private bg: { day: THREE.Color; dusk: THREE.Color; night: THREE.Color } | null = null;
@@ -102,6 +106,13 @@ export class Daylight {
     const colors = this.cfg.colors || {};
     this.dayColor = new THREE.Color(colors.day || '#e9f0ff');
     this.duskColor = new THREE.Color(colors.dusk || '#ff9a4a');
+    this.dawnColor = new THREE.Color(colors.dawn || colors.dusk || '#ff9a4a');
+    const g = this.cfg.gradient || {};
+    this.stops = {
+      night: g.night !== undefined ? Number(g.night) : -8,
+      dusk: g.dusk !== undefined ? Number(g.dusk) : 0,
+      day: g.day !== undefined ? Number(g.day) : 15,
+    };
     this.nightColor = new THREE.Color(colors.night || '#8a9bc4');
     this.groundColor = new THREE.Color(colors.ground || '#7a7068');
     this.weatherMap = Object.assign({}, DEFAULT_WEATHER, this.cfg.weather || {});
@@ -172,7 +183,7 @@ export class Daylight {
       }
       deps.scene.add(light);
       deps.scene.add(light.target);
-      this.spots.push({ light, outward, lumens: w.lumens !== undefined ? Number(w.lumens) : 3000, color: w.color || null });
+      this.spots.push({ light, outward, lumens: w.lumens !== undefined ? Number(w.lumens) : 1000, color: w.color || null });
     });
 
     // glass glow
@@ -198,15 +209,18 @@ export class Daylight {
     const sun = this.sunPosition(states);
     const weather = this.cfg.weather_entity && states[this.cfg.weather_entity] ? String(states[this.cfg.weather_entity].state) : '';
     const glowStates = this.glows.map((g) => (states[g.entity] ? states[g.entity].state : '')).join(',');
-    const signature = [sun.elevation.toFixed(1), sun.azimuth.toFixed(1), weather, glowStates].join('|');
+    const signature = [sun.elevation.toFixed(1), sun.azimuth.toFixed(1), sun.rising ? 'r' : 's', weather, glowStates].join('|');
     if (signature === this.lastSignature) return false;
     this.lastSignature = signature;
 
-    const f = smoothstep(-6, 12, sun.elevation); // daylight factor
-    const w = Math.max(0, 1 - Math.abs(sun.elevation) / 8); // dusk weight
+    // Daylight factor f: 0 at or below the night stop, 1 at or above the day stop, smooth between.
+    const f = smoothstep(this.stops.night, this.stops.day, sun.elevation);
     const wf = weather && this.weatherMap[weather] !== undefined ? this.weatherMap[weather] : 1;
     const fe = f * wf; // effective daylight
-    const color = this.nightColor.clone().lerp(this.dayColor, f).lerp(this.duskColor, w * 0.7);
+    // Colour runs night -> dusk/dawn -> day along the elevation stops, so the low sun is fully the
+    // horizon colour and both sides of it blend out of it gradually.
+    const horizon = sun.rising ? this.dawnColor : this.duskColor;
+    const color = this.gradient(this.nightColor, horizon, this.dayColor, sun.elevation);
     if (wf < 1) color.lerp(new THREE.Color('#c8ccd2'), (1 - wf) * f); // overcast greys the tint
 
     const intensity = this.ambientNight + (this.ambientDay - this.ambientNight) * fe;
@@ -226,7 +240,7 @@ export class Daylight {
       this.exteriorAmbient.color.copy(color);
     }
     if (this.bg) {
-      const c = this.bg.night.clone().lerp(this.bg.day, f).lerp(this.bg.dusk, w * 0.8);
+      const c = this.gradient(this.bg.night, this.bg.dusk, this.bg.day, sun.elevation);
       if (wf < 1) c.lerp(new THREE.Color('#8f9aa6'), (1 - wf) * f);
       this.d.scene.background = c;
     }
@@ -272,25 +286,38 @@ export class Daylight {
     return v === true || String(v).toLowerCase() === 'yes' || String(v).toLowerCase() === 'true';
   }
 
-  private sunPosition(states: any): { elevation: number; azimuth: number } {
+  // night -> horizon -> day, by elevation along the configured stops
+  private gradient(night: THREE.Color, horizon: THREE.Color, day: THREE.Color, elevation: number): THREE.Color {
+    const { night: n, dusk: h, day: d } = this.stops;
+    if (elevation <= n) return night.clone();
+    if (elevation >= d) return day.clone();
+    if (elevation <= h) return night.clone().lerp(horizon, smooth01((elevation - n) / Math.max(1e-6, h - n)));
+    return horizon.clone().lerp(day, smooth01((elevation - h) / Math.max(1e-6, d - h)));
+  }
+
+  private sunPosition(states: any): { elevation: number; azimuth: number; rising: boolean } {
     if (this.cfg.time_entity && states[this.cfg.time_entity]) {
       const t = states[this.cfg.time_entity];
       const a = t.attributes || {};
       if (a.elevation !== undefined && a.azimuth !== undefined) {
-        return { elevation: Number(a.elevation), azimuth: Number(a.azimuth) };
+        return { elevation: Number(a.elevation), azimuth: Number(a.azimuth), rising: a.rising !== false };
       }
       const hour = parseFloat(t.state);
       if (!isNaN(hour)) {
         // a plain day: sunrise 6, noon 12 at 60 degrees, sunset 18; south at noon
         const x = ((hour - 6) / 12) * Math.PI;
-        return { elevation: 60 * Math.sin(x), azimuth: 90 + (hour - 6) * 15 };
+        return { elevation: 60 * Math.sin(x), azimuth: 90 + (hour - 6) * 15, rising: hour < 12 };
       }
     }
     const sun = states[this.cfg.sun_entity || 'sun.sun'];
     if (sun && sun.attributes) {
-      return { elevation: Number(sun.attributes.elevation) || 0, azimuth: Number(sun.attributes.azimuth) || 0 };
+      return {
+        elevation: Number(sun.attributes.elevation) || 0,
+        azimuth: Number(sun.attributes.azimuth) || 0,
+        rising: sun.attributes.rising !== false,
+      };
     }
-    return { elevation: 45, azimuth: 180 };
+    return { elevation: 45, azimuth: 180, rising: false };
   }
 
   private sunDirection(elevation: number, azimuth: number): THREE.Vector3 {
@@ -302,6 +329,11 @@ export class Daylight {
     const h = n.clone().multiplyScalar(Math.cos(az)).add(e.multiplyScalar(Math.sin(az)));
     return new THREE.Vector3(h.x * Math.cos(el), Math.sin(el), h.z * Math.cos(el)).normalize();
   }
+}
+
+function smooth01(t: number): number {
+  t = Math.max(0, Math.min(1, t));
+  return t * t * (3 - 2 * t);
 }
 
 function smoothstep(a: number, b: number, x: number): number {
