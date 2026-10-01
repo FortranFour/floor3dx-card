@@ -32,6 +32,7 @@ export interface DaylightConfig {
   exterior?: string[]; // object ids or <group> names lit by the exterior ambient only
   exterior_night?: number; // exterior ambient at night, as a fraction of the day level; default 0.08
   exterior_sun?: number; // directional sun on exterior objects only, as a fraction of the day level; default 0.6
+  beam_full?: number; // elevation, degrees, at which window beams reach full strength; default 4
   glow?: DaylightGlow[];
 }
 
@@ -281,7 +282,8 @@ export class Daylight {
     }
     this.spots.forEach((s) => {
       const facing = Math.max(0, s.outward.dot(sunDir));
-      const low = smoothstep(0, 8, sun.elevation); // no beam until the sun is a little up
+      const full = this.cfg.beam_full !== undefined ? Number(this.cfg.beam_full) : 4;
+      const low = smoothstep(0, Math.max(0.1, full), sun.elevation); // no beam until the sun is a little up
       s.light.intensity = 0.003 * s.lumens * facing * low * wf;
       s.light.color.copy(s.color ? new THREE.Color(s.color) : sunColor);
     });
@@ -338,7 +340,12 @@ export class Daylight {
       if (a.elevation !== undefined && a.azimuth !== undefined) {
         return { elevation: Number(a.elevation), azimuth: Number(a.azimuth), rising: a.rising !== false };
       }
-      const hour = parseFloat(t.state);
+      // a time string (input_datetime: "06:40:00"), its hour/minute attributes, or a plain number of hours
+      let hour = NaN;
+      const m = /^(\d{1,2}):(\d{2})/.exec(String(t.state));
+      if (m) hour = Number(m[1]) + Number(m[2]) / 60;
+      else if (a.hour !== undefined && a.minute !== undefined) hour = Number(a.hour) + Number(a.minute) / 60;
+      else hour = parseFloat(t.state);
       if (!isNaN(hour)) {
         // a plain day: sunrise 6, noon 12 at 60 degrees, sunset 18; south at noon
         const x = ((hour - 6) / 12) * Math.PI;

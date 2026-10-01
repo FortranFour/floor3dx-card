@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.9
+
+### Fixed
+- `daylight.time_entity` read only the hour of a time string, so an `input_datetime` at 06:40 behaved as 06:00. Hours and minutes, and `hour`/`minute` attributes, are now understood.
+
+### Added
+- `daylight.beam_full`: elevation at which window beams reach full strength; default 4° (was a fixed 8°).
+
 ## 1.3.8
 
 ### Changed
