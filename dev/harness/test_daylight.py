@@ -31,6 +31,7 @@ JS = r"""async () => {
   out.extLayer=c._scene.getObjectByName(names[2]).layers.mask; out.camLayers=c._camera.layers.mask;
   // gradient: horizon colour at 0 degrees, blends on both sides, dawn differs from dusk when given
   const colAt=async(el,rising)=>{const st=mk(el,180,'sunny','unavailable','off'); st.states['sun.sun'].attributes.rising=rising; c.hass=st; await wait(200); return '#'+c._ambient_light.color.getHexString();};
+  const tgt=()=>spot.target.position.clone(); c.hass=mk(60,az,'sunny','unavailable','off'); await wait(200); const high=tgt(); c.hass=mk(10,az,'sunny','unavailable','off'); await wait(200); const lowT=tgt(); out.beamTravel=+lowT.distanceTo(high).toFixed(0); out.beamFloor=[+high.y.toFixed(0),+lowT.y.toFixed(0)];
   c.hass=mk(50,180,'sunny','unavailable','off'); await wait(200); out.extSunDay=c._daylight.exteriorSun.intensity; c.hass=mk(-30,10,'sunny','unavailable','off'); await wait(200); out.extSunNight=c._daylight.exteriorSun.intensity;
   out.dusk0=await colAt(0,false); out.spotColDusk='#'+spot.color.getHexString(); await colAt(50,false); out.spotColDay='#'+spot.color.getHexString(); out.dusk4=await colAt(4,false); out.duskm4=await colAt(-4,false); out.dawn0=await colAt(0,true);
   return out;
@@ -57,6 +58,7 @@ if __name__ == '__main__':
           r['dusk0'] == '#ff9a4a' and r['dusk4'] not in ('#ff9a4a', '#e9f0ff') and r['duskm4'] not in ('#ff9a4a', '#8a9bc4') and r['dawn0'] == '#ff6a39')
     check('sun_colors: beam has its own colour, orange at dusk and warm by day', r['spotColDusk'] == '#ff8a3a' and r['spotColDay'] == '#fff3dc')
     check('exterior sun: on by day, off at night', r['extSunDay'] > 0 and r['extSunNight'] == 0)
+    check('beam aim follows the sun: pool moves across the floor between high and low sun', r['beamTravel'] > 50 and r['beamFloor'] == [0, 0])
     check('no page errors', not errors)
     for e in errors:
         print('  ', e)

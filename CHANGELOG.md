@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.10
+
+### Changed
+- `daylight` window beams are aimed along the sun's direction to the floor, so the pool travels across the room through the day instead of staying put.
+
 ## 1.3.9
 
 ### Fixed

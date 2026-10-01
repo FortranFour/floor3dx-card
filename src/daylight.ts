@@ -89,7 +89,7 @@ export class Daylight {
   private hemi: THREE.HemisphereLight | null = null;
   private exteriorAmbient: THREE.AmbientLight | null = null;
   private exteriorSun: THREE.DirectionalLight | null = null;
-  private spots: { light: THREE.SpotLight; outward: THREE.Vector3; lumens: number; color: string | null }[] = [];
+  private spots: { light: THREE.SpotLight; outward: THREE.Vector3; center: THREE.Vector3; lumens: number; color: string | null }[] = [];
   private glows: { meshes: THREE.Mesh[]; entity: string; color: THREE.Color; intensity: number }[] = [];
   private lastSignature = '';
   private dayColor: THREE.Color;
@@ -203,7 +203,7 @@ export class Daylight {
       }
       deps.scene.add(light);
       deps.scene.add(light.target);
-      this.spots.push({ light, outward, lumens: w.lumens !== undefined ? Number(w.lumens) : 500, color: w.color || null });
+      this.spots.push({ light, outward, center: center.clone(), lumens: w.lumens !== undefined ? Number(w.lumens) : 500, color: w.color || null });
     });
 
     // glass glow
@@ -286,6 +286,12 @@ export class Daylight {
       const low = smoothstep(0, Math.max(0.1, full), sun.elevation); // no beam until the sun is a little up
       s.light.intensity = 0.003 * s.lumens * facing * low * wf;
       s.light.color.copy(s.color ? new THREE.Color(s.color) : sunColor);
+      // aim the beam the way the sun actually comes through the window: along -sunDir from the pane
+      // to where that line meets the floor (capped), so the pool travels across the room through the day
+      if (facing > 0 && sunDir.y > 0.02) {
+        const run = Math.min(600, s.center.y / sunDir.y);
+        s.light.target.position.copy(s.center.clone().sub(sunDir.clone().multiplyScalar(run)));
+      }
     });
 
     // glass glow after dark
