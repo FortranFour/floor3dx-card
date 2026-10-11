@@ -103,7 +103,7 @@ export const SECTIONS: Section[] = [
     title: 'Light and shadows',
     icon: 'mdi:lightbulb-on-outline',
     content: () => [
-      [text('globalLightPower'), row(bool('shadow'), bool('extralightmode')), bool('sky')],
+      [text('globalLightPower'), row(bool('shadow'), bool('extralightmode')), row(num('shadow_budget', { min: 1, max: 32, step: 1 }), bool('sky'))],
       'daylight',
     ],
   },
@@ -435,6 +435,7 @@ export const zoomObjectSchema = (objects: string[]): Schema[] => [
 export const colorConditionSchema = (): Schema[] => [row(text('state'), text('color'))];
 
 const LABELS: { [name: string]: string } = {
+  shadow_budget: 'Shadow-casting lights (max)',
   draco_path: 'Draco decoder folder',
   basis_path: 'KTX2 transcoder folder',
   sky: 'Sky and real sun (needs a roof)',
@@ -580,6 +581,7 @@ const LABELS: { [name: string]: string } = {
 };
 
 const HELPERS: { [name: string]: string } = {
+  shadow_budget: 'Default: from the GPU. Lights past it shine without a shadow',
   draco_path: 'Only for Draco models. Default: next to the card',
   basis_path: 'Only for KTX2 textures. Default: next to the card',
   pixel_ratio: 'Default: the device pixel ratio',

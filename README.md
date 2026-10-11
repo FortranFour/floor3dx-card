@@ -97,6 +97,12 @@ A virtual light takes its brightness and colour from the Home Assistant entity w
 
 Upstream intended `yes` but the code compared colour arrays by reference and assigned where it meant to compare, so a light with a `color_mode` attribute was re-lit and the whole scene re-rendered on every state change anywhere in Home Assistant. That is fixed.
 
+### Shadow budget
+
+Every shadow-casting light needs a shadow map, and each shadow map takes a texture unit in the shader. A GPU exposes a fixed number of them to one material (16 on phones and integrated graphics, 32 on many discrete cards); a scene that asks for more fails to compile its shaders and draws nothing, a black card with no error. The card now counts: with `shadow: 'yes'`, the first N lights whose entry does not say `shadow: 'no'` get a shadow, where N is what the GPU has left after its own textures, and the rest still shine without one. A console warning names the lights that lost their shadow. With `extralightmode: 'yes'` the lights that are on come first, so a light gets its shadow when it is switched on if there is room. `shadow_budget` overrides N for a GPU that still goes black at the computed value.
+
+To stay within the budget by design: `shadow: 'no'` on lights whose shadow nobody would notice, and `light_object` to make one light per fixture instead of one per bulb. Ported from giosci1994/floor3d-card.
+
 ### A switch for the state, a bulb for the colour
 
 A colour bulb behind a wall switch has its colour on one entity and its power on another, and the bulb goes `unavailable` whenever the switch is off. `color_entity` on an entry, for `type3d: light` and `type3d: color`, names the entity that supplies brightness and colour while `entity` keeps supplying the state. When the colour entity is unavailable or reports no colour, the entry uses its configured `color` and `lumens`; changes to the colour entity alone re-light and re-colour the object.
@@ -278,6 +284,7 @@ On a Home Assistant without `ha-form` the previous editor is shown instead. `day
 | `light.shadow_map_size` | 128 to 4096 | 512 |
 | `daylight` | see above | off |
 | `type3d: shade` | `shade.top_entity`, `shade.invert` | |
+| `shadow_budget` | number of shadow-casting lights | from the GPU's texture units |
 | `color_entity` | an entity id, on `light` and `color` entries | `entity` |
 | `colorcondition[].color` | `entity`, `entity_color` in addition to any colour | |
 | `type3d: image` | see above | |

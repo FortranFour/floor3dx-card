@@ -221,6 +221,13 @@ export class Floor3dCard extends LitElement {
   _helper: THREE.DirectionalLightHelper;
   private _modelready: boolean;
   private _maxtextureimage: number;
+  // Shadow budget: every shadow-casting light takes a texture unit in the shader, and a scene that
+  // asks for more than the GPU has fails to compile and draws nothing. _shadowCandidates are the
+  // lights whose entry wants a shadow, in config order; _applyShadowBudget grants castShadow to the
+  // first N of them (the ones that are on, with extralightmode) and warns once about the rest.
+  private _shadowCandidates: { light: THREE.Light; name: string; entity: string; wantsShadow: boolean }[] = [];
+  private _shadowBudget = 0;
+  private _shadowWarned = '';
   // Faz-0 Engine Backbone: (Stabil.Patch.0.0) deterministic render scheduler
   private _renderRaf?: number;
   private _renderPending: boolean;
@@ -1947,7 +1954,11 @@ export class Floor3dCard extends LitElement {
     console.log('Max Texture Image Units: ' + this._maxtextureimage);
     console.log('Max Texture Image Units: number of lights casting shadow should be less than the above number');
 
-    const availableshadows = Math.max(6, this._maxtextureimage - 4);
+    // Texture units left for shadow maps after the material's own textures and the sun's map.
+    // shadow_budget overrides it (a lower value on a GPU that still goes black at the computed one).
+    const configured = parseInt((this._config as any).shadow_budget);
+    this._shadowBudget = configured > 0 ? configured : Math.max(1, (this._maxtextureimage || 16) - 6);
+    this._shadowCandidates = [];
 
     this._renderer.domElement.style.width = '100%';
     this._renderer.domElement.style.height = '100%';
@@ -3236,10 +3247,9 @@ export class Floor3dCard extends LitElement {
                     this._setNoShadowLight(_foundobject);
                     _foundobject.traverseAncestors(this._setNoShadowLight.bind(this));
 
-                    if (entity.light.shadow == 'no') {
-                      light.castShadow = false;
-                    } else {
-                      light.castShadow = true;
+                    light.castShadow = false;
+                    const wantsShadow = this._config.shadow == 'yes' && entity.light.shadow != 'no';
+                    if (wantsShadow) {
                       light.shadow.bias = -0.0001;
                       // light.shadow_map_size: resolution of this light's shadow map (default 512); crisp
                       // shadows of thin objects, slats or railings, need 1024 or 2048
@@ -3249,6 +3259,7 @@ export class Floor3dCard extends LitElement {
                       }
                     }
                     light.name = element.object_id + '_light';
+                    this._shadowCandidates.push({ light, name: light.name, entity: entity.entity, wantsShadow });
                   }
                 });
               }
@@ -3313,6 +3324,7 @@ export class Floor3dCard extends LitElement {
         });
         this._startImageRefresh();
       }
+      this._applyShadowBudget();
       console.log('Add 3D Object End');
     } catch (e) {
       console.log(e);
@@ -4067,15 +4079,42 @@ export class Floor3dCard extends LitElement {
     return this._object_ids[i].objects;
   }
 
-  private _manage_light_shadows(entity: Floor3dCardConfig, light: THREE.Light): void {
-    if (this._config.shadow == 'yes') {
-      if (entity.light.shadow == 'yes') {
-        if (light.intensity > 0) {
-          light.castShadow = true;
-        } else {
-          light.castShadow = false;
-        }
+  private _manage_light_shadows(_entity: Floor3dCardConfig, _light: THREE.Light): void {
+    // extralightmode: the budget is re-applied so that only lights that are on hold a slot
+    this._applyShadowBudget();
+  }
+
+  // Grants castShadow to at most _shadowBudget lights. Without extralightmode the first N entries
+  // that want a shadow keep it for good (stable, no shader recompiles when lights switch); with it,
+  // the lights that are on come first, so a light gets its shadow when switched on if there is room.
+  // A light that loses its shadow still lights the room. Ported from giosci1994/floor3d-card.
+  private _applyShadowBudget(): void {
+    if (!this._renderer) return;
+    const wanting = this._shadowCandidates.filter((c) => c.wantsShadow);
+    const extra = this._config.extralightmode == 'yes';
+    const ordered = extra ? [...wanting.filter((c) => c.light.intensity > 0), ...wanting.filter((c) => c.light.intensity <= 0)] : wanting;
+    const budget = this._shadowBudget;
+    const dropped: string[] = [];
+    let changed = false;
+    ordered.forEach((c, index) => {
+      const grant = index < budget && (!extra || c.light.intensity > 0);
+      if (c.light.castShadow !== grant) {
+        c.light.castShadow = grant;
+        changed = true;
       }
+      if (!grant && c.wantsShadow && (!extra || c.light.intensity > 0)) dropped.push(c.name);
+    });
+    if (changed) this._renderer.shadowMap.needsUpdate = true;
+    const key = dropped.join(',');
+    if (dropped.length && key !== this._shadowWarned) {
+      this._shadowWarned = key;
+      console.warn(
+        'floor3d-card: ' + wanting.length + ' lights ask for shadows but this GPU has room for ' + budget +
+          ' shadow maps (' + this._maxtextureimage + ' texture units). These lights still shine but cast no shadow: ' +
+          dropped.join(', ') + '. Put shadow: no on lights whose shadow does not matter, or use light_object to make one light per fixture.',
+      );
+    } else if (!dropped.length) {
+      this._shadowWarned = '';
     }
   }
 

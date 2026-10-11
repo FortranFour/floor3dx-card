@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.1
+
+### Fixed
+- Black card with shadows on and many lights. Each shadow-casting light takes a GPU texture unit; past the GPU's limit the shaders fail and nothing is drawn. Shadows are now granted to at most the number of lights the GPU can take (the first N in config order, or with `extralightmode` the ones that are on), the rest shine without a shadow, and a console warning names them. `shadow_budget` overrides the computed limit. Ported from giosci1994/floor3d-card. `dev/harness/test_shadow_budget.py`, with a control that reproduces the failure past the limit.
+
 ## 1.4.0
 
 ### Added
