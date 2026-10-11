@@ -4,7 +4,8 @@ A Home Assistant dashboard card that shows a live 3D model of your home and bind
 
 ![License MIT](https://img.shields.io/badge/License-MIT-97CA00.svg) ![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)
 
-<img src="https://raw.githubusercontent.com/FortranFour/floor3dx-card/main/demo/demo.jpg" width="900" alt="Floor3DX Card">
+<img width="1506" height="1270" alt="Screenshot 2026-10-10 194333" src="https://github.com/user-attachments/assets/ac00ac78-1e9b-40bb-be79-fba8cefa117e" />
+
 
 ## Lineage and compatibility
 
@@ -38,6 +39,11 @@ For the full configuration reference, see the [floor3dpro-card README](docs/floo
 | `KHR_texture_basisu` (KTX2) | texture download size and GPU memory | `basis_*` files next to the card, in a worker pool |
 
 Upstream loads compressed files with a bare `GLTFLoader`, which stalls at "Loading: 100%".
+
+Compressed models can run more fluidly on low-powered devices, such as phones.
+
+<img width="1290" height="2796" alt="IMG_0216 PNG" src="https://github.com/user-attachments/assets/5dfd6451-f165-4c28-8faa-c60e3a6afd0b" />
+
 
 ### Full-resolution rendering
 
@@ -96,6 +102,11 @@ A virtual light takes its brightness and colour from the Home Assistant entity w
 | `no` | `light.lumens` | `light.color` |
 
 Upstream intended `yes` but the code compared colour arrays by reference and assigned where it meant to compare, so a light with a `color_mode` attribute was re-lit and the whole scene re-rendered on every state change anywhere in Home Assistant. That is fixed.
+
+<img width="1212" height="993" alt="Screenshot 2026-09-26 112931" src="https://github.com/user-attachments/assets/e989f401-c82d-4cf5-8575-099bb0fb585d" />
+<img width="1206" height="995" alt="Screenshot 2026-09-26 113005" src="https://github.com/user-attachments/assets/82cf36ea-d78d-43ed-bb0e-26990fb69535" />
+
+
 
 ### Shadow budget
 
@@ -159,6 +170,11 @@ daylight:
 
 `colors` tints the room light (ambient, hemisphere and camera light); `sun_colors`, when given, tints only the window beams, so the house can stay neutral grey while the sun goes orange. The light colour and the background run along a gradient by sun elevation: the night colour at or below the `night` stop, the dusk (or dawn, when the sun is rising) colour at the `dusk` stop, the day colour at or above the `day` stop, blended smoothly in between, so the low sun is fully orange and both sides of it fade out of it gradually. `north` (the card's existing option) tells the card which way the model faces, so the window spots follow the real sun. `time_entity` accepts a number of hours 0 to 24, a time (an `input_datetime` such as `06:40:00`; 6:00 sunrise, 12:00 noon, 18:00 sunset) or any entity with `elevation` and `azimuth` attributes. `beam_full` is the elevation at which the window beams reach full strength (default 4°). Exterior objects are moved to their own render layer: only the exterior ambient and `exterior_sun`, a directional light that follows the real sun, reach them, and the window spots never touch them; they remain clickable. Each window spot sits just inside its pane and is aimed along the sun's actual direction to where that line meets the floor, so its pool lands near the sill under a high sun, reaches deep into the room under a low one, and swings sideways between morning and afternoon. YAML only for now; no editor section.
 
+<img width="836" height="730" alt="Screenshot 2026-09-29 164839" src="https://github.com/user-attachments/assets/1dce8df7-31b4-4fb4-9537-043ca22721c8" />
+
+<img width="1452" height="884" alt="Screenshot 2026-09-30 202624" src="https://github.com/user-attachments/assets/254dfcff-3556-4319-9d59-e9dbe6cb2fa5" />
+
+
 ### Shades that shrink with their position (`type3d: shade`)
 
 `type3d: cover` slides an object out of the way; a roller or cellular shade should shrink instead. `type3d: shade` scales the fabric object in height from its bottom edge: `entity` is the motor that raises the bottom edge (Home Assistant's `current_position`, 100 = fully raised), and `shade.top_entity`, optional, is a second motor that lowers the top edge, for top-down/bottom-up shades. Changes animate over 1.5 s. `shade.invert: yes` for a cover that reports 100 as closed. Point the entry at the fabric only; headrail and window stay where they are.
@@ -170,6 +186,8 @@ daylight:
   shade:
     top_entity: cover.bedroom_shade_top
 ```
+<img width="1320" height="1377" alt="Screenshot 2026-09-27 095937" src="https://github.com/user-attachments/assets/a7fa1d87-e596-4181-92d0-0738289ee6b9" />
+
 
 ### Mesh colour from the light itself
 
@@ -256,6 +274,11 @@ Objects exported without texture coordinates (Sweet Home 3D panels, plain boxes:
 
 Animated GIFs are decoded in the card, so they animate in every browser and keep the scene's animation loop running while they show. Video files (`.mp4`, `.webm`) play muted in a loop. The card re-draws the object when the URL changes, when `refresh` fires, and on every animation frame while a GIF or video is showing. `/api/` URLs without an access token are fetched with the dashboard's credentials, so `entity_picture` of a camera works as is. An entity is required; use any entity, `sun.sun` for example, for a fixed picture.
 
+<img width="1175" height="947" alt="Screenshot 2026-09-26 152711" src="https://github.com/user-attachments/assets/99c383e7-6533-45f6-a700-f6298ab1d474" />
+
+<img width="320" height="672" alt="Recording 2026-09-26 144845" src="https://github.com/user-attachments/assets/cf826aa1-d8ad-40a6-aea2-342679830b51" />
+
+
 ## Visual editor
 
 The card editor is built on Home Assistant's own form components (`ha-form`, entity pickers, toggles, sortable lists), adapted from [giosci1994/floor3d-card](https://github.com/giosci1994/floor3d-card) (MIT) to the options of this card:
@@ -268,6 +291,9 @@ The card editor is built on Home Assistant's own form components (`ha-form`, ent
 - The editor writes a short form: no switches at their default, numbers unquoted, group objects as plain ids. The card accepts `true`/`false` as well as `'yes'`/`'no'`, and plain ids in groups.
 
 On a Home Assistant without `ha-form` the previous editor is shown instead. `daylight.windows`, `exterior` and `glow` lists, and `image.url` as a state map, are edited in YAML.
+
+<img width="1201" height="922" alt="Screenshot 2026-10-02 183720" src="https://github.com/user-attachments/assets/8ee30132-4fa0-4cc2-8eb2-85c41609e310" />
+
 
 ## Options added by this fork
 
@@ -288,6 +314,13 @@ On a Home Assistant without `ha-form` the previous editor is shown instead. `day
 | `color_entity` | an entity id, on `light` and `color` entries | `entity` |
 | `colorcondition[].color` | `entity`, `entity_color` in addition to any colour | |
 | `type3d: image` | see above | |
+
+## Digital Twin Ecosystem
+
+Floor3DX Card is one component of a Home Assistant digital twin ecosystem, combining learned household routines, weekly schedule planning, and 3D previews with real device control and energy management: https://github.com/FortranFour/home-scheduler.
+
+<img width="1440" height="1628" alt="demo-night" src="https://github.com/user-attachments/assets/f905ea31-7ebf-446e-a773-dab3eaea00df" />
+
 
 ## Installation
 
