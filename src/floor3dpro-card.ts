@@ -63,7 +63,7 @@ console.info(
   type: 'floor3dpro-card',
   name: 'Floor3DX Card',
   preview: false,
-  description: 'Floor3D Pro fork: Draco / Meshopt / KTX2 models, full-resolution rendering, door-cache fix',
+  description: 'Live 3D model of your home: compressed models, visual editor, lights that follow their bulbs, pictures and video on surfaces, moving shades, daylight on a roofless plan, neon and blueprint looks',
   documentationURL: 'https://github.com/FortranFour/floor3dx-card',
 });
 class ModelSource {

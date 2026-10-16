@@ -1,11 +1,23 @@
 # Floor3DX Card
 
-A Home Assistant dashboard card that shows a live 3D model of your home and binds its objects to your entities. Floor3DX is a fork of [floor3dpro-card](https://github.com/levonisyas/floor3dpro-card) that adds compressed-model support (Draco, Meshopt, KTX2, WebP), renders at full screen resolution, and fixes a bug that displaced doors and windows when you returned to a view.
+A Home Assistant dashboard card that shows a live 3D model of your home and binds its objects to your entities: lights that follow the bulb's colour and brightness, doors and shades that move with their covers, fans that spin at their speed, pictures and video on screens, and the time of day on a roofless plan. Floor3DX is a fork of [floor3dpro-card](https://github.com/levonisyas/floor3dpro-card) and [floor3d-card](https://github.com/adizanni/floor3d-card); an existing configuration for either works as it is.
 
 ![License MIT](https://img.shields.io/badge/License-MIT-97CA00.svg) ![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)
 
-<img width="1506" height="1270" alt="Screenshot 2026-10-10 194333" src="https://github.com/user-attachments/assets/ac00ac78-1e9b-40bb-be79-fba8cefa117e" />
+<img width="1506" height="1270" alt="A house model in floor3dx-card: lamps lit in their colours, daylight through the windows, a video on the garage TV" src="https://github.com/user-attachments/assets/ac00ac78-1e9b-40bb-be79-fba8cefa117e" />
 
+**What this fork adds**
+
+- **Compressed models.** Draco, Meshopt, KTX2 and WebP glTF files load with decoders kept next to the card, so a house that was 30 MB is 4 MB and works offline. Compression scripts included.
+- **A visual editor** on Home Assistant's own form components: sections, sortable lists, every object of the model in the menus, pick an object with a tap in the preview. Adapted from [giosci1994/floor3d-card](https://github.com/giosci1994/floor3d-card).
+- **Lights that behave like the real ones.** Brightness and colour from the entity (`follow_entity`), a wall switch for the state and the bulb behind it for the colour (`color_entity`), one light for a multi-part fixture (`light_object`), a light placed in front of its object so a slatted headboard throws its pattern on the wall (`offset`). A `color: entity` condition tints the lamp shade in the light's colour.
+- **Pictures and video on any surface** (`type3d: image`): camera snapshots, album art, animated GIFs decoded in the card, a looping video while a switch is on and a dark still while it is off. Works on surfaces the model exported without texture coordinates.
+- **Shades that shrink with their position** (`type3d: shade`), with a second motor for top-down/bottom-up shades.
+- **Time of day without a roof** (`daylight`): ambient and colour from the sun's elevation and a weather entity, beams through the windows that follow the sun round the house, glass that glows after dark, a slider to scrub through the day.
+- **The NeonPlan 3D / NextFloor look** (`look`): neon, blueprint and day themes on your own model, with glowing edge lines and lit lamps that shine.
+- **Fixes.** Doors and windows no longer displace on a return visit; Draco models render in a stable order; `rotate.axis: y` works unquoted; a scene with more shadow-casting lights than the GPU can take no longer goes black; entity colour tracking no longer re-renders on every state change.
+
+Everything is off unless configured, so a config written for the parent cards renders exactly as it did. The options are documented below, with a changelog in [CHANGELOG.md](CHANGELOG.md).
 
 ## Lineage and compatibility
 
