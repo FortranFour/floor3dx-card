@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.5.0
+
+### Added
+- `look`: the NeonPlan 3D / NextFloor style on the loaded model. Themes `neon`, `blueprint`, `day`: dark stage, flat muted surfaces through a per-pixel shader patch (adapted from NextFloor, MIT), additive edge lines along mesh edges, signal colours kept, lit lamp objects glowing in their light colour, stage background following `daylight`. Off by default; every existing option works on top. Editor section. `dev/harness/test_look.py`.
+
 ## 1.4.1
 
 ### Fixed

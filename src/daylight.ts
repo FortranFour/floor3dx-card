@@ -60,6 +60,7 @@ interface Deps {
   torch?: THREE.Light; // the card's camera light
   baseIntensity: number; // globalLightPower as configured
   baseBackground: THREE.Color | null;
+  stageColor?: (daylight: number) => THREE.Color | null; // from an active look
 }
 
 const DEFAULT_WEATHER: { [c: string]: number } = {
@@ -266,7 +267,11 @@ export class Daylight {
       this.exteriorAmbient.intensity = this.ambientDay * (nightFrac + (1 - nightFrac) * fe);
       this.exteriorAmbient.color.copy(color);
     }
-    if (this.bg) {
+    if (this.d.stageColor) {
+      // a look is active: its stage colour, night to day by the daylight factor
+      const c = this.d.stageColor(fe);
+      if (c) this.d.scene.background = c;
+    } else if (this.bg) {
       const c = this.gradient(this.bg.night, this.bg.dusk, this.bg.day, sun.elevation);
       if (wf < 1) c.lerp(new THREE.Color('#8f9aa6'), (1 - wf) * f);
       this.d.scene.background = c;

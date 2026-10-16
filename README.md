@@ -108,6 +108,29 @@ Upstream intended `yes` but the code compared colour arrays by reference and ass
 
 
 
+### The NeonPlan / NextFloor look (`look`)
+
+[NeonPlan 3D](https://github.com/Mastershort/neonplan3d) and [NextFloor](https://github.com/therealMRBK/NextFloor) draw their own geometry, so their style is baked in: a dark stage, flat muted surfaces in a few blues, glowing edge lines along every wall, and "signal" colours (a lit lamp, an open window) kept saturated against the muted base. `look` reproduces that on the model this card has loaded, without touching the model file. Off by default: without a `look` block the card renders exactly as before.
+
+```yaml
+look:
+  theme: neon            # neon | blueprint | day | off
+  accent: '#37e0ff'      # edge colour of the neon theme
+  edges: 'yes'           # outline lines along mesh edges
+  edge_angle: 60         # draw an edge where faces meet at more than this; 40 is denser, 60 thins window mullions
+  edge_opacity: 0.85
+  glow: 0.9              # a lit lamp object glows in its light colour (0 to 2)
+  flat: 'yes'            # flat shading, no specular
+  keep_signal: 'yes'     # bright saturated colours stay as they are
+  stage: 'yes'           # background from the theme; with daylight, night to day
+  walls: wall            # object name prefixes that get the wall tint
+  floors: room, floor
+```
+
+Every mesh keeps its original material; a themed copy maps the colour to the theme per pixel in a small shader patch (adapted from NextFloor's `viewer/theme.ts`, MIT), so textures still show through as pattern and switching themes is a uniform change. Edges are `EdgesGeometry` line segments drawn additively, normal blending in the day theme where additive glow would vanish. Colour conditions, lights, images, shades and daylight all work on top: a `Gold` colour condition stays gold because it is a signal colour, `LightSteelBlue` goes to the muted base, and a `type3d: light` entry's objects take an emissive glow in the light's colour while it is on, which is what makes lamps visible on surfaces this dark. With `daylight`, the stage background runs from the theme's night colour to its day colour.
+
+What is not taken from those projects, because it depends on their generated geometry: fold-away walls, the painted room-light surface, the plan editor and furniture library.
+
 ### Shadow budget
 
 Every shadow-casting light needs a shadow map, and each shadow map takes a texture unit in the shader. A GPU exposes a fixed number of them to one material (16 on phones and integrated graphics, 32 on many discrete cards); a scene that asks for more fails to compile its shaders and draws nothing, a black card with no error. The card now counts: with `shadow: 'yes'`, the first N lights whose entry does not say `shadow: 'no'` get a shadow, where N is what the GPU has left after its own textures, and the rest still shine without one. A console warning names the lights that lost their shadow. With `extralightmode: 'yes'` the lights that are on come first, so a light gets its shadow when it is switched on if there is room. `shadow_budget` overrides N for a GPU that still goes black at the computed value.
@@ -310,6 +333,7 @@ On a Home Assistant without `ha-form` the previous editor is shown instead. `day
 | `light.shadow_map_size` | 128 to 4096 | 512 |
 | `daylight` | see above | off |
 | `type3d: shade` | `shade.top_entity`, `shade.invert` | |
+| `look` | see above | off |
 | `shadow_budget` | number of shadow-casting lights | from the GPU's texture units |
 | `color_entity` | an entity id, on `light` and `color` entries | `entity` |
 | `colorcondition[].color` | `entity`, `entity_color` in addition to any colour | |

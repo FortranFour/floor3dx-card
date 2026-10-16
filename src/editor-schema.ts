@@ -108,6 +108,50 @@ export const SECTIONS: Section[] = [
     ],
   },
   {
+    key: 'look',
+    title: 'Look (NeonPlan / NextFloor style)',
+    icon: 'mdi:palette-swatch-outline',
+    content: () => [
+      [
+        {
+          name: 'look',
+          type: 'grid',
+          column_min_width: '140px',
+          schema: [
+            choice('theme', [
+              ['off', 'Off (model as it is)'],
+              ['neon', 'Neon'],
+              ['blueprint', 'Blueprint'],
+              ['day', 'Day'],
+            ]),
+            text('accent'),
+            choice('edges', [
+              ['yes', 'Yes'],
+              ['no', 'No'],
+            ]),
+            num('edge_angle', { min: 1, max: 179, unit_of_measurement: '°' }),
+            num('edge_opacity', { min: 0, max: 1, step: 0.05 }),
+            num('glow', { min: 0, max: 2, step: 0.1 }),
+            choice('flat', [
+              ['yes', 'Yes'],
+              ['no', 'No'],
+            ]),
+            choice('keep_signal', [
+              ['yes', 'Yes'],
+              ['no', 'No'],
+            ]),
+            choice('stage', [
+              ['yes', 'Yes'],
+              ['no', 'No'],
+            ]),
+            text('walls'),
+            text('floors'),
+          ],
+        },
+      ],
+    ],
+  },
+  {
     key: 'interaction',
     title: 'Interaction',
     icon: 'mdi:gesture-tap',
@@ -435,6 +479,17 @@ export const zoomObjectSchema = (objects: string[]): Schema[] => [
 export const colorConditionSchema = (): Schema[] => [row(text('state'), text('color'))];
 
 const LABELS: { [name: string]: string } = {
+  theme: 'Theme',
+  accent: 'Accent (neon edge colour)',
+  edges: 'Edge lines',
+  edge_angle: 'Edge angle',
+  edge_opacity: 'Edge opacity',
+  glow: 'Lamp glow',
+  flat: 'Flat shading',
+  keep_signal: 'Keep signal colours',
+  stage: 'Stage background',
+  walls: 'Wall object prefixes',
+  floors: 'Floor object prefixes',
   shadow_budget: 'Shadow-casting lights (max)',
   draco_path: 'Draco decoder folder',
   basis_path: 'KTX2 transcoder folder',
@@ -581,6 +636,15 @@ const LABELS: { [name: string]: string } = {
 };
 
 const HELPERS: { [name: string]: string } = {
+  theme: 'Off keeps the model exactly as before',
+  accent: 'Default #37e0ff',
+  edge_angle: 'Lines where faces meet at more than this. Default 40; 60 thins window mullions',
+  edge_opacity: 'Default 0.85',
+  glow: 'Emissive glow of a lit lamp object in its light colour. Default 0.9',
+  keep_signal: 'Bright saturated colours (Gold, red) stay as they are. Default yes',
+  stage: 'Background from the theme, night to day with daylight. Default yes',
+  walls: 'Comma separated. Default wall',
+  floors: 'Comma separated. Default room, floor',
   shadow_budget: 'Default: from the GPU. Lights past it shine without a shadow',
   draco_path: 'Only for Draco models. Default: next to the card',
   basis_path: 'Only for KTX2 textures. Default: next to the card',

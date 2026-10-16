@@ -12,6 +12,7 @@ import './editor';
 import { HassEntity } from 'home-assistant-js-websocket';
 import { ImageFrame, ImageFit } from './image-frame';
 import { Daylight } from './daylight';
+import { Look } from './look';
 import {
   createConfigArray,
   createObjectGroupConfigArray,
@@ -167,6 +168,8 @@ export class Floor3dCard extends LitElement {
   private _shadeSignature: string[] = [];
   // daylight: time-of-day lighting for a roofless plan
   private _daylight: Daylight | null = null;
+  // look: NeonPlan / NextFloor style themes on the loaded model
+  private _look: Look | null = null;
   // Editor of the card (only in the preview): a tap picks an object, and some objects are highlighted.
   @property({ attribute: false }) public preview?: boolean;
   private _pickMode = false;
@@ -1746,6 +1749,19 @@ export class Floor3dCard extends LitElement {
     return out;
   }
 
+  // look: construct once the scene exists (display3dmodel), apply once the meshes are in it.
+  private _applyLook(): void {
+    const cfg: any = (this._config as any).look;
+    if (!cfg || !this._scene) return;
+    if (!this._look) this._look = new Look(cfg, this._scene);
+    if (!this._look.active) return;
+    const meshes: THREE.Mesh[] = [];
+    (this._raycastinglevels || []).forEach((level) => (level || []).forEach((o: any) => o && o.isMesh && meshes.push(o)));
+    this._look.apply(meshes);
+    const stage = this._look.stageColor(0.5);
+    if (stage) this._scene.background = stage;
+  }
+
   private _initDaylight(): void {
     if (!this._config.daylight || this._daylight) return;
     let base = 0.5;
@@ -1761,6 +1777,7 @@ export class Floor3dCard extends LitElement {
       torch: this._torch,
       baseIntensity: base,
       baseBackground: this._scene.background instanceof THREE.Color ? this._scene.background : null,
+      stageColor: this._look && this._look.active ? (k: number) => this._look.stageColor(k) : undefined,
     });
     this._daylight.update(this._hass.states);
     this._renderer.shadowMap.needsUpdate = true;
@@ -1964,7 +1981,11 @@ export class Floor3dCard extends LitElement {
     this._renderer.domElement.style.height = '100%';
     this._renderer.domElement.style.display = 'block';
 
-    if (this._config.backgroundColor) {
+    if ((this._config as any).look && !this._look) this._look = new Look((this._config as any).look, this._scene);
+    const stage = this._look && this._look.stageColor(0.5);
+    if (stage) {
+      this._scene.background = stage;
+    } else if (this._config.backgroundColor) {
       if (this._config.backgroundColor == 'transparent') {
         this._renderer.setClearColor(0x000000, 0);
       } else {
@@ -2196,6 +2217,7 @@ export class Floor3dCard extends LitElement {
     }
 
     this._expandObjectPatterns();
+    this._applyLook();
     this._add3dObjects();
 
     console.log('Object loaded end');
@@ -4009,6 +4031,16 @@ export class Floor3dCard extends LitElement {
         if (this._config.extralightmode == 'yes') {
           this._manage_light_shadows(entity, light);
         }
+      }
+      // look: a lit lamp object glows in its light colour (neon surfaces are too dark for real
+      // lights alone to show a lamp is on). The glow is emissive on the objects of the light entry.
+      if (this._look && this._look.active) {
+        const glow = this._states[i] == 'on' ? light.color : null;
+        const k = glow && this._brightness[i] != -1 ? Math.max(0.25, this._brightness[i] / 255) : 1;
+        this._object_ids[i].objects.forEach((o) => {
+          const mesh: any = this._scene.getObjectByName(o.object_id);
+          if (mesh) this._look.setGlow(mesh, glow, k);
+        });
       }
       this._renderer.shadowMap.needsUpdate = true;
     });
