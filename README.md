@@ -357,6 +357,14 @@ On a Home Assistant without `ha-form` the previous editor is shown instead. `day
 | `colorcondition[].color` | `entity`, `entity_color` in addition to any colour | |
 | `type3d: image` | see above | |
 
+## Companion card: Floor3D Snapshot Card
+
+[Floor3D Snapshot Card](https://github.com/FortranFour/floor3d-snapshot-card) turns the model behind a Floor3DX card (or a floor3d-card or floor3dpro-card) into a fast, tappable floor plan for wall tablets, phones and guests. Its visual editor finds the floor3d cards in your dashboards, renders the model once in your browser to a static orthographic picture, detects the rooms and places the card's entities in the room each one stands in. Tablets and phones then load a small module and a few images, and no 3D runs on them. Tap a room's floor to get its controls; a guest mode limits locks, garage doors, alarms and volume.
+
+It shares this card's conventions: the Neon, Blueprint and Day themes of `look`, an optional sunlight layer that follows the real sun from Home Assistant's location, and a live 3D preview to turn, tilt and roll the model before the snapshot is taken. When it imports a Floor3DX card, it copies `look.theme` and `north`. Install it from HACS as a custom repository of type Dashboard.
+
+![Floor3D Snapshot Card made from a Floor3DX model](docs/floor3d-snapshot-card.png)
+
 ## Digital Twin Ecosystem
 
 Floor3DX Card is one component of a Home Assistant digital twin ecosystem, combining learned household routines, weekly schedule planning, and 3D previews with real device control and energy management: https://github.com/FortranFour/home-scheduler.
