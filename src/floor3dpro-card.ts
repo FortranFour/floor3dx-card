@@ -1750,14 +1750,18 @@ export class Floor3dCard extends LitElement {
   }
 
   // look: construct once the scene exists (display3dmodel), apply once the meshes are in it.
+  private _lookMeshes(): THREE.Mesh[] {
+    const meshes: THREE.Mesh[] = [];
+    (this._raycastinglevels || []).forEach((level) => (level || []).forEach((o: any) => o && o.isMesh && meshes.push(o)));
+    return meshes;
+  }
+
   private _applyLook(): void {
     const cfg: any = (this._config as any).look;
     if (!cfg || !this._scene) return;
     if (!this._look) this._look = new Look(cfg, this._scene);
     if (!this._look.active) return;
-    const meshes: THREE.Mesh[] = [];
-    (this._raycastinglevels || []).forEach((level) => (level || []).forEach((o: any) => o && o.isMesh && meshes.push(o)));
-    this._look.apply(meshes);
+    this._look.applyMaterials(this._lookMeshes());
     const stage = this._look.stageColor(0.5);
     if (stage) this._scene.background = stage;
   }
@@ -2217,8 +2221,11 @@ export class Floor3dCard extends LitElement {
     }
 
     this._expandObjectPatterns();
-    this._applyLook();
+    this._applyLook(); // materials only: colour-condition clones made in _add3dObjects are then themed
     this._add3dObjects();
+    // edge lines last: door, shade and rotate setup re-centres geometry on its pivot and moves the
+    // mesh, so lines built earlier would sit offset by the pivot
+    if (this._look && this._look.active) this._look.applyEdges(this._lookMeshes());
 
     console.log('Object loaded end');
 

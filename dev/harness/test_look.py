@@ -8,7 +8,8 @@ JS = r"""async () => {
   const names=[];window.card._scene.traverse(o=>{if(o.isMesh&&o.name){o.geometry.computeBoundingBox();const b=o.geometry.boundingBox;if(b.max.y-b.min.y>20)names.push(o.name)}});
   const hass={states:{'light.x':{state:'on',attributes:{brightness:255}}},language:'en',themes:{},config:{},user:{},callService(){}};
   const make=async(look)=>{
-    const ents=[{entity:'light.x',type3d:'light',object_id:names[0],light:{shadow:'no',lumens:'800',color:'#FFB830',distance:'200',decay:'1'}},
+    const ents=[{entity:'light.x',type3d:'door',object_id:names[5],door:{doortype:'swing',side:'left',direction:'inner',degrees:'30'}},
+                {entity:'light.x',type3d:'light',object_id:names[0],light:{shadow:'no',lumens:'800',color:'#FFB830',distance:'200',decay:'1'}},
                 {entity:'light.x',type3d:'color',object_id:names[1],colorcondition:[{state:'on',color:'Gold'},{state:'off',color:'LightSteelBlue'}]}];
     const cfg=Object.assign({},window.card._config,{type:'custom:floor3dx-card',pro_skill:'mobile',shadow:'no',backgroundColor:'#848c8f',object_groups:[],entities:ents});
     if(look)cfg.look=look;
@@ -23,6 +24,11 @@ JS = r"""async () => {
   out.neonBg='#'+neon._scene.background.getHexString(); out.edges=neon._look.edgeLines.length; out.themed=neon._look.themed.size;
   const m0=neon._scene.getObjectByName(names[2]).material; out.wrapped=!!(m0.userData&&m0.userData.f3dxThemedOf); out.originalKept=neon._look.originalOf(m0)!==m0;
   out.blendAdditive=neon._look.edgeMaterial.blending===2; // THREE.AdditiveBlending
+  const dl=neon._look.edgeLines.find(l=>l.parent&&l.parent.name===names[5]); const v=(o)=>{const p=neon._camera.position.clone(); return o.getWorldPosition(p);};
+  // the door mesh's geometry was re-centred on its hinge and the mesh moved: the line geometry must match, so the
+  // line's bounding box in world space must overlap the mesh's
+  dl.geometry.computeBoundingBox(); const lb=dl.geometry.boundingBox.clone().applyMatrix4(dl.matrixWorld); dl.parent.geometry.computeBoundingBox(); const mb=dl.parent.geometry.boundingBox.clone().applyMatrix4(dl.parent.matrixWorld);
+  out.doorLineOnMesh=lb.getCenter(v(dl)).distanceTo(mb.getCenter(v(dl.parent)))<2;
   // colour condition still applies: Gold on, LightSteelBlue off, on the themed material
   const cm=()=>'#'+neon._scene.getObjectByName(names[1]).material.color.getHexString();
   out.condOn=cm(); neon.hass={...hass,states:{'light.x':{state:'off',attributes:{}}}}; await new Promise(r=>setTimeout(r,300)); out.condOff=cm();
@@ -46,6 +52,7 @@ if __name__ == '__main__':
     check('neon: stage background, edge lines drawn, materials wrapped with originals kept',
           r['neonBg'] != '#848c8f' and r['edges'] > 0 and r['themed'] > 0 and r['wrapped'] and r['originalKept'])
     check('neon edges additive, day edges normal', r['blendAdditive'] and r['dayBlendNormal'])
+    check('edge lines of a swing door stay on the door after its hinge re-centring', r['doorLineOnMesh'])
     check('colour condition still works on the themed material', r['condOn'] == '#ffd700' and r['condOff'] == '#b0c4de')
     check('lit lamp object glows in its light colour, dark when off', r['glowOff'] == '#000000' and r['glowOn'] not in (None, '#000000'))
     check('day and blueprint stage colours differ from neon', len({r['neonBg'], r['dayBg'], r['bpBg']}) == 3)

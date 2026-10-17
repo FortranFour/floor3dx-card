@@ -128,11 +128,24 @@ export class Look {
     return this.theme() !== 'off';
   }
 
-  /** Apply to every mesh in the scene: themed materials, edge lines. Idempotent. */
-  apply(meshes: THREE.Mesh[]): void {
+  /** Themed materials for every mesh. Idempotent. Call before any code that clones materials. */
+  applyMaterials(meshes: THREE.Mesh[]): void {
     if (!this.active) return;
     meshes.forEach((mesh) => this.applyMesh(mesh));
-    if (yes(this.cfg.edges, true)) this.buildEdges(meshes);
+  }
+
+  /** Edge lines for every mesh, from its current geometry. Call after any code that re-centres
+   *  geometry (door hinges, shade pivots): the lines are children of the mesh and share its transform. */
+  applyEdges(meshes: THREE.Mesh[]): void {
+    if (!this.active || !yes(this.cfg.edges, true)) return;
+    if (this.edgeLines.length) return; // already built
+    this.buildEdges(meshes);
+  }
+
+  /** Both, for callers with no re-centring step. */
+  apply(meshes: THREE.Mesh[]): void {
+    this.applyMaterials(meshes);
+    this.applyEdges(meshes);
   }
 
   /** Theme one mesh's material(s). Called at setup and again whenever a mesh gets a new material. */

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.5.1
+
+### Fixed
+- `look`: the edge lines of doors, windows, shades and rotating objects floated away from the house, offset by each object's hinge. Lines were built before the door setup re-centred the geometry on its pivot; they are now built after it.
+
 ## 1.5.0
 
 ### Added
