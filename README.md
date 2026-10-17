@@ -138,6 +138,12 @@ look:
   walls: wall            # object name prefixes that get the wall tint
   floors: room, floor
 ```
+<img width="1337" height="652" alt="Screenshot 2026-10-16 173414" src="https://github.com/user-attachments/assets/379c0215-a064-4155-bcf8-8817e4c2d89e" />
+
+<img width="1342" height="665" alt="Screenshot 2026-10-16 173148" src="https://github.com/user-attachments/assets/aa9841bd-19a2-4bed-81b0-3bdc4909538d" />
+
+<img width="1001" height="1080" alt="Screenshot 2026-10-16 173503" src="https://github.com/user-attachments/assets/e3a9536c-c791-4fcf-8df8-5d0c10fb3880" />
+
 
 Every mesh keeps its original material; a themed copy maps the colour to the theme per pixel in a small shader patch (adapted from NextFloor's `viewer/theme.ts`, MIT), so textures still show through as pattern and switching themes is a uniform change. Edges are `EdgesGeometry` line segments drawn additively, normal blending in the day theme where additive glow would vanish. Colour conditions, lights, images, shades and daylight all work on top: a `Gold` colour condition stays gold because it is a signal colour, `LightSteelBlue` goes to the muted base, and a `type3d: light` entry's objects take an emissive glow in the light's colour while it is on, which is what makes lamps visible on surfaces this dark. With `daylight`, the stage background runs from the theme's night colour to its day colour.
 
