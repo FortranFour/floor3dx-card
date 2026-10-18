@@ -34,6 +34,12 @@ JS = r"""async () => {
   c.hass=mk('off',0); await wait(300); out.numInv0=[op(3),c._scene.getObjectByName(names[3]).visible, mat(3).transparent, mat(3).depthWrite];
   c.hass=mk('off',100); await wait(300); out.restored=[op(3),c._scene.getObjectByName(names[3]).visible, mat(3).transparent, mat(3).depthWrite];
   out.rowsBound=c._transparency.bound.length;
+  // overlapping rules: an "all" rule then a "subset" rule on the same mesh; the later rule wins whichever changed
+  const ov=await make({transparent:[{objects:[names[7],names[8]],transparency:60,entity:'input_boolean.x'},{objects:names[8],transparency:10,entity:'input_number.t'}],entities:[]});
+  const om=(k)=>+((Array.isArray(ov._scene.getObjectByName(names[k]).material)?ov._scene.getObjectByName(names[k]).material[0]:ov._scene.getObjectByName(names[k]).material).opacity).toFixed(2);
+  ov.hass=mk('on',10); await wait(300); out.overlapBoth=[om(7),om(8)];          // all 60, subset says 10 -> 0.4 / 0.9
+  ov.hass=mk('off',10); await wait(300); out.overlapAllOff=[om(7),om(8)];       // all 0 (changed), subset unchanged 10 but re-applied -> 1 / 0.9
+  ov.hass=mk('on',0); await wait(300); out.overlapSubsetZero=[om(7),om(8)];     // all 60, subset 0 -> 0.4 / 1
   // with a look: the faded material is the themed one
   const l=await make({look:{theme:'neon'}}); const lm=l._scene.getObjectByName(names[0]).material; out.lookThemedFaded=[!!(lm.userData&&lm.userData.f3dxThemedOf), +lm.opacity.toFixed(2)];
   // no option: nothing bound, no material touched
@@ -61,6 +67,9 @@ if __name__ == '__main__':
     check('numeric 0 inverted: 100 -> opacity 0, hidden', r['numInv0'] == [0, False, True, False])
     check('back to 0: visible, material flags exactly restored', r['restored'] == [1, True, False, True])
     check('rules bound: 2 card-level + 3 rows', r['rowsBound'] == 5)
+    check('overlapping rules: the later rule wins on the shared mesh', r['overlapBoth'] == [0.4, 0.9])
+    check('overlapping rules: an unchanged later rule is re-applied when the earlier one changes', r['overlapAllOff'] == [1, 0.9])
+    check('overlapping rules: later rule at 0 makes the shared mesh solid', r['overlapSubsetZero'] == [0.4, 1])
     check('with a look, the themed material is the one faded', r['lookThemedFaded'] == [True, 0.5])
     check('no option: nothing bound, material untouched', r['plain'] == [None, False])
     check('no page errors', not errors)

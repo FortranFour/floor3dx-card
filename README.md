@@ -184,6 +184,8 @@ entities:
 
 A numeric entity state is the transparency itself: 0 to 100, or 0 to 1 when the entity's `max` is 1 or below. Each mesh keeps its material and only its opacity is lowered; a material shared with an object outside the rules is cloned first so that object stays solid. At 100 the mesh is hidden, so it stops casting shadows as well; back at 0 the material is restored exactly. Works on top of `look` (the themed material is the one faded; the edge lines stay, which gives an x-ray outline) and of colour conditions on other objects.
 
+When several rules name the same object, the later rule in the configuration wins: an "all walls" rule first and "this room's walls" rules after it let a selector pick a room while a slider sets the amount (template sensors give each rule its value; see the forum thread for a package).
+
 ### Shadow budget
 
 Every shadow-casting light needs a shadow map, and each shadow map takes a texture unit in the shader. A GPU exposes a fixed number of them to one material (16 on phones and integrated graphics, 32 on many discrete cards); a scene that asks for more fails to compile its shaders and draws nothing, a black card with no error. The card now counts: with `shadow: 'yes'`, the first N lights whose entry does not say `shadow: 'no'` get a shadow, where N is what the GPU has left after its own textures, and the rest still shine without one. A console warning names the lights that lost their shadow. With `extralightmode: 'yes'` the lights that are on come first, so a light gets its shadow when it is switched on if there is room. `shadow_budget` overrides N for a GPU that still goes black at the computed value.

@@ -135,17 +135,19 @@ export class Transparency {
     return this.bound.length > 0;
   }
 
-  /** Apply the rules for this hass. True when something changed on screen. */
+  /** Apply the rules for this hass. True when something changed on screen. When any rule's value
+   *  changed, every rule is re-applied in order, so a mesh named by several rules ends up with the
+   *  value of the last one in the configuration whatever changed first (an "all walls" rule followed
+   *  by "this room's walls" rules, say). */
   update(hass: any): boolean {
     const states = hass && hass.states ? hass.states : {};
     let changed = false;
     this.bound.forEach((b) => {
       const value = Transparency.value(b.rule, b.rule.entity ? states[b.rule.entity] : undefined);
-      if (b.current === value) return;
+      if (b.current !== value) changed = true;
       b.current = value;
-      b.meshes.forEach((mesh) => Transparency.setTransparency(mesh, value));
-      changed = true;
     });
+    if (changed) this.bound.forEach((b) => b.meshes.forEach((mesh) => Transparency.setTransparency(mesh, b.current as number)));
     return changed;
   }
 

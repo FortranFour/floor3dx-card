@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.6.1
+
+### Fixed
+- `transparent`: when a mesh is named by several rules (an "all walls" rule and a "this room's walls" rule, say), every rule is re-applied in order whenever any of them changes, so the later rule in the configuration always wins. Before, only the rule whose entity changed was applied, and the result depended on which changed last.
+
 ## 1.6.0
 
 ### Added
