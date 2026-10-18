@@ -1180,6 +1180,25 @@ export class Floor3dCard extends LitElement {
     names.forEach((name) => {
       const object = this._scene.getObjectByName(name);
       if (!object) return;
+      // A box in the object's own frame, placed with its world matrix: it hugs the object whatever
+      // its rotation. A world-axis box (BoxHelper) around a wall of a house drawn at an angle is a
+      // large rectangle whose diagonal is the wall, which looks displaced.
+      const geometry = (object as THREE.Mesh).geometry;
+      if (geometry) {
+        if (!geometry.boundingBox) geometry.computeBoundingBox();
+        const box = geometry.boundingBox;
+        const size = box.getSize(new THREE.Vector3());
+        const edges = new THREE.EdgesGeometry(new THREE.BoxGeometry(size.x || 0.01, size.y || 0.01, size.z || 0.01));
+        edges.translate((box.min.x + box.max.x) / 2, (box.min.y + box.max.y) / 2, (box.min.z + box.max.z) / 2);
+        const helper = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x03a9f4, depthTest: false, transparent: true }));
+        helper.matrixAutoUpdate = false;
+        object.updateWorldMatrix(true, false);
+        helper.matrix.copy(object.matrixWorld);
+        helper.renderOrder = 999;
+        this._scene.add(helper);
+        this._highlightHelpers.push(helper);
+        return;
+      }
       const helper = new THREE.BoxHelper(object, 0x03a9f4);
       const material = helper.material as THREE.LineBasicMaterial;
       material.depthTest = false;

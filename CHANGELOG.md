@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.6.2
+
+### Fixed
+- Editor: the highlight box around a picked object is drawn in the object's own frame, so it hugs the object whatever its rotation. The previous world-axis box around a wall of a house drawn at an angle was a large rectangle whose diagonal was the wall, which looked displaced from the model.
+
 ## 1.6.1
 
 ### Fixed
