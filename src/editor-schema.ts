@@ -59,6 +59,7 @@ export const BLOCK_SWITCHES: { [block: string]: { [key: string]: 'yes' | 'no' } 
   room: { label: 'no' },
   image: { mirror: 'no', planar_uv: 'no' },
   shade: { invert: 'no' },
+  transparent: { invert: 'no' },
 };
 // Options written as [x, y, z] lists, edited as three numbers.
 export const ARRAY_VECTORS: { [block: string]: string[] } = {};
@@ -237,6 +238,7 @@ export const TYPES: [string, string, string][] = [
   ['door', 'Door or window', 'mdi:door-open'],
   ['cover', 'Cover (sliding)', 'mdi:window-shutter'],
   ['shade', 'Shade (shrinks with position)', 'mdi:blinds-horizontal'],
+  ['transparent', 'Transparent (walls see-through)', 'mdi:square-opacity'],
   ['rotate', 'Rotating object (fan)', 'mdi:fan'],
   ['gesture', 'Service on tap', 'mdi:gesture-tap'],
   ['camera', 'Camera', 'mdi:cctv'],
@@ -407,6 +409,32 @@ export const typeSchema = (type: string, objects: string[]): (Schema[] | string)
       return [[{ name: type, type: 'grid', column_min_width: '140px', schema: [text('state')] }]];
     case 'gesture':
       return [[{ name: 'gesture', type: 'grid', column_min_width: '140px', schema: [text('domain'), text('service')] }]];
+    case 'transparent':
+      return [
+        [
+          {
+            name: 'transparent',
+            type: 'grid',
+            column_min_width: '140px',
+            schema: [
+              {
+                ...num('transparency', { min: 0, max: 100, unit_of_measurement: '%' }),
+                helper: '0 solid, 100 invisible, while the entity is in the state. A numeric entity sets it directly. Default 70',
+              },
+              num('transparency_off', { min: 0, max: 100, unit_of_measurement: '%' }),
+              text('state'),
+              {
+                ...choice('invert', [
+                  ['yes', 'Yes'],
+                  ['no', 'No'],
+                ]),
+                label: 'Invert a numeric entity',
+                helper: 'Numeric entity: 100 - value',
+              },
+            ],
+          },
+        ],
+      ];
     case 'image':
       return [
         [
@@ -512,6 +540,7 @@ const LABELS: { [name: string]: string } = {
   max_size: 'Texture size',
   fps: 'Frames per second',
   top_entity: 'Top-edge motor',
+  transparency_off: 'Transparency otherwise',
   invert: '100 means closed',
   weather_entity: 'Weather entity',
   time_entity: 'Time override entity',
@@ -637,6 +666,7 @@ const LABELS: { [name: string]: string } = {
 
 const HELPERS: { [name: string]: string } = {
   theme: 'Off keeps the model exactly as before',
+  transparency_off: 'When the entity is not in the state. Default 0 (solid)',
   accent: 'Default #37e0ff',
   edge_angle: 'Lines where faces meet at more than this. Default 40; 60 thins window mullions',
   edge_opacity: 'Default 0.85',

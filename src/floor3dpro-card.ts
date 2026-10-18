@@ -13,6 +13,7 @@ import { HassEntity } from 'home-assistant-js-websocket';
 import { ImageFrame, ImageFit } from './image-frame';
 import { Daylight } from './daylight';
 import { Look } from './look';
+import { Transparency } from './transparency';
 import {
   createConfigArray,
   createObjectGroupConfigArray,
@@ -170,6 +171,7 @@ export class Floor3dCard extends LitElement {
   private _daylight: Daylight | null = null;
   // look: NeonPlan / NextFloor style themes on the loaded model
   private _look: Look | null = null;
+  private _transparency: Transparency | null = null;
   // Editor of the card (only in the preview): a tap picks an object, and some objects are highlighted.
   @property({ attribute: false }) public preview?: boolean;
   private _pickMode = false;
@@ -1720,6 +1722,10 @@ export class Floor3dCard extends LitElement {
           }
         }
       }
+      if (this._transparency && this._modelready && this._transparency.update(hass)) {
+        this._renderer.shadowMap.needsUpdate = true;
+        this._requestRender('transparent');
+      }
       if (this._daylight && this._modelready && this._daylight.update(hass.states)) {
         this._renderer.shadowMap.needsUpdate = true;
         this._requestRender('daylight');
@@ -1764,6 +1770,35 @@ export class Floor3dCard extends LitElement {
     this._look.applyMaterials(this._lookMeshes());
     const stage = this._look.stageColor(0.5);
     if (stage) this._scene.background = stage;
+  }
+
+  // transparent: the card-level rules and the type3d transparent rows, bound once the meshes are in
+  // the scene (after the look, whose themed materials are the ones made see-through)
+  private _bindTransparency(): void {
+    const rows = (this._config.entities || []).map((entity: any, i) => ({
+      entity: entity.entity,
+      type3d: entity.type3d,
+      transparent: entity.transparent,
+      objects: ((this._object_ids[i] && this._object_ids[i].objects) || []).map((o) => o.object_id),
+    }));
+    const rules = Transparency.rules((this._config as any).transparent, rows);
+    if (rules.length === 0) {
+      this._transparency = null;
+      return;
+    }
+    this._transparency = new Transparency();
+    const names = this._modelObjectNames();
+    this._transparency.bind(rules, this._scene, (id) => this._resolveObjectId(id, names));
+    if (this._hass) this._transparency.update(this._hass);
+  }
+
+  // The model object names an object id stands for: itself, the matches of a * pattern, or the
+  // objects of <group>.
+  private _resolveObjectId(id: string, names: string[]): string[] {
+    const group = /^<(.*)>$/.exec(id);
+    if (!group) return matchObjects(id, names);
+    const found = (this._config.object_groups || []).find((g) => g.object_group === group[1]);
+    return ((found && found.objects) || []).flatMap((o) => matchObjects(o.object_id, names));
   }
 
   private _initDaylight(): void {
@@ -2226,6 +2261,7 @@ export class Floor3dCard extends LitElement {
     // edge lines last: door, shade and rotate setup re-centres geometry on its pivot and moves the
     // mesh, so lines built earlier would sit offset by the pivot
     if (this._look && this._look.active) this._look.applyEdges(this._lookMeshes());
+    this._bindTransparency();
 
     console.log('Object loaded end');
 

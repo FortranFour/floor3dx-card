@@ -38,6 +38,7 @@ const BLOCK_SWITCHES: [string, string][] = [
   ['image', 'mirror'],
   ['image', 'planar_uv'],
   ['shade', 'invert'],
+  ['transparent', 'invert'],
 ];
 
 // Types whose options block the card reads without checking that it exists.
@@ -51,6 +52,7 @@ const BLOCK_NUMBERS: { [block: string]: string[] } = {
   room: ['transparency', 'elevation', 'width', 'height'],
   image: ['rotate', 'refresh', 'aspect', 'max_size', 'fps'],
   rotate: ['round_per_second'],
+  transparent: ['transparency', 'transparency_off'],
 };
 
 const NUMBER = /^-?\d+(\.\d+)?$/;

@@ -15,6 +15,7 @@ A Home Assistant dashboard card that shows a live 3D model of your home and bind
 - **Shades that shrink with their position** (`type3d: shade`), with a second motor for top-down/bottom-up shades.
 - **Time of day without a roof** (`daylight`): ambient and colour from the sun's elevation and a weather entity, beams through the windows that follow the sun round the house, glass that glows after dark, a slider to scrub through the day.
 - **The NeonPlan 3D / NextFloor look** (`look`): neon, blueprint and day themes on your own model, with glowing edge lines and lit lamps that shine.
+- **Transparent walls** (`transparent`): any walls see-through by a fixed amount, or by an amount a switch or slider sets, down to not drawn at all.
 - **Fixes.** Doors and windows no longer displace on a return visit; Draco models render in a stable order; `rotate.axis: y` works unquoted; a scene with more shadow-casting lights than the GPU can take no longer goes black; entity colour tracking no longer re-renders on every state change.
 
 Everything is off unless configured, so a config written for the parent cards renders exactly as it did. The options are documented below, with a changelog in [CHANGELOG.md](CHANGELOG.md).
@@ -148,6 +149,40 @@ look:
 Every mesh keeps its original material; a themed copy maps the colour to the theme per pixel in a small shader patch (adapted from NextFloor's `viewer/theme.ts`, MIT), so textures still show through as pattern and switching themes is a uniform change. Edges are `EdgesGeometry` line segments drawn additively, normal blending in the day theme where additive glow would vanish. Colour conditions, lights, images, shades and daylight all work on top: a `Gold` colour condition stays gold because it is a signal colour, `LightSteelBlue` goes to the muted base, and a `type3d: light` entry's objects take an emissive glow in the light's colour while it is on, which is what makes lamps visible on surfaces this dark. With `daylight`, the stage background runs from the theme's night colour to its day colour.
 
 What is not taken from those projects, because it depends on their generated geometry: fold-away walls, the painted room-light surface, the plan editor and furniture library.
+
+### Transparent walls (`transparent`)
+
+Walls, or any objects, drawn see-through by a fixed amount or by an amount an entity sets. Nothing changes without the option. Transparency runs from 0 (solid, as the model came) to 100 (invisible), the same scale as `room.transparency`.
+
+A card-level list, for walls that should always be see-through:
+
+```yaml
+transparent:
+  - objects: 'wall_*'          # object ids, * patterns, <group> for an object group, or a list of them
+    transparency: 60
+  - objects: ['wall_12', 'wall_13']
+    transparency: 100           # these two are not drawn at all
+```
+
+An entity row, for walls that follow a switch or a slider:
+
+```yaml
+entities:
+  - entity: input_boolean.xray          # on: 80, off: solid
+    type3d: transparent
+    object_id: 'wall_*'
+    transparent:
+      transparency: 80
+      transparency_off: 0               # default 0
+      state: 'on'                       # default: on, open, home, playing... count as on
+  - entity: input_number.wall_see_through   # 0..100 slider sets the transparency itself
+    type3d: transparent
+    object_id: '<outer_walls>'
+    transparent:
+      invert: 'no'                      # yes: 100 - value, for a slider that means opacity
+```
+
+A numeric entity state is the transparency itself: 0 to 100, or 0 to 1 when the entity's `max` is 1 or below. Each mesh keeps its material and only its opacity is lowered; a material shared with an object outside the rules is cloned first so that object stays solid. At 100 the mesh is hidden, so it stops casting shadows as well; back at 0 the material is restored exactly. Works on top of `look` (the themed material is the one faded; the edge lines stay, which gives an x-ray outline) and of colour conditions on other objects.
 
 ### Shadow budget
 
@@ -352,6 +387,8 @@ On a Home Assistant without `ha-form` the previous editor is shown instead. `day
 | `daylight` | see above | off |
 | `type3d: shade` | `shade.top_entity`, `shade.invert` | |
 | `look` | see above | off |
+| `transparent` | card-level list of `{objects, transparency}` rules; see above | off |
+| `type3d: transparent` | `transparent.transparency`, `transparent.transparency_off`, `transparent.state`, `transparent.invert` | |
 | `shadow_budget` | number of shadow-casting lights | from the GPU's texture units |
 | `color_entity` | an entity id, on `light` and `color` entries | `entity` |
 | `colorcondition[].color` | `entity`, `entity_color` in addition to any colour | |

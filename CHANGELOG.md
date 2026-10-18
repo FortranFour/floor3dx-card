@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.6.0
+
+### Added
+- `transparent`: walls (or any objects) drawn see-through, 0 solid to 100 invisible. A card-level list of `{objects, transparency}` rules for a fixed amount, and `type3d: transparent` rows for an amount that follows an entity: a switch (`transparency` in `state`, `transparency_off` otherwise) or a numeric entity whose value is the transparency itself (`invert` for 100 - value). Materials shared with objects outside the rules are cloned so those stay solid; 100 hides the mesh; 0 restores the material exactly. Works with `look` and colour conditions. Editor type. Off without the option. `dev/harness/test_transparent.py`.
+
 ## 1.5.1
 
 ### Fixed
