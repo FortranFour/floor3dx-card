@@ -12,6 +12,7 @@ JS = r"""() => {
     tri(0,1,2); tri(0,2,3); if(doubleSided){tri(0,2,1); tri(0,3,2);}
     const g=new T.BufferGeometry(); g.setAttribute('position',new T.Float32BufferAttribute(p,3)); g.computeVertexNormals();
     const m=new T.Mesh(g,new T.MeshStandardMaterial({color:0x888888})); m.name=name; return m; };
+  const box=(name,x,y,z,w,h,d)=>{const m=new T.Mesh(new T.BoxGeometry(w,h,d),new T.MeshStandardMaterial({color:0x888888})); m.name=name; m.position.set(x,y,z); return m;};
   const build=(skip)=>{
     const scene=new T.Scene();
     const meshes=[
@@ -21,7 +22,11 @@ JS = r"""() => {
       quad('wall_d',[[0,0,500],[200,0,500],[200,250,500],[0,250,500]],true), // double-sided copy
       quad('room_1',[[0,0,0],[200,0,0],[200,0,300],[0,0,300]]),          // floors, XZ plane
       quad('room_2',[[200,0,0],[400,0,0],[400,0,300],[200,0,300]]),
+      quad('room_3a',[[0,0,300],[100,0,300],[100,0,500],[0,0,500]]),   // next to room_1 along z, its edge split in two
+      quad('room_3b',[[100,0,300],[200,0,300],[200,0,500],[100,0,500]]),
       quad('screen_1',[[50,100,1],[150,100,1],[150,160,1],[50,160,1]]),
+      box('wall_e',700,125,1000,200,250,10), box('wall_f',900,125,1000,200,250,10),  // closed wall segments: end caps pressed together at x=800
+      box('wall_g',1000+5,125,1000+105,10,250,200),                                // a perpendicular segment on wall_f's end: a corner
     ];
     meshes.forEach(m=>scene.add(m)); scene.updateMatrixWorld(true);
     const look=new Look({theme:'neon',edge_skip:skip},scene);
@@ -47,15 +52,18 @@ if __name__ == '__main__':
         print(('PASS ' if cond else 'FAIL ') + name)
         ok = ok and cond
     check('no skip: every open quad outlines its 4 edges, double-sided quad too, no diagonals',
-          all(r['plain'][k] == 4 for k in ['wall_a', 'wall_b', 'wall_c', 'wall_d', 'room_1', 'room_2', 'screen_1']))
+          all(r['plain'][k] == 4 for k in ['wall_a', 'wall_b', 'wall_c', 'wall_d', 'room_1', 'room_2', 'room_3a', 'room_3b', 'screen_1']))
     check('seams: the joint of two coplanar wall segments vanishes, the corner with wall_c stays',
           r['seams']['wall_a'] == 3 and r['seams']['wall_b'] == 3 and r['seams']['wall_c'] == 4 and r['seams']['room_1'] == 4)
-    check('floors: the joint of two room floors vanishes, walls untouched',
-          r['floors']['room_1'] == 3 and r['floors']['room_2'] == 3 and r['floors']['wall_a'] == 4)
+    check('floors: the joints of room floors vanish, including a border split differently on each side; walls untouched',
+          r['floors']['room_1'] == 2 and r['floors']['room_2'] == 3 and r['floors']['room_3a'] == 2 and r['floors']['room_3b'] == 2 and r['floors']['wall_a'] == 4)
     check('coplanar: both; the floor edge along the wall base (90 degrees) stays',
-          r['coplanar']['wall_a'] == 3 and r['coplanar']['room_1'] == 3 and r['coplanar']['room_2'] == 3)
+          r['coplanar']['wall_a'] == 3 and r['coplanar']['room_1'] == 2 and r['coplanar']['room_2'] == 3)
+    check('closed segments: 12 box edges each without skip', r['plain']['wall_e'] == 12 and r['plain']['wall_f'] == 12 and r['plain']['wall_g'] == 12)
+    check('seams: the 4 edges around the pressed-together end caps vanish, the corner with wall_g keeps its edges',
+          r['seams']['wall_e'] == 8 and r['seams']['wall_f'] == 8 and r['seams']['wall_g'] == 12)
     check('named object: no lines on it, others unchanged', r['named']['screen_1'] == 0 and r['named']['wall_a'] == 4)
-    check('mixed list', r['mixed'] == {'wall_a': 3, 'wall_b': 3, 'wall_c': 4, 'wall_d': 4, 'room_1': 3, 'room_2': 3, 'screen_1': 0})
+    check('mixed list', r['mixed'] == {'wall_a': 3, 'wall_b': 3, 'wall_c': 4, 'wall_d': 4, 'room_1': 2, 'room_2': 3, 'room_3a': 2, 'room_3b': 2, 'screen_1': 0, 'wall_e': 8, 'wall_f': 8, 'wall_g': 12})
     check('no page errors', not errors)
     for e in errors: print('  ', e)
     raise SystemExit(0 if ok else 1)

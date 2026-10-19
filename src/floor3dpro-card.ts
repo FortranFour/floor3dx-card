@@ -1797,12 +1797,13 @@ export class Floor3dCard extends LitElement {
     const out = new Set<string>();
     if (!this._look) return out;
     const names = this._modelObjectNames();
-    const keywords = ['images', 'seams', 'floors', 'coplanar'];
+    const keywords = ['images', 'texts', 'seams', 'floors', 'coplanar'];
     this._look.edgeSkip().forEach((entry) => {
       const key = entry.toLowerCase();
-      if (key === 'images') {
+      if (key === 'images' || key === 'texts') {
+        const type = key === 'images' ? 'image' : 'text';
         (this._config.entities || []).forEach((entity: any, i) => {
-          if (entity.type3d !== 'image') return;
+          if (entity.type3d !== type) return;
           ((this._object_ids[i] && this._object_ids[i].objects) || []).forEach((o) => out.add(o.object_id));
         });
       } else if (!keywords.includes(key)) {

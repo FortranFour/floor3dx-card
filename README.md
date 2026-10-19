@@ -138,7 +138,7 @@ look:
   stage: 'yes'           # background from the theme; with daylight, night to day
   walls: wall            # object name prefixes that get the wall tint
   floors: room, floor
-  edge_skip: images, seams, floors   # see below; default: nothing skipped
+  edge_skip: images, texts, seams, floors   # see below; default: nothing skipped
 ```
 
 **Which edges are drawn.** A line is drawn where two faces meet at more than `edge_angle`, and along the open edge of a surface. On an exported model some of those open edges are not outlines you want: the joint where one straight wall was exported as two segments, the border between two rooms' floors where there is no wall, the edges of a picture or screen. `edge_skip` names what gets no line, in a list or a comma-separated string:
@@ -149,9 +149,10 @@ look:
 | `floors` | the joint between two coplanar floor objects is not drawn (the floor edge along a wall still is) |
 | `coplanar` | both of the above, for every pair of objects whatever their names |
 | `images` | no lines on the objects of `type3d: image` rows |
+| `texts` | no lines on the objects of `type3d: text` rows |
 | anything else | an object id, a `*` pattern or a `<group>`: no lines on those objects (`Tide*`, `<frames>`) |
 
-Walls and floors are told apart by the `walls` and `floors` prefixes. The joints are found by matching each object's open edges against the faces of the other objects at the same place: a face that continues the surface removes the line, a face that meets it at more than `edge_angle` keeps it.
+Walls and floors are told apart by the `walls` and `floors` prefixes. The joints are found geometrically: an open edge whose midpoint lies on a coplanar face of another object (to half a centimetre on a 20 m house) is a joint and gets no line, so rooms drawn with different corner points and walls split at different places still match; a face that meets the edge at an angle does not count, so corners keep their line.
 <img width="1337" height="652" alt="Screenshot 2026-10-16 173414" src="https://github.com/user-attachments/assets/379c0215-a064-4155-bcf8-8817e4c2d89e" />
 
 <img width="1342" height="665" alt="Screenshot 2026-10-16 173148" src="https://github.com/user-attachments/assets/aa9841bd-19a2-4bed-81b0-3bdc4909538d" />
