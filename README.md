@@ -152,7 +152,11 @@ look:
 | `texts` | no lines on the objects of `type3d: text` rows |
 | anything else | an object id, a `*` pattern or a `<group>`: no lines on those objects (`Tide*`, `<frames>`) |
 
-Walls and floors are told apart by the `walls` and `floors` prefixes. The joints are found geometrically: an open edge whose midpoint lies on a coplanar face of another object (to half a centimetre on a 20 m house) is a joint and gets no line, so rooms drawn with different corner points and walls split at different places still match; a face that meets the edge at an angle does not count, so corners keep their line.
+Walls and floors are told apart by the `walls` and `floors` prefixes. The joints are found geometrically: an open edge whose midpoint lies on a coplanar face of another object (to 2.5 cm on a 20 m house, enough for two rooms whose borders overlap or stop short of each other by a few millimetres) is a joint and gets no line, so rooms drawn with different corner points and walls split at different places still match; a face that meets the edge at an angle does not count, so corners keep their line.
+
+The bottom and top faces of a wall lie in the plane of the floor and the ceiling, and a Sweet Home 3D wall keeps its full footprint under a doorway, so with two different tints the floor and the wall's underside would fight for the same pixels and show a broken line across every opening. The themed material of a flat wall face lowers it by a hair (a ten-thousandth of the model), so the floor or ceiling always wins; the mesh itself and its edge lines are not moved.
+
+A changed `look` takes effect when the card is rebuilt (the editor's reload, or a saved dashboard); the edge lines are rebuilt with it.
 <img width="1337" height="652" alt="Screenshot 2026-10-16 173414" src="https://github.com/user-attachments/assets/379c0215-a064-4155-bcf8-8817e4c2d89e" />
 
 <img width="1342" height="665" alt="Screenshot 2026-10-16 173148" src="https://github.com/user-attachments/assets/aa9841bd-19a2-4bed-81b0-3bdc4909538d" />
@@ -205,6 +209,16 @@ entities:
 A numeric entity state is the transparency itself: 0 to 100, or 0 to 1 when the entity's `max` is 1 or below. Each mesh keeps its material and only its opacity is lowered; a material shared with an object outside the rules is cloned first so that object stays solid. At 100 the mesh is hidden, so it stops casting shadows as well; back at 0 the material is restored exactly. Works on top of `look` (the themed material is the one faded; the edge lines stay, which gives an x-ray outline) and of colour conditions on other objects.
 
 When several rules name the same object, the later rule in the configuration wins: an "all walls" rule first and "this room's walls" rules after it let a selector pick a room while a slider sets the amount (template sensors give each rule its value; see the forum thread for a package).
+
+### Sealed wall joints (`wall_seal`)
+
+Walls drawn by hand rarely meet to the millimetre, and a lamp inside a room throws a streak of light through the hairline gap between two segments onto whatever is behind it. `wall_seal` stretches every wall by that much at each end, in model units (centimetres for a Sweet Home 3D export; `0.5` closes a gap of up to a centimetre), when the model loads:
+
+```yaml
+wall_seal: 0.5
+```
+
+A wall is its `wall_<id>_<n>` meshes together (the `walls` prefix of `look` applies when set); the stretch is about the wall's centre and along its length only, so the thickness, the height, and the door and window frames set into the wall are as they were, and the wall's edge lines and shadows follow the stretched geometry. Each stretched wall gets its own copy of its geometry, so a box shared between walls in the file, or a model shared between cards on a page, is not stretched twice. Off without the option: the geometry is exactly the file's.
 
 ### Shadow budget
 
@@ -413,6 +427,7 @@ On a Home Assistant without `ha-form` the previous editor is shown instead. `day
 | `transparent` | card-level list of `{objects, transparency}` rules; see above | off |
 | `type3d: transparent` | `transparent.transparency`, `transparent.transparency_off`, `transparent.state`, `transparent.invert` | |
 | `shadow_budget` | number of shadow-casting lights | from the GPU's texture units |
+| `wall_seal` | model units each wall is stretched at each end | off |
 | `color_entity` | an entity id, on `light` and `color` entries | `entity` |
 | `colorcondition[].color` | `entity`, `entity_color` in addition to any colour | |
 | `type3d: image` | see above | |

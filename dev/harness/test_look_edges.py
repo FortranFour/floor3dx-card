@@ -1,7 +1,8 @@
 """Unit test of the look's edge lines on a hand-built scene (dev/harness/unit): open quads standing
 in for Sweet Home 3D wall faces and room floors. Checks the crease/boundary rule, the double-sided
-boundary, and edge_skip: seams between coplanar wall segments vanish, floors between rooms vanish,
-corners stay, named objects get no lines."""
+boundary, and edge_skip: seams between coplanar wall segments vanish, floors between rooms vanish
+(also where the two floors overlap or stop short by a few millimetres), corners stay, named objects
+get no lines. Also the themed materials: the flat faces of a wall get the lowered variant."""
 import json, os, subprocess
 from run import run, ROOT
 
@@ -27,6 +28,9 @@ JS = r"""() => {
       quad('screen_1',[[50,100,1],[150,100,1],[150,160,1],[50,160,1]]),
       box('wall_e',700,125,1000,200,250,10), box('wall_f',900,125,1000,200,250,10),  // closed wall segments: end caps pressed together at x=800
       box('wall_g',1000+5,125,1000+105,10,250,200),                                // a perpendicular segment on wall_f's end: a corner
+      quad('room_4',[[600,0,0],[800,0,0],[800,0,300.4],[600,0,300.4]]),    // floors drawn by hand: room_5 overlaps room_4 by 4 mm,
+      quad('room_5',[[600,0,300],[800,0,300],[800,0,600],[600,0,600]]),    // room_6 stops 6 mm short of room_5
+      quad('room_6',[[800.6,0,300],[1000,0,300],[1000,0,600],[800.6,0,600]]),
     ];
     meshes.forEach(m=>scene.add(m)); scene.updateMatrixWorld(true);
     const look=new Look({theme:'neon',edge_skip:skip},scene);
@@ -34,7 +38,21 @@ JS = r"""() => {
     look.applyEdges(meshes,names);
     const out={}; meshes.forEach(m=>{const l=m.children.find(c=>c.name.startsWith('f3dx_edge_')); out[m.name]=l?l.geometry.attributes.position.count/2:0;});
     return out; };
-  return {plain:build([]), seams:build(['seams']), floors:build(['floors']), coplanar:build(['coplanar']), named:build(['Screen_1'.toLowerCase()]), mixed:build(['seams','floors','screen_1'])};
+  const flat=()=>{ // themed materials: the bottom and top faces of a wall get the lowered variant, its sides and a floor do not
+    const scene=new T.Scene();
+    const meshes=[
+      quad('wall_1_1',[[0,0,0],[200,0,0],[200,0,10],[0,0,10]]),            // bottom face, y=0
+      quad('wall_1_5',[[0,250,0],[200,250,0],[200,250,10],[0,250,10]]),    // top face, y=250
+      quad('wall_1_3',[[0,0,0],[200,0,0],[200,250,0],[0,250,0]]),          // side face
+      quad('room_1',[[0,0,0],[200,0,0],[200,0,300],[0,0,300]]),
+    ];
+    const paint=new T.MeshStandardMaterial({color:0xcccccc}); meshes.slice(0,3).forEach(m=>m.material=paint); // one wall material, as exported
+    meshes.forEach(m=>scene.add(m)); scene.updateMatrixWorld(true);
+    const look=new Look({theme:'neon'},scene); look.applyMaterials(meshes);
+    const out={}; meshes.forEach(m=>out[m.name]=!!m.material.userData.f3dxFlatWall);
+    out.oneCopyPerVariant = meshes[0].material===meshes[1].material && meshes[0].material!==meshes[2].material; // bottom and top share the lowered copy, the side has the plain one
+    return out; };
+  return {plain:build([]), seams:build(['seams']), floors:build(['floors']), coplanar:build(['coplanar']), named:build(['Screen_1'.toLowerCase()]), mixed:build(['seams','floors','screen_1']), flat:flat()};
 }"""
 
 if __name__ == '__main__':
@@ -62,8 +80,13 @@ if __name__ == '__main__':
     check('closed segments: 12 box edges each without skip', r['plain']['wall_e'] == 12 and r['plain']['wall_f'] == 12 and r['plain']['wall_g'] == 12)
     check('seams: the 4 edges around the pressed-together end caps vanish, the corner with wall_g keeps its edges',
           r['seams']['wall_e'] == 8 and r['seams']['wall_f'] == 8 and r['seams']['wall_g'] == 12)
+    check('floors: a border where one floor overlaps the other by 4 mm, or stops 6 mm short, vanishes too',
+          r['plain']['room_4'] == 4 and r['plain']['room_5'] == 4 and r['plain']['room_6'] == 4
+          and r['floors']['room_4'] == 3 and r['floors']['room_5'] == 2 and r['floors']['room_6'] == 3)
     check('named object: no lines on it, others unchanged', r['named']['screen_1'] == 0 and r['named']['wall_a'] == 4)
-    check('mixed list', r['mixed'] == {'wall_a': 3, 'wall_b': 3, 'wall_c': 4, 'wall_d': 4, 'room_1': 2, 'room_2': 3, 'room_3a': 2, 'room_3b': 2, 'screen_1': 0, 'wall_e': 8, 'wall_f': 8, 'wall_g': 12})
+    check('mixed list', r['mixed'] == {'wall_a': 3, 'wall_b': 3, 'wall_c': 4, 'wall_d': 4, 'room_1': 2, 'room_2': 3, 'room_3a': 2, 'room_3b': 2, 'screen_1': 0, 'wall_e': 8, 'wall_f': 8, 'wall_g': 12, 'room_4': 3, 'room_5': 2, 'room_6': 3})
+    check('themed materials: the flat faces of a wall are lowered, its side and a floor are not',
+          r['flat'] == {'wall_1_1': True, 'wall_1_5': True, 'wall_1_3': False, 'room_1': False, 'oneCopyPerVariant': True})
     check('no page errors', not errors)
     for e in errors: print('  ', e)
     raise SystemExit(0 if ok else 1)

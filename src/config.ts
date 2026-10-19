@@ -45,7 +45,7 @@ const BLOCK_SWITCHES: [string, string][] = [
 const REQUIRED_BLOCKS = ['light', 'door', 'cover', 'rotate', 'room', 'text', 'gesture', 'hide', 'show'];
 
 // Numbers the editor used to save as text ('700'): written as numbers.
-const TOP_NUMBERS = ['overlay_width', 'overlay_height', 'globalLightPower', 'pixel_ratio', 'anisotropy', 'initialLevel', 'shadow_budget'];
+const TOP_NUMBERS = ['overlay_width', 'overlay_height', 'globalLightPower', 'pixel_ratio', 'anisotropy', 'initialLevel', 'shadow_budget', 'wall_seal'];
 const BLOCK_NUMBERS: { [block: string]: string[] } = {
   light: ['lumens', 'decay', 'distance', 'angle', 'shadow_map_size'],
   door: ['degrees', 'percentage'],

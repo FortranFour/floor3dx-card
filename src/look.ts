@@ -34,6 +34,15 @@
 // Colour-condition and image entries replace a mesh's material at runtime; the card re-themes a
 // material it has not seen, so those entries keep working: a "Gold" lamp shade stays gold because it
 // is a signal colour, LightSteelBlue goes to the muted base.
+//
+// The flat faces of a wall (its bottom on the floor, its top under a ceiling) lie in the plane of
+// the floor or ceiling they touch, and a Sweet Home 3D wall keeps its full footprint under a doorway,
+// so the two surfaces fight for the same pixels. With the model's own materials both have the same
+// look and the fight goes unnoticed; themed, a wall and a floor get different tints and the loser
+// shows through as a broken line across the opening. The themed material of a flat wall face lowers
+// it by a hair in the vertex shader (uDrop, a ten-thousandth of the model's size, 1 mm on a 10 m
+// house), so the floor or ceiling always wins; the mesh itself is not moved, and its edge lines stay
+// where they are.
 
 import * as THREE from 'three';
 
@@ -110,6 +119,9 @@ export class Look {
   readonly cfg: LookConfig;
   private scene: THREE.Scene;
   private themed = new Map<THREE.Material, Themed>();
+  private themedFlat = new Map<THREE.Material, Themed>(); // the lowered variant, for the flat faces of walls
+  private span = 0; // the model's largest dimension, in model units (set on the first applyMaterials)
+  private drop = { value: 0 }; // uDrop: how far a flat wall face is lowered, a ten-thousandth of span
   private edgeLines: THREE.LineSegments[] = [];
   private edgeMaterial: THREE.LineBasicMaterial | null = null;
   private themeIndex = 0;
@@ -140,6 +152,18 @@ export class Look {
   /** Themed materials for every mesh. Idempotent. Call before any code that clones materials. */
   applyMaterials(meshes: THREE.Mesh[]): void {
     if (!this.active) return;
+    if (!this.drop.value) {
+      // a ten-thousandth of the model: 1 mm on a 10 m house, far above the depth resolution and far
+      // below anything the eye picks up
+      const box = new THREE.Box3();
+      meshes.forEach((mesh) => {
+        if (!mesh.geometry || !(mesh.geometry as THREE.BufferGeometry).attributes) return;
+        mesh.updateWorldMatrix(true, false);
+        box.expandByObject(mesh);
+      });
+      this.span = box.isEmpty() ? 0 : Math.max(...box.getSize(new THREE.Vector3()).toArray());
+      this.drop.value = this.span / 10000 || 0.01;
+    }
     meshes.forEach((mesh) => this.applyMesh(mesh));
   }
 
@@ -170,11 +194,13 @@ export class Look {
   applyMesh(mesh: THREE.Mesh): void {
     if (!this.active || !mesh.material) return;
     const surface = this.surfaceOf(mesh.name);
+    const flat = surface === 1 && this.isFlat(mesh);
+    const pool = flat ? this.themedFlat : this.themed;
     const wrap = (m: THREE.Material): THREE.Material => {
       if ((m as any).userData && (m as any).userData.f3dxThemedOf) return m; // already a themed copy
-      const existing = this.themed.get(m);
+      const existing = pool.get(m);
       if (existing) return existing.material;
-      return this.themeMaterial(m, surface).material;
+      return this.themeMaterial(m, surface, flat).material;
     };
     if (Array.isArray(mesh.material)) mesh.material = mesh.material.map(wrap);
     else mesh.material = wrap(mesh.material);
@@ -191,6 +217,7 @@ export class Look {
     if (theme === 'off') return;
     this.themeIndex = THEMES.indexOf(theme);
     this.themed.forEach((t) => (t.uniforms.uTheme.value = this.themeIndex));
+    this.themedFlat.forEach((t) => (t.uniforms.uTheme.value = this.themeIndex));
     if (this.edgeMaterial) {
       this.edgeMaterial.color.set(theme === 'neon' ? this.accentHex() : EDGE[theme]);
       this.edgeMaterial.blending = theme === 'day' ? THREE.NormalBlending : THREE.AdditiveBlending;
@@ -236,13 +263,15 @@ export class Look {
 
   dispose(): void {
     this.edgeLines.forEach((l) => {
-      this.scene.remove(l);
+      if (l.parent) l.parent.remove(l);
       l.geometry.dispose();
     });
     this.edgeLines = [];
     if (this.edgeMaterial) this.edgeMaterial.dispose();
     this.themed.forEach((t) => t.material.dispose());
     this.themed.clear();
+    this.themedFlat.forEach((t) => t.material.dispose());
+    this.themedFlat.clear();
   }
 
   // ---- internals ------------------------------------------------------------------------------
@@ -258,14 +287,25 @@ export class Look {
     return 0;
   }
 
-  private themeMaterial(original: THREE.Material, surface: number): Themed {
+  /** A mesh with no height: the bottom or top face of a wall, lying in the plane of a floor or ceiling. */
+  private isFlat(mesh: THREE.Mesh): boolean {
+    const geometry = mesh.geometry as THREE.BufferGeometry;
+    if (!geometry || !geometry.attributes || !geometry.attributes.position) return false;
+    if (!geometry.boundingBox) geometry.computeBoundingBox();
+    mesh.updateWorldMatrix(true, false);
+    const box = geometry.boundingBox.clone().applyMatrix4(mesh.matrixWorld);
+    return box.max.y - box.min.y < (this.span || 1000) / 2000; // under 1 cm on a 20 m house
+  }
+
+  private themeMaterial(original: THREE.Material, surface: number, flat = false): Themed {
     const material = original.clone();
-    (material as any).userData = { ...(material as any).userData, f3dxThemedOf: original };
+    (material as any).userData = { ...(material as any).userData, f3dxThemedOf: original, f3dxFlatWall: flat };
     const uniforms = {
       uTheme: { value: this.themeIndex },
       uAccent: { value: this.accent },
       uKeepSignal: { value: yes(this.cfg.keep_signal, true) ? 1 : 0 },
       uSurface: { value: surface },
+      uDrop: this.drop,
     };
     if (yes(this.cfg.flat, true)) {
       (material as any).flatShading = true;
@@ -281,11 +321,19 @@ export class Look {
       shader.fragmentShader = shader.fragmentShader
         .replace('#include <common>', '#include <common>\n' + LOOK_FUNCTION)
         .replace('#include <color_fragment>', '#include <color_fragment>\n  diffuseColor.rgb = f3dxThemed(diffuseColor.rgb);');
+      if (flat) {
+        // lowered by uDrop along the model's up axis, so the floor or ceiling in the same plane wins
+        // the depth test (a depth offset would not: with the logarithmic depth buffer the fragment
+        // shader writes the depth itself, and polygon offset does not apply to it)
+        shader.vertexShader = shader.vertexShader
+          .replace('#include <common>', '#include <common>\nuniform float uDrop;')
+          .replace('#include <begin_vertex>', '#include <begin_vertex>\n  transformed.y -= uDrop;');
+      }
     };
-    material.customProgramCacheKey = () => 'f3dx-look-' + surface;
+    material.customProgramCacheKey = () => 'f3dx-look-' + surface + (flat ? '-flat' : '');
     material.needsUpdate = true;
     const entry = { material, original, uniforms };
-    this.themed.set(original, entry);
+    (flat ? this.themedFlat : this.themed).set(original, entry);
     return entry;
   }
 
@@ -338,7 +386,10 @@ export class Look {
     const pairs = (a: number, b: number): boolean => mergeAll || (mergeWalls && a === 1 && b === 1) || (mergeFloors && a === 2 && b === 2);
     const extent = scene.getSize(new THREE.Vector3());
     const span = Math.max(extent.x, extent.y, extent.z) || 1;
-    const eps = span / 4000; // half a centimetre on a 20 m house
+    // Two rooms drawn by hand rarely share a border to the millimetre: one polygon stops short of
+    // the other, or overlaps it, by a few millimetres, and a joint test tighter than that leaves a
+    // line along the border. 2.5 cm on a 20 m house is still far below anything else in a model.
+    const eps = span / 800;
     const cell = span / 40;
     interface Tri { tri: THREE.Triangle; n: THREE.Vector3; mesh: number }
     const grid = new Map<string, Tri[]>();
@@ -376,14 +427,22 @@ export class Look {
     const wp = new THREE.Vector3(), wn = new THREE.Vector3(), closest = new THREE.Vector3(), nm = new THREE.Matrix3();
     // is the world point `wp` on a face of another object that is coplanar with the world normal `wn`?
     const onForeignFace = (item: Item, m: number): boolean => {
-      const bucket = grid.get(cellKey(wp.x, wp.y, wp.z));
-      if (!bucket) return false;
-      return bucket.some((t) => {
-        if (t.mesh === m || !pairs(item.cls, items[t.mesh].cls)) return false;
-        if (Math.abs(t.n.dot(wn)) < 0.999) return false; // not the same plane: a corner, kept
-        t.tri.closestPointToPoint(wp, closest);
-        return closest.distanceTo(wp) <= eps;
-      });
+      // the point's cell, and the neighbouring cells it is within eps of (a face just across a cell
+      // boundary is registered there, not here)
+      const keys = new Set<string>();
+      for (const dx of [-eps, 0, eps]) for (const dy of [-eps, 0, eps]) for (const dz of [-eps, 0, eps]) keys.add(cellKey(wp.x + dx, wp.y + dy, wp.z + dz));
+      for (const key of keys) {
+        const bucket = grid.get(key);
+        if (!bucket) continue;
+        const hit = bucket.some((t) => {
+          if (t.mesh === m || !pairs(item.cls, items[t.mesh].cls)) return false;
+          if (Math.abs(t.n.dot(wn)) < 0.999) return false; // not the same plane: a corner, kept
+          t.tri.closestPointToPoint(wp, closest);
+          return closest.distanceTo(wp) <= eps;
+        });
+        if (hit) return true;
+      }
+      return false;
     };
     items.forEach((item, m) => {
       const out: number[] = [];
@@ -535,7 +594,7 @@ function yes(v: any, dflt: boolean): boolean {
   return v === true || String(v).toLowerCase() === 'yes' || String(v).toLowerCase() === 'true';
 }
 
-function list(v: any, dflt: string[]): string[] {
+export function list(v: any, dflt: string[]): string[] {
   if (v === undefined || v === null || v === '') return dflt;
   const arr = Array.isArray(v) ? v : String(v).split(',');
   return arr.map((s) => String(s).trim().toLowerCase()).filter((s) => s);

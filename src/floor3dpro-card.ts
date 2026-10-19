@@ -12,7 +12,7 @@ import './editor';
 import { HassEntity } from 'home-assistant-js-websocket';
 import { ImageFrame, ImageFit } from './image-frame';
 import { Daylight } from './daylight';
-import { Look } from './look';
+import { Look, list as lookList } from './look';
 import { Transparency } from './transparency';
 import {
   createConfigArray,
@@ -1791,6 +1791,65 @@ export class Floor3dCard extends LitElement {
     if (stage) this._scene.background = stage;
   }
 
+  // wall_seal: walls drawn by hand rarely meet to the millimetre, and a lamp inside a room throws a
+  // streak of light through the hairline gap between two segments. Each wall (the meshes
+  // wall_<id>_<n>, grouped by wall) is stretched by wall_seal at each end, in model units, about the
+  // wall's centre and only along its length (the thickness is left alone, so door and window frames
+  // still sit flush with the faces). Heights are unchanged.
+  // Off without the option: the model's geometry is exactly the file's.
+  private _sealWalls(): void {
+    const seal = Number((this._config as any).wall_seal);
+    if (!(seal > 0)) return;
+    const prefixes = lookList((this._config as any).look && (this._config as any).look.walls, ['wall']);
+    const walls = new Map<string, THREE.Mesh[]>();
+    this._lookMeshes().forEach((mesh) => {
+      const name = (mesh.name || '').toLowerCase();
+      if (!prefixes.some((p) => name.startsWith(p))) return;
+      const m = /^(.*?_\d+)(?:_\d+)*$/.exec(name); // wall_17_3 -> wall_17; wall_0_3_1_1 (a part of a part) -> wall_0
+      const id = m ? m[1] : name.replace(/_\d+$/, '');
+      const group = walls.get(id) || [];
+      group.push(mesh);
+      walls.set(id, group);
+    });
+    const box = new THREE.Box3(), size = new THREE.Vector3(), centre = new THREE.Vector3(), local = new THREE.Vector3();
+    walls.forEach((meshes) => {
+      box.makeEmpty();
+      meshes.forEach((mesh) => {
+        mesh.updateWorldMatrix(true, false);
+        box.expandByObject(mesh);
+      });
+      if (box.isEmpty()) return;
+      box.getSize(size);
+      box.getCenter(centre);
+      // along the length only: an axis under a quarter of the longer one is the thickness and stays,
+      // so door and window frames still sit flush; a wall drawn at an angle fills both axes of its
+      // box and is stretched along both, which still lengthens it at each end
+      const longest = Math.max(size.x, size.z);
+      const sx = size.x >= longest / 4 ? 1 + (2 * seal) / size.x : 1;
+      const sz = size.z >= longest / 4 ? 1 + (2 * seal) / size.z : 1;
+      if (sx === 1 && sz === 1) return;
+      meshes.forEach((mesh) => {
+        const shared = mesh.geometry as THREE.BufferGeometry;
+        if (!shared || !shared.attributes || !shared.attributes.position) return;
+        // its own copy: an exported model often shares one box between walls, placed and rotated by
+        // each mesh's transform, and a model is shared between the cards on a page
+        const geometry = shared.clone();
+        geometry.userData = { ...shared.userData, f3dxSealed: true };
+        mesh.geometry = geometry;
+        local.copy(centre);
+        mesh.worldToLocal(local);
+        const pos = geometry.attributes.position;
+        for (let i = 0; i < pos.count; i++) {
+          pos.setX(i, local.x + (pos.getX(i) - local.x) * sx);
+          pos.setZ(i, local.z + (pos.getZ(i) - local.z) * sz);
+        }
+        pos.needsUpdate = true;
+        geometry.computeBoundingBox();
+        geometry.computeBoundingSphere();
+      });
+    });
+  }
+
   // look.edge_skip: the model objects that get no edge line. `images` stands for the objects of the
   // type3d: image rows; anything that is not a keyword is an object id, a * pattern or a <group>.
   private _edgeSkipNames(): Set<string> {
@@ -2033,6 +2092,13 @@ export class Floor3dCard extends LitElement {
 
     //create and initialize scene and camera
 
+    // A new scene gets a new look: the old one holds the old scene's materials and edge lines, and
+    // its edge lines, once built, are never rebuilt, so a changed `look` (edge_skip, say) would
+    // otherwise show only after a page reload.
+    if (this._look) {
+      this._look.dispose();
+      this._look = null;
+    }
     this._scene = new THREE.Scene();
 
     this._camera = new THREE.PerspectiveCamera(45, 1, 0.1, 10000);
@@ -2297,6 +2363,7 @@ export class Floor3dCard extends LitElement {
     }
 
     this._expandObjectPatterns();
+    this._sealWalls(); // geometry first: the look's edge lines and the lights' shadows follow it
     this._applyLook(); // materials only: colour-condition clones made in _add3dObjects are then themed
     this._add3dObjects();
     // edge lines last: door, shade and rotate setup re-centres geometry on its pivot and moves the

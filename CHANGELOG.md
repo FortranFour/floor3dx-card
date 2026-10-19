@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.7.2
+
+### Added
+- `wall_seal`: every wall (its `wall_<id>_<n>` meshes together) is stretched by this much at each end, in model units, when the model loads, so a lamp's light no longer leaks through the hairline gap between two segments that do not quite meet. Along the length only, about the wall's centre: thickness, height and the frames set into the wall are unchanged; edge lines and shadows follow. Each wall gets its own geometry, so a box shared between walls, or a model shared between cards, is stretched once. Off without the option. Editor field under Light and shadows. `dev/harness/test_wall_seal.py`.
+
+### Fixed
+- `look`: the floor-contact and top faces of a wall are coplanar with the floor and the ceiling, and a Sweet Home 3D wall keeps its full footprint under a doorway, so the wall tint and the floor tint fought for the same pixels and a broken line crossed every opening in the themed views (and only there: the model's own materials gave both the same look). The themed material of a flat wall face now lowers it by a ten-thousandth of the model in the vertex shader, so the floor or ceiling wins; the mesh and its edge lines stay where they are. (A depth offset would not do: with the logarithmic depth buffer the fragment shader writes the depth itself.)
+- `look.edge_skip`: `floors` missed the border between two rooms whose polygons overlap or stop short of each other by a few millimetres, which hand-drawn rooms commonly do; the joint tolerance is now 2.5 cm on a 20 m house (was 0.5 cm), and the search covers the neighbouring cells of the triangle grid.
+- `look`: a card rebuilt on the same element (the editor's reload) kept the look of the first build, with its materials bound to the old scene and its edge lines never rebuilt, so a changed `edge_skip` showed only after a page reload. The look is now disposed and rebuilt with the scene.
+
 ## 1.7.1
 
 ### Fixed
