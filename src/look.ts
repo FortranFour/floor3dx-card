@@ -10,6 +10,13 @@
 //   edges      yes | no: draw outline lines along mesh edges (default yes)
 //   edge_angle degrees; an edge is drawn where two faces meet at more than this angle (default 40)
 //   edge_opacity 0..1 (default 0.85)
+//   edge_skip  what gets no line (default: nothing). A list or a comma-separated string of:
+//                images    the objects of type3d: image rows (pictures, screens) and nothing on them
+//                seams     the joint between two coplanar wall segments (one straight wall exported in parts)
+//                floors    the joint between two coplanar floor objects (rooms with no wall between them)
+//                coplanar  any joint between coplanar faces of two different objects (seams and floors, for all objects)
+//                anything else: an object id, a * pattern or a <group>; those objects get no lines
+//              The card resolves the object ids; the keywords are not case-sensitive.
 //   flat       yes | no: flat shading, no specular (default yes)
 //   keep_signal yes | no: leave saturated bright colours as they are (default yes)
 //   walls      object name prefix(es) whose meshes count as walls (default: wall); walls get the wall tint
@@ -37,6 +44,7 @@ export interface LookConfig {
   edges?: string | boolean;
   edge_angle?: number | string;
   edge_opacity?: number | string;
+  edge_skip?: string | string[];
   flat?: string | boolean;
   keep_signal?: string | boolean;
   walls?: string | string[];
@@ -136,10 +144,19 @@ export class Look {
 
   /** Edge lines for every mesh, from its current geometry. Call after any code that re-centres
    *  geometry (door hinges, shade pivots): the lines are children of the mesh and share its transform. */
-  applyEdges(meshes: THREE.Mesh[]): void {
+  applyEdges(meshes: THREE.Mesh[], skipNames?: Set<string>): void {
     if (!this.active || !yes(this.cfg.edges, true)) return;
     if (this.edgeLines.length) return; // already built
-    this.buildEdges(meshes);
+    this.buildEdges(meshes, skipNames || new Set());
+  }
+
+  /** The entries of edge_skip, lower-cased. The keywords (images, seams, floors, coplanar) are read
+   *  here and by the card; the rest are object ids the card resolves to names. */
+  edgeSkip(): string[] {
+    const v = this.cfg.edge_skip;
+    if (v === undefined || v === null || v === '') return [];
+    const arr = Array.isArray(v) ? v : String(v).split(',');
+    return arr.map((x) => String(x).trim()).filter((x) => x);
   }
 
   /** Both, for callers with no re-centring step. */
@@ -271,11 +288,16 @@ export class Look {
     return entry;
   }
 
-  private buildEdges(meshes: THREE.Mesh[]): void {
+  private buildEdges(meshes: THREE.Mesh[], skipNames: Set<string>): void {
     const theme = this.theme();
     if (theme === 'off') return;
     const angle = Number(this.cfg.edge_angle) > 0 ? Number(this.cfg.edge_angle) : 40;
+    const thresholdDot = Math.cos(THREE.MathUtils.degToRad(angle));
     const opacity = this.cfg.edge_opacity !== undefined ? Math.max(0, Math.min(1, Number(this.cfg.edge_opacity))) : 0.85;
+    const skip = this.edgeSkip().map((x) => x.toLowerCase());
+    const mergeAll = skip.includes('coplanar');
+    const mergeWalls = mergeAll || skip.includes('seams');
+    const mergeFloors = mergeAll || skip.includes('floors');
     this.edgeMaterial = new THREE.LineBasicMaterial({
       color: theme === 'neon' ? this.accentHex() : EDGE[theme],
       transparent: true,
@@ -283,23 +305,78 @@ export class Look {
       depthWrite: false,
       blending: theme === 'day' ? THREE.NormalBlending : THREE.AdditiveBlending,
     });
+    // pass 1: each mesh's edges in its own frame; open edges are kept aside with their world
+    // position and face normal, to be matched against the other objects
+    interface Open { key: string; n: THREE.Vector3; mesh: number }
+    interface Item { mesh: THREE.Mesh; cls: number; edges: MeshEdges; open: Open[] }
+    const items: Item[] = [];
+    const scene = new THREE.Box3();
     meshes.forEach((mesh) => {
       if (!mesh.geometry || !(mesh.geometry as THREE.BufferGeometry).attributes) return;
+      if (skipNames.has(mesh.name)) return;
       // tiny or transparent objects (glass, hardware) get no lines: they would only add noise
       const mat: any = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
       const orig: any = this.originalOf(mat);
       if (orig && orig.transparent && orig.opacity < 0.99) return;
-      const box = (mesh.geometry as THREE.BufferGeometry).boundingBox || ((mesh.geometry as THREE.BufferGeometry).computeBoundingBox(), (mesh.geometry as THREE.BufferGeometry).boundingBox);
+      const geometry = mesh.geometry as THREE.BufferGeometry;
+      const box = geometry.boundingBox || (geometry.computeBoundingBox(), geometry.boundingBox);
       const size = box.getSize(new THREE.Vector3());
       if (Math.max(size.x, size.y, size.z) < 8) return;
-      const edges = creaseEdges(mesh.geometry as THREE.BufferGeometry, angle);
+      const edges = creaseEdges(geometry, angle);
       if (!edges) return;
-      const line = new THREE.LineSegments(edges, this.edgeMaterial);
-      line.name = 'f3dx_edge_' + mesh.name;
+      mesh.updateWorldMatrix(true, false);
+      scene.union(box.clone().applyMatrix4(mesh.matrixWorld));
+      items.push({ mesh, cls: this.surfaceOf(mesh.name), edges, open: [] });
+    });
+    // pass 2: open edges of one object that lie on a face of another object. The joint of two
+    // coplanar wall segments, or of two room floors, is then not a boundary; a corner still is.
+    const merging = mergeAll || mergeWalls || mergeFloors;
+    const pairs = (a: number, b: number): boolean => mergeAll || (mergeWalls && a === 1 && b === 1) || (mergeFloors && a === 2 && b === 2);
+    const byKey = new Map<string, Open[]>();
+    if (merging) {
+      const extent = scene.getSize(new THREE.Vector3());
+      const q = Math.max(extent.x, extent.y, extent.z) / 20000 || 1e-3;
+      const wp = new THREE.Vector3(), wq = new THREE.Vector3();
+      const nm = new THREE.Matrix3();
+      items.forEach((item, m) => {
+        if (!(mergeAll || (mergeWalls && item.cls === 1) || (mergeFloors && item.cls === 2))) return;
+        nm.getNormalMatrix(item.mesh.matrixWorld);
+        item.edges.open.forEach((edge) => {
+          wp.copy(edge.a).applyMatrix4(item.mesh.matrixWorld);
+          wq.copy(edge.b).applyMatrix4(item.mesh.matrixWorld);
+          const ka = Math.round(wp.x / q) + ',' + Math.round(wp.y / q) + ',' + Math.round(wp.z / q);
+          const kb = Math.round(wq.x / q) + ',' + Math.round(wq.y / q) + ',' + Math.round(wq.z / q);
+          const key = ka < kb ? ka + '|' + kb : kb + '|' + ka;
+          const open: Open = { key, n: edge.n.clone().applyMatrix3(nm).normalize(), mesh: m };
+          item.open.push(open);
+          let bucket = byKey.get(key);
+          if (!bucket) byKey.set(key, (bucket = []));
+          bucket.push(open);
+        });
+      });
+    }
+    items.forEach((item, m) => {
+      const out = item.edges.lines.slice();
+      item.edges.open.forEach((edge, i) => {
+        let draw = true;
+        const open = item.open[i];
+        if (open) {
+          const others = (byKey.get(open.key) || []).filter((o) => o.mesh !== m && pairs(item.cls, items[o.mesh].cls));
+          // a face of another object along this edge: a crease if it meets ours at more than the
+          // angle, nothing if it continues our surface
+          if (others.length) draw = others.some((o) => Math.abs(o.n.dot(open.n)) <= thresholdDot);
+        }
+        if (draw) out.push(edge.a.x, edge.a.y, edge.a.z, edge.b.x, edge.b.y, edge.b.z);
+      });
+      if (!out.length) return;
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(out, 3));
+      const line = new THREE.LineSegments(g, this.edgeMaterial);
+      line.name = 'f3dx_edge_' + item.mesh.name;
       line.renderOrder = 10;
-      line.layers.mask = mesh.layers.mask;
+      line.layers.mask = item.mesh.layers.mask;
       // follow the mesh: same parent, same transform, so doors and shades carry their lines along
-      mesh.add(line);
+      item.mesh.add(line);
       this.edgeLines.push(line);
     });
   }
@@ -312,7 +389,12 @@ export class Look {
 // faces around an edge are compared with an unsigned dot product, so flipped duplicates count as
 // coplanar, and an edge is drawn only where two faces really meet at more than `angle` degrees, or
 // where it belongs to a single face (a boundary).
-function creaseEdges(geometry: THREE.BufferGeometry, angle: number): THREE.BufferGeometry | null {
+interface MeshEdges {
+  lines: number[]; // crease segments, 6 numbers each, in the mesh's frame
+  open: { a: THREE.Vector3; b: THREE.Vector3; n: THREE.Vector3 }[]; // boundary edges with their face normal
+}
+
+function creaseEdges(geometry: THREE.BufferGeometry, angle: number): MeshEdges | null {
   const pos = geometry.attributes.position;
   if (!pos) return null;
   const index = geometry.index;
@@ -340,6 +422,7 @@ function creaseEdges(geometry: THREE.BufferGeometry, angle: number): THREE.Buffe
   }
   const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), n = new THREE.Vector3();
   const normals: THREE.Vector3[] = [];
+  const tris: number[][] = [];
   const edges = new Map<string, { a: number; b: number; faces: number[] }>();
   for (let t = 0; t < triCount; t++) {
     const i0 = index ? index.getX(t * 3) : t * 3;
@@ -351,6 +434,7 @@ function creaseEdges(geometry: THREE.BufferGeometry, angle: number): THREE.Buffe
     n.copy(b).sub(a).cross(c.clone().sub(a));
     if (n.lengthSq() < 1e-12) continue;
     normals.push(n.clone().normalize());
+    tris.push(v);
     const f = normals.length - 1;
     for (let e = 0; e < 3; e++) {
       const p = v[e], r = v[(e + 1) % 3];
@@ -364,11 +448,15 @@ function creaseEdges(geometry: THREE.BufferGeometry, angle: number): THREE.Buffe
     }
   }
   const out: number[] = [];
+  const open: MeshEdges['open'] = [];
   edges.forEach((edge) => {
     const faces = edge.faces;
     let draw = false;
-    if (faces.length === 1) {
-      draw = true; // boundary of an open surface
+    const ia = first[edge.a], ib = first[edge.b];
+    if (faces.length === 1 || (faces.length === 2 && isFlippedPair(tris[faces[0]], tris[faces[1]]))) {
+      // boundary of an open surface (on a double-sided export, the edge of a face and of its back copy)
+      open.push({ a: new THREE.Vector3().fromBufferAttribute(pos, ia), b: new THREE.Vector3().fromBufferAttribute(pos, ib), n: normals[faces[0]] });
+      return;
     } else {
       // distinct face planes around this edge (flipped duplicates collapse to one)
       const planes: THREE.Vector3[] = [];
@@ -388,13 +476,15 @@ function creaseEdges(geometry: THREE.BufferGeometry, angle: number): THREE.Buffe
       }
     }
     if (!draw) return;
-    const ia = first[edge.a], ib = first[edge.b];
     out.push(pos.getX(ia), pos.getY(ia), pos.getZ(ia), pos.getX(ib), pos.getY(ib), pos.getZ(ib));
   });
-  if (!out.length) return null;
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(out, 3));
-  return g;
+  if (!out.length && !open.length) return null;
+  return { lines: out, open };
+}
+
+// the same three merged vertices in both triangles: a face and its back copy
+function isFlippedPair(a: number[], b: number[]): boolean {
+  return a.includes(b[0]) && a.includes(b[1]) && a.includes(b[2]);
 }
 
 function yes(v: any, dflt: boolean): boolean {

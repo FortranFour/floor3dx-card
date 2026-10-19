@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.7.0
+
+### Added
+- `look.edge_skip`: what gets no edge line. `seams` removes the joint between two coplanar wall segments, `floors` the border between two rooms' floors with no wall between them, `coplanar` both for any objects, `images` the objects of `type3d: image` rows, and any object id, `*` pattern or `<group>` removes the lines on those objects. Corners, openings and object contours stay: an open edge is matched against the faces of the other objects at the same place and dropped only where the other face continues the surface. Default: nothing skipped, so existing cards render as before. Editor field. `dev/harness/test_look_edges.py` (unit test of the rules on a hand-built scene, bundle in `dev/harness/unit`).
+
+### Fixed
+- `look`: on a double-sided export the open edge of a face and of its back copy now counts as a boundary of the surface and is drawn; it was read as an edge between two faces and dropped.
+
 ## 1.6.2
 
 ### Fixed

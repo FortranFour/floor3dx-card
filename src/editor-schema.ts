@@ -132,6 +132,7 @@ export const SECTIONS: Section[] = [
             ]),
             num('edge_angle', { min: 1, max: 179, unit_of_measurement: '°' }),
             num('edge_opacity', { min: 0, max: 1, step: 0.05 }),
+            text('edge_skip'),
             num('glow', { min: 0, max: 2, step: 0.1 }),
             choice('flat', [
               ['yes', 'Yes'],
@@ -540,6 +541,7 @@ const LABELS: { [name: string]: string } = {
   max_size: 'Texture size',
   fps: 'Frames per second',
   top_entity: 'Top-edge motor',
+  edge_skip: 'No edge lines on',
   transparency_off: 'Transparency otherwise',
   invert: '100 means closed',
   weather_entity: 'Weather entity',
@@ -670,6 +672,7 @@ const HELPERS: { [name: string]: string } = {
   accent: 'Default #37e0ff',
   edge_angle: 'Lines where faces meet at more than this. Default 40; 60 thins window mullions',
   edge_opacity: 'Default 0.85',
+  edge_skip: 'Comma separated: images, seams, floors, coplanar, or object ids / patterns / <groups>. Default: nothing skipped',
   glow: 'Emissive glow of a lit lamp object in its light colour. Default 0.9',
   keep_signal: 'Bright saturated colours (Gold, red) stay as they are. Default yes',
   stage: 'Background from the theme, night to day with daylight. Default yes',

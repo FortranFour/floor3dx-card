@@ -1791,6 +1791,27 @@ export class Floor3dCard extends LitElement {
     if (stage) this._scene.background = stage;
   }
 
+  // look.edge_skip: the model objects that get no edge line. `images` stands for the objects of the
+  // type3d: image rows; anything that is not a keyword is an object id, a * pattern or a <group>.
+  private _edgeSkipNames(): Set<string> {
+    const out = new Set<string>();
+    if (!this._look) return out;
+    const names = this._modelObjectNames();
+    const keywords = ['images', 'seams', 'floors', 'coplanar'];
+    this._look.edgeSkip().forEach((entry) => {
+      const key = entry.toLowerCase();
+      if (key === 'images') {
+        (this._config.entities || []).forEach((entity: any, i) => {
+          if (entity.type3d !== 'image') return;
+          ((this._object_ids[i] && this._object_ids[i].objects) || []).forEach((o) => out.add(o.object_id));
+        });
+      } else if (!keywords.includes(key)) {
+        this._resolveObjectId(entry, names).forEach((name) => out.add(name));
+      }
+    });
+    return out;
+  }
+
   // transparent: the card-level rules and the type3d transparent rows, bound once the meshes are in
   // the scene (after the look, whose themed materials are the ones made see-through)
   private _bindTransparency(): void {
@@ -2279,7 +2300,7 @@ export class Floor3dCard extends LitElement {
     this._add3dObjects();
     // edge lines last: door, shade and rotate setup re-centres geometry on its pivot and moves the
     // mesh, so lines built earlier would sit offset by the pivot
-    if (this._look && this._look.active) this._look.applyEdges(this._lookMeshes());
+    if (this._look && this._look.active) this._look.applyEdges(this._lookMeshes(), this._edgeSkipNames());
     this._bindTransparency();
 
     console.log('Object loaded end');

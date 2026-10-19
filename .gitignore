@@ -146,3 +146,4 @@ __pycache__/
 
 # local symlink or folder
 node_modules
+dev/harness/unit/look-bundle.js
