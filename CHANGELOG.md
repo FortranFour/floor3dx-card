@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.7.3
+
+### Fixed
+- `look.edge_skip` `seams`: the vertical lines on walls with windows. Sweet Home 3D exports such a wall as overlapping closed pieces, often inside one mesh (full-height pieces either side, a piece under the sill, one over the lintel), and the end of a full-height piece is buried under the sill, exposed up the jamb and buried again above the lintel, all on one edge. Edges are now cut where other vertices lie on them, and each part is judged on its own; a face pressed against a face of another piece (more coplanar faces covering a point than one surface has, counting a double-sided export's copies) no longer makes a visible fold. The same test covers the mesh's own pieces and other objects, so joints inside one mesh and between meshes are treated alike. Jambs, sills, lintels, reveals and outer corners keep their lines. Along the surface the search is loose (2.5 cm on a 20 m house), across it tight (2.5 mm), so a parallel face a little behind does not pass for a continuation. Unit test: a windowed wall built from overlapping pieces.
+
 ## 1.7.2
 
 ### Added

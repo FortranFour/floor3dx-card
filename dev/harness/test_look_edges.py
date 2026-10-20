@@ -14,6 +14,10 @@ JS = r"""() => {
     const g=new T.BufferGeometry(); g.setAttribute('position',new T.Float32BufferAttribute(p,3)); g.computeVertexNormals();
     const m=new T.Mesh(g,new T.MeshStandardMaterial({color:0x888888})); m.name=name; return m; };
   const box=(name,x,y,z,w,h,d)=>{const m=new T.Mesh(new T.BoxGeometry(w,h,d),new T.MeshStandardMaterial({color:0x888888})); m.name=name; m.position.set(x,y,z); return m;};
+  // one mesh made of overlapping closed pieces, as Sweet Home 3D exports a wall with a window:
+  // full-height pieces left and right, a piece under the sill and one over the lintel
+  const pieces=(name,list)=>{const ps=[];list.forEach(([x,y,z,w,h,d])=>{const g=new T.BoxGeometry(w,h,d).toNonIndexed();g.translate(x,y,z);ps.push(...g.attributes.position.array);});
+    const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(ps,3));g.computeVertexNormals();const m=new T.Mesh(g,new T.MeshStandardMaterial({color:0x888888}));m.name=name;return m;};
   const build=(skip)=>{
     const scene=new T.Scene();
     const meshes=[
@@ -31,12 +35,16 @@ JS = r"""() => {
       quad('room_4',[[600,0,0],[800,0,0],[800,0,300.4],[600,0,300.4]]),    // floors drawn by hand: room_5 overlaps room_4 by 4 mm,
       quad('room_5',[[600,0,300],[800,0,300],[800,0,600],[600,0,600]]),    // room_6 stops 6 mm short of room_5
       quad('room_6',[[800.6,0,300],[1000,0,300],[1000,0,600],[800.6,0,600]]),
+      pieces('wall_w',[[50,125,2000,100,250,10],[150,40,2000,100,80,10],[150,225,2000,100,50,10],[250,125,2000,100,250,10]]), // window x 100..200, y 80..200
     ];
     meshes.forEach(m=>scene.add(m)); scene.updateMatrixWorld(true);
     const look=new Look({theme:'neon',edge_skip:skip},scene);
     const names=new Set(); if((skip||[]).includes('screen_1')) names.add('screen_1');
     look.applyEdges(meshes,names);
     const out={}; meshes.forEach(m=>{const l=m.children.find(c=>c.name.startsWith('f3dx_edge_')); out[m.name]=l?l.geometry.attributes.position.count/2:0;});
+    const w=meshes.find(m=>m.name==='wall_w'); const l=w.children.find(c=>c.name.startsWith('f3dx_edge_'));
+    if(l){const p=l.geometry.attributes.position; const segs=[]; for(let i=0;i<p.count;i+=2) segs.push([[p.getX(i),p.getY(i),p.getZ(i)],[p.getX(i+1),p.getY(i+1),p.getZ(i+1)]]);
+      const r=(v)=>Math.round(v*10)/10; out.wall_w_segments=segs.map(s=>s.map(q=>q.map(r)));}
     return out; };
   const flat=()=>{ // themed materials: the bottom and top faces of a wall get the lowered variant, its sides and a floor do not
     const scene=new T.Scene();
@@ -63,7 +71,7 @@ if __name__ == '__main__':
         page.on('pageerror', lambda e: errors.append(str(e)))
         page.goto('http://127.0.0.1:8765/dev/harness/unit/look-edges.html'); page.wait_for_function('() => !!window.Look')
         r = page.evaluate(JS); b.close()
-    print(json.dumps(r))
+    print(json.dumps({k: {kk: vv for kk, vv in v.items() if kk != 'wall_w_segments'} for k, v in r.items()}))
     ok = True
     def check(name, cond):
         global ok
@@ -75,16 +83,32 @@ if __name__ == '__main__':
           r['seams']['wall_a'] == 3 and r['seams']['wall_b'] == 3 and r['seams']['wall_c'] == 4 and r['seams']['room_1'] == 4)
     check('floors: the joints of room floors vanish, including a border split differently on each side; walls untouched',
           r['floors']['room_1'] == 2 and r['floors']['room_2'] == 3 and r['floors']['room_3a'] == 2 and r['floors']['room_3b'] == 2 and r['floors']['wall_a'] == 4)
-    check('coplanar: both; the floor edge along the wall base (90 degrees) stays',
-          r['coplanar']['wall_a'] == 3 and r['coplanar']['room_1'] == 2 and r['coplanar']['room_2'] == 3)
+    check('coplanar: both; the floor edge along the wall base (90 degrees) stays; a room corner on the double-sided wall cuts its edge in two (4 -> 5)',
+          r['coplanar']['wall_a'] == 3 and r['coplanar']['room_1'] == 2 and r['coplanar']['room_2'] == 3 and r['coplanar']['wall_d'] == 5)
     check('closed segments: 12 box edges each without skip', r['plain']['wall_e'] == 12 and r['plain']['wall_f'] == 12 and r['plain']['wall_g'] == 12)
     check('seams: the 4 edges around the pressed-together end caps vanish, the corner with wall_g keeps its edges',
           r['seams']['wall_e'] == 8 and r['seams']['wall_f'] == 8 and r['seams']['wall_g'] == 12)
     check('floors: a border where one floor overlaps the other by 4 mm, or stops 6 mm short, vanishes too',
           r['plain']['room_4'] == 4 and r['plain']['room_5'] == 4 and r['plain']['room_6'] == 4
           and r['floors']['room_4'] == 3 and r['floors']['room_5'] == 2 and r['floors']['room_6'] == 3)
+    def segs(mode):
+        return [tuple(map(tuple, s)) for s in r[mode].get('wall_w_segments', [])]
+    def vertical_at(mode, x, lo, hi):  # a vertical segment on the skins at x covering [lo, hi]
+        return any(a[0] == x and b[0] == x and a[2] == b[2] and min(a[1], b[1]) <= lo + 0.1 and max(a[1], b[1]) >= hi - 0.1 for a, b in segs(mode))
+    def seam_part(mode, x, lo, hi):  # any vertical segment at x lying within [lo, hi] on the skins
+        return any(a[0] == x and b[0] == x and a[2] == b[2] and min(a[1], b[1]) >= lo - 0.1 and max(a[1], b[1]) <= hi + 0.1 and abs(a[1] - b[1]) > 0.5 for a, b in segs(mode))
+    check('windowed wall, no skip: the piece seams show below the sill and above the lintel',
+          seam_part('plain', 100, 0, 80) and seam_part('plain', 100, 200, 250) and seam_part('plain', 200, 0, 80))
+    check('windowed wall, seams: the seams below the sill and above the lintel are gone',
+          not seam_part('seams', 100, 0, 80) and not seam_part('seams', 100, 200, 250) and not seam_part('seams', 200, 0, 80) and not seam_part('seams', 200, 200, 250))
+    check('windowed wall, seams: the jambs (x 100 and 200, y 80..200) are still drawn', vertical_at('seams', 100, 80, 200) and vertical_at('seams', 200, 80, 200))
+    check('windowed wall, seams: outer corners (x 0 and 300) still drawn full height', vertical_at('seams', 0, 0, 250) and vertical_at('seams', 300, 0, 250))
+    check('windowed wall, seams: sill and lintel lines still drawn',
+          any(a[1] == 80 and b[1] == 80 and a[2] == b[2] and abs(a[0] - b[0]) > 50 for a, b in segs('seams')) and any(a[1] == 200 and b[1] == 200 and a[2] == b[2] and abs(a[0] - b[0]) > 50 for a, b in segs('seams')))
+    check('windowed wall, seams: the reveal edges (along the thickness at the sill and jamb corners) still drawn',
+          any(a[0] == 100 and b[0] == 100 and a[1] == 80 and b[1] == 80 and a[2] != b[2] for a, b in segs('seams')))
     check('named object: no lines on it, others unchanged', r['named']['screen_1'] == 0 and r['named']['wall_a'] == 4)
-    check('mixed list', r['mixed'] == {'wall_a': 3, 'wall_b': 3, 'wall_c': 4, 'wall_d': 4, 'room_1': 2, 'room_2': 3, 'room_3a': 2, 'room_3b': 2, 'screen_1': 0, 'wall_e': 8, 'wall_f': 8, 'wall_g': 12, 'room_4': 3, 'room_5': 2, 'room_6': 3})
+    check('mixed list', {k: v for k, v in r['mixed'].items() if k not in ('wall_w', 'wall_w_segments')} == {'wall_a': 3, 'wall_b': 3, 'wall_c': 4, 'wall_d': 5, 'room_1': 2, 'room_2': 3, 'room_3a': 2, 'room_3b': 2, 'screen_1': 0, 'wall_e': 8, 'wall_f': 8, 'wall_g': 12, 'room_4': 3, 'room_5': 2, 'room_6': 3})
     check('themed materials: the flat faces of a wall are lowered, its side and a floor are not',
           r['flat'] == {'wall_1_1': True, 'wall_1_5': True, 'wall_1_3': False, 'room_1': False, 'oneCopyPerVariant': True})
     check('no page errors', not errors)

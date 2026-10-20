@@ -376,24 +376,44 @@ export class Look {
       scene.union(box.clone().applyMatrix4(mesh.matrixWorld));
       items.push({ mesh, cls: this.surfaceOf(mesh.name), edges });
     });
-    // pass 2: an open edge of one object that lies on a coplanar face of another object is a joint,
-    // not a boundary: the next segment of a straight wall, the floor of the next room. The test is
-    // geometric (the edge's midpoint lies on the other face, to a tolerance), so rooms drawn with
-    // different corner points and walls split at different places still match. A face that meets
-    // ours at an angle does not count, so corners stay.
+    // pass 2: a line is a joint, not an outline, where the surface continues on both sides of it:
+    // the next segment of a straight wall, the piece of wall under a window sill, the floor of the
+    // next room. A Sweet Home 3D wall with windows is exported as overlapping closed pieces, often
+    // inside one mesh, so the test looks at the triangles of the object itself as well as those of
+    // the other objects of an allowed class, in world space. One edge can be a joint on part of its
+    // length and an outline on the rest (the end of a full-height piece: buried under the sill,
+    // exposed up the window jamb, buried again above the lintel), so edges are first cut where
+    // other vertices lie on them, and each part is judged on its own: for each plane of the edge,
+    // two probe points a little to either side of the part's midpoint; a coplanar surface at both
+    // means the surface continues and the part gets no line. A face meeting the edge at an angle is
+    // not coplanar, so corners, openings and object contours keep theirs.
     const merging = mergeAll || mergeWalls || mergeFloors;
     const candidate = (cls: number): boolean => mergeAll || (mergeWalls && cls === 1) || (mergeFloors && cls === 2);
     const pairs = (a: number, b: number): boolean => mergeAll || (mergeWalls && a === 1 && b === 1) || (mergeFloors && a === 2 && b === 2);
     const extent = scene.getSize(new THREE.Vector3());
     const span = Math.max(extent.x, extent.y, extent.z) || 1;
     // Two rooms drawn by hand rarely share a border to the millimetre: one polygon stops short of
-    // the other, or overlaps it, by a few millimetres, and a joint test tighter than that leaves a
-    // line along the border. 2.5 cm on a 20 m house is still far below anything else in a model.
-    const eps = span / 800;
+    // the other, or overlaps it, by a few millimetres. Along the surface the search is loose (2.5 cm
+    // on a 20 m house); across it, tight (2.5 mm), so a parallel face a little behind does not pass
+    // for a continuation.
+    const along = span / 800;
+    const across = span / 8000;
+    const probe = span / 4000; // how far to either side of an edge the surface is sampled: 5 mm
     const cell = span / 40;
     interface Tri { tri: THREE.Triangle; n: THREE.Vector3; mesh: number }
     const grid = new Map<string, Tri[]>();
+    const vertexGrid = new Map<string, THREE.Vector3[]>();
     const cellKey = (x: number, y: number, z: number): string => Math.floor(x / cell) + ',' + Math.floor(y / cell) + ',' + Math.floor(z / cell);
+    const bucketsIn = <T>(map: Map<string, T[]>, bb: THREE.Box3, add: (bucket: T[]) => void): void => {
+      for (let x = Math.floor(bb.min.x / cell); x <= Math.floor(bb.max.x / cell); x++)
+        for (let y = Math.floor(bb.min.y / cell); y <= Math.floor(bb.max.y / cell); y++)
+          for (let z = Math.floor(bb.min.z / cell); z <= Math.floor(bb.max.z / cell); z++) {
+            const k = x + ',' + y + ',' + z;
+            let bucket = map.get(k);
+            if (!bucket) map.set(k, (bucket = []));
+            add(bucket);
+          }
+    };
     if (merging) {
       items.forEach((item, m) => {
         if (!candidate(item.cls)) return;
@@ -402,6 +422,16 @@ export class Look {
         const index = geometry.index;
         const count = index ? index.count / 3 : pos.count / 3;
         const bb = new THREE.Box3();
+        const seen = new Set<string>();
+        for (let i = 0; i < pos.count; i++) {
+          const v = new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(item.mesh.matrixWorld);
+          const k = Math.round(v.x / across) + ',' + Math.round(v.y / across) + ',' + Math.round(v.z / across);
+          if (seen.has(k)) continue;
+          seen.add(k);
+          bb.min.copy(v).subScalar(along);
+          bb.max.copy(v).addScalar(along);
+          bucketsIn(vertexGrid, bb, (bucket) => bucket.push(v));
+        }
         for (let t = 0; t < count; t++) {
           const i0 = index ? index.getX(t * 3) : t * 3, i1 = index ? index.getX(t * 3 + 1) : t * 3 + 1, i2 = index ? index.getX(t * 3 + 2) : t * 3 + 2;
           const tri = new THREE.Triangle(
@@ -412,62 +442,125 @@ export class Look {
           const n = tri.getNormal(new THREE.Vector3());
           if (n.lengthSq() < 0.5) continue; // degenerate
           const entry: Tri = { tri, n, mesh: m };
-          bb.setFromPoints([tri.a, tri.b, tri.c]);
-          for (let x = Math.floor(bb.min.x / cell); x <= Math.floor(bb.max.x / cell); x++)
-            for (let y = Math.floor(bb.min.y / cell); y <= Math.floor(bb.max.y / cell); y++)
-              for (let z = Math.floor(bb.min.z / cell); z <= Math.floor(bb.max.z / cell); z++) {
-                const k = x + ',' + y + ',' + z;
-                let bucket = grid.get(k);
-                if (!bucket) grid.set(k, (bucket = []));
-                bucket.push(entry);
-              }
+          bb.setFromPoints([tri.a, tri.b, tri.c]).expandByScalar(along);
+          bucketsIn(grid, bb, (bucket) => bucket.push(entry));
         }
       });
     }
-    const wp = new THREE.Vector3(), wn = new THREE.Vector3(), closest = new THREE.Vector3(), nm = new THREE.Matrix3();
-    // is the world point `wp` on a face of another object that is coplanar with the world normal `wn`?
-    const onForeignFace = (item: Item, m: number): boolean => {
-      // the point's cell, and the neighbouring cells it is within eps of (a face just across a cell
-      // boundary is registered there, not here)
-      const keys = new Set<string>();
-      for (const dx of [-eps, 0, eps]) for (const dy of [-eps, 0, eps]) for (const dz of [-eps, 0, eps]) keys.add(cellKey(wp.x + dx, wp.y + dy, wp.z + dz));
-      for (const key of keys) {
-        const bucket = grid.get(key);
-        if (!bucket) continue;
-        const hit = bucket.some((t) => {
-          if (t.mesh === m || !pairs(item.cls, items[t.mesh].cls)) return false;
-          if (Math.abs(t.n.dot(wn)) < 0.999) return false; // not the same plane: a corner, kept
-          t.tri.closestPointToPoint(wp, closest);
-          return closest.distanceTo(wp) <= eps;
-        });
-        if (hit) return true;
+    const wp = new THREE.Vector3(), closest = new THREE.Vector3(), nm = new THREE.Matrix3();
+    const wa = new THREE.Vector3(), wb = new THREE.Vector3(), dir = new THREE.Vector3(), lateral = new THREE.Vector3();
+    const side = [new THREE.Vector3(), new THREE.Vector3()];
+    const foot = new THREE.Vector3(), delta = new THREE.Vector3();
+    // The coplanar surface at world point p (normal n), of this object or of another object of an
+    // allowed class: `own` when a face adjacent to the edge (one holding both its ends) covers the
+    // point, `other` when any other coplanar face does. A face of another piece lying on the face
+    // of this edge means the face is buried, pressed against that piece.
+    const near = (v: THREE.Vector3, w: THREE.Vector3): boolean => v.distanceToSquared(w) <= across * across;
+    // Only surface on the probe's side of the edge counts (`away` is the unit direction from the
+    // edge to the probe): the face of the edge itself must not pass for a continuation on the far side.
+    // `own`: a face of this edge (same object, holding both its ends) is here. `other`: some other
+    // coplanar surface is within reach along the plane (a continuation). `buried`: the point is
+    // covered by more coplanar faces than one surface has, so a face of another piece or object is
+    // pressed against the face of this edge (an end cap against the next segment's end cap).
+    const surfaceAt = (p: THREE.Vector3, n: THREE.Vector3, away: THREE.Vector3, item: Item, m: number): { own: boolean; other: boolean; buried: boolean } => {
+      const r = { own: false, other: false, buried: false };
+      const bucket = grid.get(cellKey(p.x, p.y, p.z));
+      if (!bucket) return r;
+      let covering = 0;
+      const expected = item.edges.doubleSided ? 2 : 1;
+      for (const t of bucket) {
+        if (t.mesh !== m && !pairs(item.cls, items[t.mesh].cls)) continue;
+        if (Math.abs(t.n.dot(n)) < 0.999) continue; // not the same plane: a corner, kept
+        t.tri.closestPointToPoint(p, closest);
+        delta.copy(closest).sub(p);
+        const off = Math.abs(delta.dot(t.n)); // across the surface
+        if (off > across) continue;
+        const inPlane = delta.lengthSq() - off * off;
+        if (inPlane > along * along) continue;
+        if (delta.copy(closest).sub(wp).dot(away) <= across) continue; // on the edge or beyond it, not on this side
+        const covers = inPlane <= across * across;
+        const holdsEdge = t.mesh === m && (near(t.tri.a, wa) || near(t.tri.b, wa) || near(t.tri.c, wa)) && (near(t.tri.a, wb) || near(t.tri.b, wb) || near(t.tri.c, wb));
+        if (holdsEdge) {
+          r.own = true;
+          if (covers) covering++;
+        } else {
+          r.other = true;
+          if (covers) r.buried = true;
+        }
       }
-      return false;
+      if (covering > expected) r.buried = true;
+      return r;
     };
     items.forEach((item, m) => {
       const out: number[] = [];
       const merge = merging && candidate(item.cls);
       if (merge) nm.getNormalMatrix(item.mesh.matrixWorld);
       item.edges.edges.forEach((edge) => {
-        let draw = true;
-        if (merge) {
-          // planes whose face is not buried in another object: the end face of a wall segment pressed
-          // against the next segment's end face does not count, nor a bottom face on the floor
-          const planes = edge.planes.filter((p) => {
-            wp.copy(p.centroid).applyMatrix4(item.mesh.matrixWorld);
-            wn.copy(p.n).applyMatrix3(nm).normalize();
-            return !onForeignFace(item, m);
-          });
-          if (planes.length === 0) draw = false;
-          else if (planes.length === 1) {
-            // open, or a crease whose other face is buried: a joint if the midpoint lies on a face of
-            // another object that continues this one, a boundary otherwise
-            wp.copy(edge.a).add(edge.b).multiplyScalar(0.5).applyMatrix4(item.mesh.matrixWorld);
-            wn.copy(planes[0].n).applyMatrix3(nm).normalize();
-            draw = !onForeignFace(item, m);
-          } else draw = creaseBetween(planes.map((p) => p.n), thresholdDot);
+        if (!merge) {
+          out.push(edge.a.x, edge.a.y, edge.a.z, edge.b.x, edge.b.y, edge.b.z);
+          return;
         }
-        if (draw) out.push(edge.a.x, edge.a.y, edge.a.z, edge.b.x, edge.b.y, edge.b.z);
+        wa.copy(edge.a).applyMatrix4(item.mesh.matrixWorld);
+        wb.copy(edge.b).applyMatrix4(item.mesh.matrixWorld);
+        dir.copy(wb).sub(wa);
+        const length = dir.length();
+        if (length <= across) return;
+        dir.divideScalar(length);
+        const normals = edge.planes.map((pl) => pl.n.clone().applyMatrix3(nm).normalize());
+        // cut where other vertices lie on the edge (T-junctions)
+        const cuts = [0, length];
+        const bb = new THREE.Box3().setFromPoints([wa, wb]);
+        const seenCuts = new Set<number>();
+        for (let x = Math.floor(bb.min.x / cell); x <= Math.floor(bb.max.x / cell); x++)
+          for (let y = Math.floor(bb.min.y / cell); y <= Math.floor(bb.max.y / cell); y++)
+            for (let z = Math.floor(bb.min.z / cell); z <= Math.floor(bb.max.z / cell); z++) {
+              const bucket = vertexGrid.get(x + ',' + y + ',' + z);
+              if (!bucket) continue;
+              bucket.forEach((v) => {
+                delta.copy(v).sub(wa);
+                const t = delta.dot(dir);
+                if (t <= probe || t >= length - probe) return;
+                foot.copy(wa).addScaledVector(dir, t);
+                if (foot.distanceToSquared(v) > across * across) return;
+                const key = Math.round(t / across);
+                if (seenCuts.has(key)) return;
+                seenCuts.add(key);
+                cuts.push(t);
+              });
+            }
+        cuts.sort((p, q) => p - q);
+        for (let i = 1; i < cuts.length; i++) {
+          const t0 = cuts[i - 1], t1 = cuts[i];
+          if (t1 - t0 <= across) continue;
+          wp.copy(wa).addScaledVector(dir, (t0 + t1) / 2);
+          const reach = Math.min(probe, (t1 - t0) / 4);
+          // for each plane: which side its face is on, whether that face is buried there, and
+          // whether a coplanar surface continues on the far side
+          const exposed: THREE.Vector3[] = [];
+          let continues = false;
+          normals.forEach((n) => {
+            lateral.crossVectors(dir, n).normalize();
+            side[0].copy(wp).addScaledVector(lateral, reach);
+            side[1].copy(wp).addScaledVector(lateral, -reach);
+            const s0 = surfaceAt(side[0], n, lateral, item, m);
+            lateral.negate();
+            const s1 = surfaceAt(side[1], n, lateral, item, m);
+            const faceSide = s0.own ? s0 : s1.own ? s1 : null;
+            const farSide = faceSide === s0 ? s1 : s0;
+            if (!faceSide) return; // no face of this edge found at the probe (a sliver): ignore the plane
+            if (faceSide.buried) return; // pressed against another piece: not a visible face here
+            exposed.push(n);
+            if (farSide.own || farSide.other) continues = true;
+          });
+          let draw: boolean;
+          if (exposed.length >= 2) draw = creaseBetween(exposed, thresholdDot); // a visible fold
+          else if (exposed.length === 1) draw = !continues; // an outline, unless the surface goes on
+          else draw = false; // every face here is buried
+          if (!draw) continue;
+          // back to the mesh's frame: the line is a child of the mesh
+          const a = edge.a.clone().lerp(edge.b, t0 / length), b = edge.a.clone().lerp(edge.b, t1 / length);
+          out.push(a.x, a.y, a.z, b.x, b.y, b.z);
+        }
       });
       if (!out.length) return;
       const g = new THREE.BufferGeometry();
@@ -492,9 +585,9 @@ export class Look {
 // where it belongs to a single face (a boundary).
 interface MeshEdges {
   // the edges that may get a line, in the mesh's frame: an open edge (one plane) or a crease (two or
-  // more distinct planes meeting at more than the angle). Each plane carries the centroid of one of
-  // its faces, for the test of a face buried inside another object.
-  edges: { a: THREE.Vector3; b: THREE.Vector3; planes: { n: THREE.Vector3; centroid: THREE.Vector3 }[] }[];
+  // more distinct planes meeting at more than the angle)
+  edges: { a: THREE.Vector3; b: THREE.Vector3; planes: { n: THREE.Vector3 }[] }[];
+  doubleSided: boolean; // most faces come with a flipped copy (a Sweet Home 3D export)
 }
 
 function creaseEdges(geometry: THREE.BufferGeometry, angle: number): MeshEdges | null {
@@ -551,30 +644,25 @@ function creaseEdges(geometry: THREE.BufferGeometry, angle: number): MeshEdges |
     }
   }
   const out: MeshEdges['edges'] = [];
+  let flipped = 0;
   edges.forEach((edge) => {
     const faces = edge.faces;
     const ia = first[edge.a], ib = first[edge.b];
-    // distinct face planes around this edge (flipped duplicates collapse to one), each with the
-    // centroid of one of its faces, for the buried-face test
+    // distinct face planes around this edge (flipped duplicates collapse to one)
     const planes: MeshEdges['edges'][0]['planes'] = [];
     faces.forEach((f) => {
       const nf = normals[f];
-      if (planes.some((p) => Math.abs(p.n.dot(nf)) > 0.9999)) return;
-      const t = tris[f];
-      const centroid = new THREE.Vector3()
-        .fromBufferAttribute(pos, first[t[0]])
-        .add(new THREE.Vector3().fromBufferAttribute(pos, first[t[1]]))
-        .add(new THREE.Vector3().fromBufferAttribute(pos, first[t[2]]))
-        .multiplyScalar(1 / 3);
-      planes.push({ n: nf, centroid });
+      if (!planes.some((p) => Math.abs(p.n.dot(nf)) > 0.9999)) planes.push({ n: nf });
     });
-    const open = faces.length === 1 || (faces.length === 2 && isFlippedPair(tris[faces[0]], tris[faces[1]]));
+    const pair = faces.length === 2 && isFlippedPair(tris[faces[0]], tris[faces[1]]);
+    if (pair) flipped += 2 / 3; // two faces, three edges each
+    const open = faces.length === 1 || pair;
     if (!open && planes.length < 2) return; // inside a flat surface
     if (!open && !creaseBetween(planes.map((p) => p.n), thresholdDot)) return; // a fold too shallow to draw
     out.push({ a: new THREE.Vector3().fromBufferAttribute(pos, ia), b: new THREE.Vector3().fromBufferAttribute(pos, ib), planes });
   });
   if (!out.length) return null;
-  return { edges: out };
+  return { edges: out, doubleSided: flipped * 2 > tris.length };
 }
 
 /** Some two of these planes meet at more than the angle (dot below the threshold). */
