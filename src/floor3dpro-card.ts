@@ -324,6 +324,7 @@ export class Floor3dCard extends LitElement {
   public connectedCallback(): void {
     super.connectedCallback();
     window.addEventListener(EDITOR_EVENT, this._editorListener);
+    this._widenPreview();
     // Faz-0 Engine Backbone: (Stabil.Patch.0.0)
     this._isConnected = true;
 
@@ -548,6 +549,27 @@ export class Floor3dCard extends LitElement {
     this.display3dmodel();
   }
 
+  // The hui-card the editor shows this card in (it carries the `preview` attribute), or null.
+  private _previewHost(): HTMLElement | null {
+    let node: any = this.parentElement || (this.getRootNode() as any).host;
+    for (let i = 0; i < 12 && node; i++) {
+      if (node.tagName === 'HUI-CARD' && node.hasAttribute && node.hasAttribute('preview')) return node;
+      node = node.parentElement || (node.getRootNode && node.getRootNode().host);
+    }
+    return null;
+  }
+
+  private _inPreview(): boolean {
+    return !!this.preview || !!this._previewHost();
+  }
+
+  // The editor caps its preview card at 390 / 500 px wide, so the preview could never follow the
+  // dialog when it is expanded. A 3D view is worth the pane: lift the cap on the preview's hui-card.
+  private _widenPreview(): void {
+    const host = this._previewHost();
+    if (host && host.style.maxWidth !== 'none') host.style.maxWidth = 'none';
+  }
+
   private _ispanel(): boolean {
 
     let root: any = document.querySelector('home-assistant');
@@ -618,6 +640,7 @@ export class Floor3dCard extends LitElement {
     console.log('First updated start');
 
     this._card = this.shadowRoot.getElementById(this._card_id);
+    this._widenPreview();
     if (this._card) {
       if (!this._content) {
         this._content = document.createElement('div');
@@ -1340,7 +1363,9 @@ export class Floor3dCard extends LitElement {
     }
 
     const w = this._renderer.domElement.parentElement.clientWidth;
-    const h = this._renderer.domElement.parentElement.clientHeight;
+    // the editor's preview keeps a 4:3 box that follows its width (see render); elsewhere the
+    // box's own height rules
+    const h = this._inPreview() && !this._config.style ? Math.round((w * 3) / 4) : this._renderer.domElement.parentElement.clientHeight;
 
     if (!w || !h) {
       return;
@@ -4730,15 +4755,20 @@ export class Floor3dCard extends LitElement {
       return this._showError(localize('common.show_error'));
     }
 
+    // In the card editor's preview the dashboard's view type says nothing about the box the card is
+    // in: a panel-view height (the whole viewport) would make a very tall preview, so the preview
+    // keeps a 4:3 box that follows its width instead.
     let htmlHeight: string;
-    if (this._ispanel()) htmlHeight = 'calc(100vh - var(--header-height))';
+    const preview = this._inPreview();
+    if (!preview && this._ispanel()) htmlHeight = 'calc(100vh - var(--header-height))';
     else htmlHeight = 'auto';
+    const box = preview ? ' aspect-ratio: 4 / 3;' : '';
 
     return html`
       <ha-card
         tabindex="0"
         .style=${`${
-          this._config.style || 'overflow: hidden; width: auto; height: ' + htmlHeight + '; position: relative;'
+          this._config.style || 'overflow: hidden; width: auto; height: ' + htmlHeight + '; position: relative;' + box
         }`}
         id="${this._card_id}"
       >

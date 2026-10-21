@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.2
+
+### Fixed
+- Card editor preview: the card now fills the preview pane and follows it when the dialog is expanded. Home Assistant caps its preview card at 390 px (500 px on wide screens), so no card follows the pane by itself; a 3D view is worth the room, so the card lifts that cap on its own preview wrapper. In the preview the card also keeps a 4:3 box that follows its width instead of taking the dashboard's panel-view height (the whole viewport), which made a very tall, narrow preview. Dashboards are unchanged.
+
 ## 1.9.1
 
 ### Fixed
