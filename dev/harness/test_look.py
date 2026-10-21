@@ -34,9 +34,9 @@ JS = r"""async () => {
   out.condOn=cm(); neon.hass={...hass,states:{'light.x':{state:'off',attributes:{}}}}; await new Promise(r=>setTimeout(r,300)); out.condOff=cm();
   const lampMat=()=>{const m=neon._scene.getObjectByName(names[0]).material; return m.emissive?'#'+m.emissive.getHexString():null;};
   out.glowOff=lampMat(); neon.hass=hass; await new Promise(r=>setTimeout(r,300)); out.glowOn=lampMat();
-  const day=await make({theme:'day',edges:'yes'}); out.dayBg='#'+day._scene.background.getHexString(); out.dayBlendNormal=day._look.edgeMaterial.blending===1;
+  const day=await make({theme:'day',edges:'yes'}); out.dayBg='#'+day._scene.background.getHexString(); out.dayBlendNormal=day._look.edgeMaterial.blending===5&&day._look.edgeMaterial.blendSrc===204&&day._look.edgeMaterial.blendDst===205&&day._look.edgeMaterial.transparent===false; // CustomBlending as normal alpha, opaque pass
   const custom=await make({theme:'custom',custom:{dark:'#102030',light:'#80a0c0',walls:'#a0b0c0',edges:'#ff8800',stage:'#f0f0f0',stage_day:'#ffffff',hue:0.3}});
-  out.customBg='#'+custom._scene.background.getHexString(); out.customEdge='#'+custom._look.edgeMaterial.color.getHexString(); out.customBlendNormal=custom._look.edgeMaterial.blending===1;
+  out.customBg='#'+custom._scene.background.getHexString(); out.customEdge='#'+custom._look.edgeMaterial.color.getHexString(); out.customBlendNormal=custom._look.edgeMaterial.blending===5;
   const cm2=custom._scene.getObjectByName(names[2]).material; const u=(cm2.userData&&cm2.userData.f3dxThemedOf)?custom._look.themed.get(cm2.userData.f3dxThemedOf):null; out.customUniforms=u?[u.uniforms.uTheme.value,+u.uniforms.uCustomHue.value.toFixed(2),'#'+new (custom._scene.background.constructor)(u.uniforms.uCustomWall.value.x,u.uniforms.uCustomWall.value.y,u.uniforms.uCustomWall.value.z).getHexString()]:null;
   const kept=await make({theme:'neon',keep:names[3]+', '+names[4]}); const km=kept._scene.getObjectByName(names[3]).material; const other=kept._scene.getObjectByName(names[2]).material;
   out.keepUntouched=!(km.userData&&km.userData.f3dxThemedOf); out.keepNoEdges=!kept._scene.getObjectByName(names[3]).children.some(c=>c.name.startsWith('f3dx_edge_')); out.othersThemed=!!(other.userData&&other.userData.f3dxThemedOf);
@@ -56,7 +56,7 @@ if __name__ == '__main__':
     check('no look: background as configured, no look object, no edge lines', r['plainBg'] == '#848c8f' and not r['plainLook'] and r['plainEdges'] == 0)
     check('neon: stage background, edge lines drawn, materials wrapped with originals kept',
           r['neonBg'] != '#848c8f' and r['edges'] > 0 and r['themed'] > 0 and r['wrapped'] and r['originalKept'])
-    check('neon edges additive, day edges normal', r['blendAdditive'] and r['dayBlendNormal'])
+    check('neon edges additive, day edges alpha-blended in the opaque pass', r['blendAdditive'] and r['dayBlendNormal'])
     check('edge lines of a swing door stay on the door after its hinge re-centring', r['doorLineOnMesh'])
     check('colour condition still works on the themed material', r['condOn'] == '#ffd700' and r['condOff'] == '#b0c4de')
     check('lit lamp object glows in its light colour, dark when off', r['glowOff'] == '#000000' and r['glowOn'] not in (None, '#000000'))

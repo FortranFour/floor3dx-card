@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.12
+
+### Fixed
+- `look`: 1.9.11 put the edge lines in depth order with the translucent objects, which was not enough: the parts of one item share an origin, so a dial's lines and the glass dome over it sorted as equals and the lines still showed through. The lines are now drawn in the opaque pass, after the opaque meshes and before every translucent object, with their blending set explicitly (additive on a dark stage, alpha on a light one). A line behind a 50% glass dome now comes through at half strength, as the model behind it does.
+
 ## 1.9.11
 
 ### Fixed

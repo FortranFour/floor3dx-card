@@ -279,7 +279,7 @@ export class Look {
     this.themedFlat.forEach((t) => (t.uniforms.uTheme.value = this.themeIndex));
     if (this.edgeMaterial) {
       this.edgeMaterial.color.set(this.edgeColour(theme));
-      this.edgeMaterial.blending = this.lightStage(theme) ? THREE.NormalBlending : THREE.AdditiveBlending;
+      this.setEdgeBlending(this.edgeMaterial, theme);
       this.edgeMaterial.needsUpdate = true;
     }
   }
@@ -339,6 +339,20 @@ export class Look {
     if (theme === 'neon') return this.accentHex();
     if (theme === 'custom') return this.custom.edges;
     return EDGE[theme as Exclude<Theme, 'off'>];
+  }
+
+  // additive glow on a dark stage; on a light stage ordinary alpha blending (as CustomBlending, so
+  // that it is applied although the material is drawn in the opaque pass)
+  private setEdgeBlending(material: THREE.LineBasicMaterial, theme: Theme): void {
+    if (this.lightStage(theme)) {
+      material.blending = THREE.CustomBlending;
+      material.blendEquation = THREE.AddEquation;
+      material.blendSrc = THREE.SrcAlphaFactor;
+      material.blendDst = THREE.OneMinusSrcAlphaFactor;
+    } else {
+      material.blending = THREE.AdditiveBlending;
+    }
+    material.needsUpdate = true;
   }
 
   // lines blend normally on a light stage, where additive glow would vanish
@@ -452,13 +466,19 @@ export class Look {
     const mergeAll = skip.includes('coplanar');
     const mergeWalls = mergeAll || skip.includes('seams');
     const mergeFloors = mergeAll || skip.includes('floors');
+    // The lines are drawn in the opaque pass (transparent: false), after the opaque meshes
+    // (renderOrder 1) and before every translucent object, so a glass dome or a see-through wall is
+    // painted over the lines of what stands behind it, as over the model itself. Depth sorting could
+    // not do that: the parts of one item share an origin, and the line of a dial and the dome over
+    // it sort as equals. Blending is set explicitly, since a normal-blended material that is not
+    // transparent would be drawn without blending.
     this.edgeMaterial = new THREE.LineBasicMaterial({
       color: this.edgeColour(theme),
-      transparent: true,
+      transparent: false,
       opacity,
       depthWrite: false,
-      blending: this.lightStage(theme) ? THREE.NormalBlending : THREE.AdditiveBlending,
     });
+    this.setEdgeBlending(this.edgeMaterial, theme);
     // pass 1: each mesh's edges in its own frame; open edges are kept aside to be matched against
     // the faces of the other objects
     interface Item { mesh: THREE.Mesh; cls: number; edges: MeshEdges }
@@ -672,11 +692,9 @@ export class Look {
       g.setAttribute('position', new THREE.Float32BufferAttribute(out, 3));
       const line = new THREE.LineSegments(g, this.edgeMaterial);
       line.name = 'f3dx_edge_' + item.mesh.name;
-      // Drawn in the transparent pass in depth order like any other translucent thing, not after
-      // everything: the lines of what stands behind a glass dome or a see-through wall are then
-      // covered by it as the model itself is, instead of showing through at full strength. Lines
-      // on their own surface still pass the depth test (less-or-equal) against it.
-      line.renderOrder = 0;
+      // after the opaque meshes (so a mesh never overwrites its own lines), before the translucent
+      // pass (see the edge material)
+      line.renderOrder = 1;
       line.layers.mask = item.mesh.layers.mask;
       // follow the mesh: same parent, same transform, so doors and shades carry their lines along
       item.mesh.add(line);
