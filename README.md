@@ -495,6 +495,14 @@ node compress.mjs          /path/to/home.glb home     # writes home.draco.glb an
 node compress-textures.mjs /path/to/home.glb home     # writes home.draco-webp.glb
 ```
 
+`remove-objects.mjs` takes objects out of a model without a trip back to Sweet Home 3D, for parts that can never be seen (the dial behind a frosted meter glass) or placeholders a model carries, and re-encodes the file as it was (Draco, WebP, names and transforms untouched):
+
+```bash
+node remove-objects.mjs home.draco.glb home.trim.glb 48 47_1 55 within:1_9 keep:34_1
+```
+
+Object names are the ones the card shows; `within:<object>` takes everything whose centre lies inside that object's box, `keep:<object>` takes one out of the list again. It prints what it removed.
+
 `compress.mjs` keeps node and mesh names in order and leaves every node transform untouched. Its Meshopt output keeps positions at full precision for that reason, which is why Draco comes out smaller here. `compress-textures.mjs` converts PNG textures to lossless WebP and JPEG textures to WebP at quality 90, and scales anything larger than 2048 pixels (pass another limit as a third argument).
 
 Measured on two Sweet Home 3D exports, loaded through the card:
