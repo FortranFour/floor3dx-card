@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.4
+
+### Fixed
+- Card editor preview: in the narrow dialog the height stopped at twice the width and so no longer followed the window; the cap is gone, the preview fills the window's height in every dialog width.
+
 ## 1.9.3
 
 ### Changed

@@ -574,11 +574,11 @@ export class Floor3dCard extends LitElement {
   }
 
   // The preview's height: what is left of the window below the card's top, so the preview fills
-  // the pane in both directions and follows the window; never squatter than 2:1 or shorter than 240.
-  private _previewHeight(width: number): number {
+  // the pane in both directions and follows the window, whatever its width; never shorter than 240.
+  private _previewHeight(_width: number): number {
     const top = this._card ? this._card.getBoundingClientRect().top : 0;
     const room = window.innerHeight - top - 88; // the dialog's bottom bar and padding
-    const h = Math.max(240, Math.min(room, width * 2));
+    const h = Math.max(240, room);
     if (this._card && this._card.style.height !== h + 'px') this._card.style.height = h + 'px';
     return Math.round(h);
   }
