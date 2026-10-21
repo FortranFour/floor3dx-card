@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.8
+
+### Changed
+- Console lines for `look.keep` (which objects it matched, or a warning when none) and `hide_spare_panels` (the bound panels' families and sizes, what was hidden, or why nothing was), so a setting that seems to do nothing can be read off the console.
+
 ## 1.9.7
 
 ### Added

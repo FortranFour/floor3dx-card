@@ -1831,6 +1831,11 @@ export class Floor3dCard extends LitElement {
     if (!this._look) this._look = new Look(cfg, this._scene);
     if (!this._look.active) return;
     const keep = this._lookKeepNames();
+    if ((this._config as any).look.keep) {
+      const kept = Array.from(keep);
+      if (kept.length) console.log('floor3d-card: look.keep leaves ' + kept.length + ' object(s) as in the model: ' + kept.join(', '));
+      else console.warn('floor3d-card: look.keep <' + String((this._config as any).look.keep) + '> matches no object of the model');
+    }
     this._look.applyMaterials(this._lookMeshes().filter((mesh) => !keep.has(mesh.name)));
     const stage = this._look.stageColor(0.5);
     if (stage) this._scene.background = stage;
@@ -1908,7 +1913,10 @@ export class Floor3dCard extends LitElement {
       if (entity.type3d !== 'text' && entity.type3d !== 'image') return;
       ((this._object_ids[i] && this._object_ids[i].objects) || []).forEach((o) => bound.add(o.object_id));
     });
-    if (!bound.size) return;
+    if (!bound.size) {
+      console.warn('floor3d-card: hide_spare_panels: no type3d text or image row binds an object, nothing to compare with');
+      return;
+    }
     const stem = (n: string): string => String(n).replace(/[\d_]+$/, '');
     const box = new THREE.Box3(), size = new THREE.Vector3();
     const shape = (o: THREE.Object3D): { c: THREE.Vector3; dims: number[]; stem: string } | null => {
@@ -1925,7 +1933,11 @@ export class Floor3dCard extends LitElement {
       const sh = o && shape(o);
       if (sh) shapes.push(sh);
     });
-    if (!shapes.length) return;
+    if (!shapes.length) {
+      console.warn('floor3d-card: hide_spare_panels: none of the bound panels (' + Array.from(bound).join(', ') + ') is a flat object, nothing to compare with');
+      return;
+    }
+    console.log('floor3d-card: hide_spare_panels: bound panels ' + shapes.map((p) => p.stem + '* ' + p.dims.map((d) => d.toFixed(1)).join('x')).join('; '));
     const hidden: string[] = [];
     this._scene.traverse((o: any) => {
       if (!o.name || bound.has(o.name) || o.name.startsWith('f3dx_') || !o.visible) return;
@@ -1949,6 +1961,7 @@ export class Floor3dCard extends LitElement {
       if (o) o.visible = false;
     });
     if (hidden.length) console.log('floor3d-card: hide_spare_panels hid ' + hidden.length + ' panel(s): ' + hidden.join(', '));
+    else console.log('floor3d-card: hide_spare_panels: no unbound panel of the same family and size found near a bound one');
   }
 
   // look.keep: the model objects the look leaves exactly as the model has them, materials and lines
