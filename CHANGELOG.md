@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.9.5
+
+### Changed
+- Version shown in the editor is the card's own (`1.9.5`); the upstream lineage (floor3dpro-card 1.5.3-Pro.Faz.2.1) moves to the console banner.
+- Loading messages name the model: `Loading house.glb: 42%` (and `(materials)` / `(geometry)` for OBJ models) in place of `Loading: 42%`, `1/2`, `2/2`; the text shown while the card waits for its box reads `Loading house.glb…` instead of `[PRO] Asset Cache Loading…`.
+
 ## 1.9.4
 
 ### Fixed

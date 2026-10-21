@@ -26,7 +26,7 @@ import {
   ProLogState,
 } from './helpers';
 import type { Floor3dCardConfig } from './types';
-import { CARD_VERSION, EDITOR_EVENT, PREVIEW_EVENT } from './const';
+import { CARD_VERSION, UPSTREAM_VERSION, EDITOR_EVENT, PREVIEW_EVENT } from './const';
 import { normalizeConfig, matchObjects, objectPattern } from './config';
 import { localize } from './localize/localize';
 //import three.js libraries for 3D rendering
@@ -45,7 +45,7 @@ import '../elements/button';
 // Shown in the browser console so it is obvious which file the browser is actually running.
 const BUILD_ID = 'build __FLOOR3DX_BUILD__';
 const title = '  FLOOR3DX-CARD (floor3dpro-card fork) ';
-const version = `  ${localize('common.version')} ${CARD_VERSION} · ${BUILD_ID}    `;
+const version = `  ${localize('common.version')} ${CARD_VERSION} (on ${UPSTREAM_VERSION}) · ${BUILD_ID}    `;
 
 // En uzun satırı baz al
 const width = Math.max(title.length, version.length);
@@ -811,12 +811,18 @@ export class Floor3dCard extends LitElement {
     proLog(this._proLogState, this._proSkillEnabled('mobile'), 'MOBILE', message, throttleKey);
   }
 
+  // The model's file name, for the loading messages.
+  private _modelLabel(): string {
+    const file = String((this._config && this._config.objfile) || '');
+    return file ? file.split('/').pop() : 'model';
+  }
+
   // Faz-0 Deterministic Correction: (Fix) Viewport mask for zero-size prevention
   private _ensureViewportMask(): void {
     if (this._viewportMask) return;
 
     const el = document.createElement('div');
-    el.textContent = '[PRO] Asset Cache Loading…';
+    el.textContent = 'Loading ' + this._modelLabel() + '…';
     el.style.position = 'absolute';
     el.style.left = '10%';
     el.style.top = '5%';
@@ -2339,18 +2345,18 @@ export class Floor3dCard extends LitElement {
   private _onloadedGLTF3DProgress(_progress: ProgressEvent): void {
     // total is 0 when the server compresses the response on the fly
     this._content.innerText = _progress.total
-      ? 'Loading: ' + Math.round((_progress.loaded / _progress.total) * 100) + '%'
-      : 'Loading: ' + (_progress.loaded / 1048576).toFixed(1) + ' MB';
+      ? 'Loading ' + this._modelLabel() + ': ' + Math.round((_progress.loaded / _progress.total) * 100) + '%'
+      : 'Loading ' + this._modelLabel() + ': ' + (_progress.loaded / 1048576).toFixed(1) + ' MB';
   }
 
   private _onLoadMaterialProgress(_progress: ProgressEvent): void {
     //progress function called at regular intervals during material loading process
-    this._content.innerText = '1/2: ' + Math.round((_progress.loaded / _progress.total) * 100) + '%';
+    this._content.innerText = 'Loading ' + this._modelLabel() + ' (materials): ' + Math.round((_progress.loaded / _progress.total) * 100) + '%';
   }
 
   private _onLoadObjectProgress(_progress: ProgressEvent): void {
     //progress function called at regular intervals during object loading process
-    this._content.innerText = '2/2: ' + Math.round((_progress.loaded / _progress.total) * 100) + '%';
+    this._content.innerText = 'Loading ' + this._modelLabel() + ' (geometry): ' + Math.round((_progress.loaded / _progress.total) * 100) + '%';
   }
 
   private _onLoadedGLTF3DModel(gltf: GLTF) {

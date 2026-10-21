@@ -1,4 +1,6 @@
-export const CARD_VERSION = '1.9.4 (floor3dpro-card 1.5.3-Pro.Faz.2.1)';
+export const CARD_VERSION = '1.9.5';
+/** The upstream this fork is built on; shown in the console banner only. */
+export const UPSTREAM_VERSION = 'floor3dpro-card 1.5.3-Pro.Faz.2.1';
 
 // Events between the card editor and the card shown next to it (the preview): see editor.ts.
 export const EDITOR_EVENT = 'floor3dpro-card-editor';
