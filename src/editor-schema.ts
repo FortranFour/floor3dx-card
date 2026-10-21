@@ -84,6 +84,7 @@ export const SECTIONS: Section[] = [
       [row(text('draco_path'), text('basis_path'))],
       [row(text('backgroundColor'), text('style'))],
       [bool('hide_spare_panels')],
+      [text('hide_objects')],
     ],
   },
   {
@@ -553,6 +554,7 @@ const LABELS: { [name: string]: string } = {
   edge_skip: 'No edge lines on',
   keep: 'Keep as in the model',
   hide_spare_panels: 'Hide unused text and picture panels',
+  hide_objects: 'Hide objects',
   transparency_off: 'Transparency otherwise',
   invert: '100 means closed',
   weather_entity: 'Weather entity',
@@ -686,6 +688,7 @@ const HELPERS: { [name: string]: string } = {
   edge_skip: 'Comma separated: images, texts, seams, floors, coplanar, or object ids / patterns / <groups>. Default: nothing skipped',
   keep: 'Objects the theme leaves untouched, materials and lines: ids, patterns, <groups>, comma separated',
   hide_spare_panels: 'Flat objects of the same name family and size as a text or picture panel, near it, that no row binds. Default no',
+  hide_objects: 'Never drawn: object ids, * patterns or <groups>, comma separated',
   glow: 'Emissive glow of a lit lamp object in its light colour. Default 0.9',
   keep_signal: 'Bright saturated colours (Gold, red) stay as they are. Default yes',
   stage: 'Background from the theme, night to day with daylight. Default yes',

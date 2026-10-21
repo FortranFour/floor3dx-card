@@ -400,7 +400,9 @@ Animated GIFs are decoded in the card, so they animate in every browser and keep
 
 ### Unused readout panels (`hide_spare_panels`)
 
-A model often carries a stack of flat panels for readouts, a row of label frames on a car roof, a display board, of which the card binds only some as `type3d: text` or `type3d: image`; the rest sit there as blank frames. `hide_spare_panels: 'yes'` hides them: flat objects of the same name family and size as a bound panel, within a few panel widths of it, that no row binds (`1_14` beside a bound `1_13`, `Frame5_1` beside `Frame4_1`). Bound panels and everything else stay. The console lists what was hidden. Off by default. The Floor3D Snapshot Card applies the same rule to its snapshots.
+A model often carries a stack of flat panels for readouts, a row of label frames on a car roof, a display board, of which the card binds only some as `type3d: text` or `type3d: image`; the rest sit there as blank frames. `hide_spare_panels: 'yes'` hides them: flat objects of the same name family and size as a bound panel, within a few panel widths of it, that no row binds (`1_14` beside a bound `1_13`, `Frame5_1` beside `Frame4_1`). Bound panels and everything else stay. The console lists what was hidden, and names flat objects of a bound family nearby that were another size, so you can list those by hand. Off by default. The Floor3D Snapshot Card applies the same rule to its snapshots.
+
+`hide_objects` hides named objects outright when the model loads (ids, `*` patterns, `<group>`s, a list or comma-separated): `hide_objects: Frame1*, 12_7, <placeholders>`. For placeholders no rule can tell from real parts.
 
 ## Visual editor
 
@@ -437,6 +439,7 @@ On a Home Assistant without `ha-form` the previous editor is shown instead. `day
 | `look.custom` | colours of `theme: custom`; see above | defaults |
 | `look.keep` | objects the theme leaves as the model has them: ids / patterns / `<group>` | none |
 | `hide_spare_panels` | `yes`, `no`: hide unbound panels beside bound text / picture panels | `no` |
+| `hide_objects` | objects never drawn: ids / patterns / `<group>` | none |
 | `transparent` | card-level list of `{objects, transparency}` rules; see above | off |
 | `type3d: transparent` | `transparent.transparency`, `transparent.transparency_off`, `transparent.state`, `transparent.invert` | |
 | `shadow_budget` | number of shadow-casting lights | from the GPU's texture units |

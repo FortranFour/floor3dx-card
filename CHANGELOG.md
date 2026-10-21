@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.9.9
+
+### Added
+- `hide_objects`: objects hidden when the model loads (ids, `*` patterns, `<group>`s). Editor field in the 3D model section.
+
+### Changed
+- `hide_spare_panels`: size tolerance 8% (was 3%) and reach four panel widths (was three); the console also names flat objects of a bound family nearby that were another size, ready to be listed in `hide_objects`.
+
 ## 1.9.8
 
 ### Changed

@@ -1905,7 +1905,31 @@ export class Floor3dCard extends LitElement {
   // image. The rest are blank placeholders. With hide_spare_panels: 'yes' the unbound ones are
   // hidden: flat objects of the same name family and size as a bound panel, within a few panel
   // widths of it (the rule of the Floor3D Snapshot Card). Bound panels and everything else stay.
+  // hide_objects: objects hidden when the model loads (ids, * patterns, <group>s): placeholders a
+  // model carries that no rule can tell from real parts.
+  private _hideObjects(): void {
+    const cfg = (this._config as any).hide_objects;
+    if (!cfg || !this._scene) return;
+    const names = this._modelObjectNames();
+    const hidden: string[] = [];
+    (Array.isArray(cfg) ? cfg : String(cfg).split(',')).forEach((entry: any) => {
+      const id = String(entry).trim();
+      if (!id) return;
+      const found = this._resolveObjectId(id, names);
+      if (!found.length) console.warn('floor3d-card: hide_objects <' + id + '> matches no object of the model');
+      found.forEach((name) => {
+        const o = this._scene.getObjectByName(name);
+        if (o && o.visible) {
+          o.visible = false;
+          hidden.push(name);
+        }
+      });
+    });
+    if (hidden.length) console.log('floor3d-card: hide_objects hid ' + hidden.length + ' object(s): ' + hidden.join(', '));
+  }
+
   private _hideSparePanels(): void {
+    this._hideObjects();
     if (String((this._config as any).hide_spare_panels || 'no').toLowerCase() !== 'yes') return;
     if (!this._scene) return;
     const bound = new Set<string>();
@@ -1939,6 +1963,7 @@ export class Floor3dCard extends LitElement {
     }
     console.log('floor3d-card: hide_spare_panels: bound panels ' + shapes.map((p) => p.stem + '* ' + p.dims.map((d) => d.toFixed(1)).join('x')).join('; '));
     const hidden: string[] = [];
+    const nearMisses: string[] = [];
     this._scene.traverse((o: any) => {
       if (!o.name || bound.has(o.name) || o.name.startsWith('f3dx_') || !o.visible) return;
       let mesh = false;
@@ -1949,11 +1974,15 @@ export class Floor3dCard extends LitElement {
       const sh = shape(o);
       if (!sh) return;
       for (const p of shapes) {
-        const same = sh.stem === p.stem && Math.abs(sh.dims[1] - p.dims[1]) <= p.dims[2] * 0.03 && Math.abs(sh.dims[2] - p.dims[2]) <= p.dims[2] * 0.03;
-        if (same && sh.c.distanceTo(p.c) <= p.dims[2] * 3) {
+        if (sh.stem !== p.stem) continue;
+        const near = sh.c.distanceTo(p.c) <= p.dims[2] * 4;
+        const same = Math.abs(sh.dims[1] - p.dims[1]) <= p.dims[2] * 0.08 && Math.abs(sh.dims[2] - p.dims[2]) <= p.dims[2] * 0.08;
+        if (same && near) {
           hidden.push(o.name);
           break;
         }
+        // same family and flat, close by, but another size: named so a hide_objects entry can be written
+        if (near && nearMisses.length < 12) nearMisses.push(o.name + ' ' + sh.dims.map((d) => d.toFixed(1)).join('x'));
       }
     });
     hidden.forEach((name) => {
@@ -1962,6 +1991,7 @@ export class Floor3dCard extends LitElement {
     });
     if (hidden.length) console.log('floor3d-card: hide_spare_panels hid ' + hidden.length + ' panel(s): ' + hidden.join(', '));
     else console.log('floor3d-card: hide_spare_panels: no unbound panel of the same family and size found near a bound one');
+    if (nearMisses.length) console.log('floor3d-card: hide_spare_panels: flat objects of a bound family near a bound panel but of another size (hide_objects takes them by name): ' + nearMisses.join('; '));
   }
 
   // look.keep: the model objects the look leaves exactly as the model has them, materials and lines
