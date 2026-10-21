@@ -1895,6 +1895,62 @@ export class Floor3dCard extends LitElement {
     });
   }
 
+  // hide_spare_panels: a model often carries a stack of flat panels for readouts (a row of label
+  // frames on a car roof, a display board), of which the card binds only some as type3d: text or
+  // image. The rest are blank placeholders. With hide_spare_panels: 'yes' the unbound ones are
+  // hidden: flat objects of the same name family and size as a bound panel, within a few panel
+  // widths of it (the rule of the Floor3D Snapshot Card). Bound panels and everything else stay.
+  private _hideSparePanels(): void {
+    if (String((this._config as any).hide_spare_panels || 'no').toLowerCase() !== 'yes') return;
+    if (!this._scene) return;
+    const bound = new Set<string>();
+    (this._config.entities || []).forEach((entity: any, i) => {
+      if (entity.type3d !== 'text' && entity.type3d !== 'image') return;
+      ((this._object_ids[i] && this._object_ids[i].objects) || []).forEach((o) => bound.add(o.object_id));
+    });
+    if (!bound.size) return;
+    const stem = (n: string): string => String(n).replace(/[\d_]+$/, '');
+    const box = new THREE.Box3(), size = new THREE.Vector3();
+    const shape = (o: THREE.Object3D): { c: THREE.Vector3; dims: number[]; stem: string } | null => {
+      box.setFromObject(o);
+      if (box.isEmpty()) return null;
+      box.getSize(size);
+      const dims = [size.x, size.y, size.z].sort((a, b) => a - b);
+      if (!(dims[2] > 0) || dims[0] > dims[2] * 0.08) return null; // flat objects only
+      return { c: box.getCenter(new THREE.Vector3()), dims, stem: stem(o.name) };
+    };
+    const shapes: { c: THREE.Vector3; dims: number[]; stem: string }[] = [];
+    bound.forEach((name) => {
+      const o = this._scene.getObjectByName(name);
+      const sh = o && shape(o);
+      if (sh) shapes.push(sh);
+    });
+    if (!shapes.length) return;
+    const hidden: string[] = [];
+    this._scene.traverse((o: any) => {
+      if (!o.name || bound.has(o.name) || o.name.startsWith('f3dx_') || !o.visible) return;
+      let mesh = false;
+      o.traverse((m: any) => {
+        if (m.isMesh) mesh = true;
+      });
+      if (!mesh) return;
+      const sh = shape(o);
+      if (!sh) return;
+      for (const p of shapes) {
+        const same = sh.stem === p.stem && Math.abs(sh.dims[1] - p.dims[1]) <= p.dims[2] * 0.03 && Math.abs(sh.dims[2] - p.dims[2]) <= p.dims[2] * 0.03;
+        if (same && sh.c.distanceTo(p.c) <= p.dims[2] * 3) {
+          hidden.push(o.name);
+          break;
+        }
+      }
+    });
+    hidden.forEach((name) => {
+      const o = this._scene.getObjectByName(name);
+      if (o) o.visible = false;
+    });
+    if (hidden.length) console.log('floor3d-card: hide_spare_panels hid ' + hidden.length + ' panel(s): ' + hidden.join(', '));
+  }
+
   // look.keep: the model objects the look leaves exactly as the model has them, materials and lines
   // (a frosted glass dome, a screen, a photograph): object ids, * patterns or <group>s.
   private _lookKeepNames(): Set<string> {
@@ -2434,6 +2490,7 @@ export class Floor3dCard extends LitElement {
       this._look.applyEdges(this._lookMeshes(), skip);
     }
     this._bindTransparency();
+    this._hideSparePanels();
 
     console.log('Object loaded end');
 

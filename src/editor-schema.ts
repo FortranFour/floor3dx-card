@@ -53,6 +53,7 @@ export const SWITCHES: { [key: string]: 'yes' | 'no' } = {
   selectionMode: 'no',
   sky: 'no',
   antialias: 'yes',
+  hide_spare_panels: 'no',
 };
 // The same inside the options block of a type.
 export const BLOCK_SWITCHES: { [block: string]: { [key: string]: 'yes' | 'no' } } = {
@@ -82,6 +83,7 @@ export const SECTIONS: Section[] = [
       [text('path'), row(text('objfile'), text('mtlfile')), text('objectlist')],
       [row(text('draco_path'), text('basis_path'))],
       [row(text('backgroundColor'), text('style'))],
+      [bool('hide_spare_panels')],
     ],
   },
   {
@@ -550,6 +552,7 @@ const LABELS: { [name: string]: string } = {
   top_entity: 'Top-edge motor',
   edge_skip: 'No edge lines on',
   keep: 'Keep as in the model',
+  hide_spare_panels: 'Hide unused text and picture panels',
   transparency_off: 'Transparency otherwise',
   invert: '100 means closed',
   weather_entity: 'Weather entity',
@@ -682,6 +685,7 @@ const HELPERS: { [name: string]: string } = {
   edge_opacity: 'Default 0.85',
   edge_skip: 'Comma separated: images, texts, seams, floors, coplanar, or object ids / patterns / <groups>. Default: nothing skipped',
   keep: 'Objects the theme leaves untouched, materials and lines: ids, patterns, <groups>, comma separated',
+  hide_spare_panels: 'Flat objects of the same name family and size as a text or picture panel, near it, that no row binds. Default no',
   glow: 'Emissive glow of a lit lamp object in its light colour. Default 0.9',
   keep_signal: 'Bright saturated colours (Gold, red) stay as they are. Default yes',
   stage: 'Background from the theme, night to day with daylight. Default yes',

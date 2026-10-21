@@ -398,6 +398,10 @@ Animated GIFs are decoded in the card, so they animate in every browser and keep
 
 <p><img src="https://github.com/user-attachments/assets/99c383e7-6533-45f6-a700-f6298ab1d474" alt="Pictures on model objects" width="64%"> <img src="https://github.com/user-attachments/assets/cf826aa1-d8ad-40a6-aea2-342679830b51" alt="Recording: a video playing on a model object" width="24%"></p>
 
+### Unused readout panels (`hide_spare_panels`)
+
+A model often carries a stack of flat panels for readouts, a row of label frames on a car roof, a display board, of which the card binds only some as `type3d: text` or `type3d: image`; the rest sit there as blank frames. `hide_spare_panels: 'yes'` hides them: flat objects of the same name family and size as a bound panel, within a few panel widths of it, that no row binds (`1_14` beside a bound `1_13`, `Frame5_1` beside `Frame4_1`). Bound panels and everything else stay. The console lists what was hidden. Off by default. The Floor3D Snapshot Card applies the same rule to its snapshots.
+
 ## Visual editor
 
 The card editor is built on Home Assistant's own form components (`ha-form`, entity pickers, toggles, sortable lists), adapted from [giosci1994/floor3d-card](https://github.com/giosci1994/floor3d-card) (MIT) to the options of this card:
@@ -432,6 +436,7 @@ On a Home Assistant without `ha-form` the previous editor is shown instead. `day
 | `look.edge_skip` | `images`, `texts`, `seams`, `floors`, `coplanar`, object ids / patterns / `<group>` | nothing skipped |
 | `look.custom` | colours of `theme: custom`; see above | defaults |
 | `look.keep` | objects the theme leaves as the model has them: ids / patterns / `<group>` | none |
+| `hide_spare_panels` | `yes`, `no`: hide unbound panels beside bound text / picture panels | `no` |
 | `transparent` | card-level list of `{objects, transparency}` rules; see above | off |
 | `type3d: transparent` | `transparent.transparency`, `transparent.transparency_off`, `transparent.state`, `transparent.invert` | |
 | `shadow_budget` | number of shadow-casting lights | from the GPU's texture units |

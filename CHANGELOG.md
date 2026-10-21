@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.7
+
+### Added
+- `hide_spare_panels: 'yes'`: hides the blank placeholder panels a model carries beside the ones bound as `type3d: text` or `image`: flat objects of the same name family and size, within a few panel widths of a bound one, that no row binds. Off by default. Editor switch in the 3D model section.
+
 ## 1.9.6
 
 ### Added

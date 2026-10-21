@@ -20,6 +20,7 @@ const SWITCH_DEFAULTS: { [key: string]: 'yes' | 'no' } = {
   selectionMode: 'no',
   sky: 'no',
   antialias: 'yes',
+  hide_spare_panels: 'no',
 };
 
 // Other top-level options whose value, when missing, is the one written here.
