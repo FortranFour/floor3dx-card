@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.3
+
+### Changed
+- Card editor preview: the card's height now follows the window as well, filling the pane down to the dialog's bottom bar (never shorter than 240 px or squatter than 2:1), and re-sizes when the window is resized. Replaces the fixed 4:3 preview box of 1.9.2.
+
 ## 1.9.2
 
 ### Fixed

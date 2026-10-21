@@ -198,6 +198,7 @@ export class Floor3dCard extends LitElement {
   private _firstcall?: boolean;
   private _resizeTimeout?: number;
   private _resizeObserver: ResizeObserver;
+  private _windowResizeListener = (): void => this._resizeCanvasDebounce(); // preview: the height follows the window
   private _zIndexInterval: number;
   private _performActionListener: EventListener;
   private _clickStart?: number;
@@ -325,6 +326,7 @@ export class Floor3dCard extends LitElement {
     super.connectedCallback();
     window.addEventListener(EDITOR_EVENT, this._editorListener);
     this._widenPreview();
+    if (this._inPreview()) window.addEventListener('resize', this._windowResizeListener);
     // Faz-0 Engine Backbone: (Stabil.Patch.0.0)
     this._isConnected = true;
 
@@ -353,6 +355,7 @@ export class Floor3dCard extends LitElement {
 
   public disconnectedCallback(): void {
     super.disconnectedCallback();
+    window.removeEventListener('resize', this._windowResizeListener);
     window.removeEventListener(EDITOR_EVENT, this._editorListener);
     // Faz-0 Engine Backbone: (Stabil.Patch.0.0)
     this._isConnected = false;
@@ -568,6 +571,16 @@ export class Floor3dCard extends LitElement {
   private _widenPreview(): void {
     const host = this._previewHost();
     if (host && host.style.maxWidth !== 'none') host.style.maxWidth = 'none';
+  }
+
+  // The preview's height: what is left of the window below the card's top, so the preview fills
+  // the pane in both directions and follows the window; never squatter than 2:1 or shorter than 240.
+  private _previewHeight(width: number): number {
+    const top = this._card ? this._card.getBoundingClientRect().top : 0;
+    const room = window.innerHeight - top - 88; // the dialog's bottom bar and padding
+    const h = Math.max(240, Math.min(room, width * 2));
+    if (this._card && this._card.style.height !== h + 'px') this._card.style.height = h + 'px';
+    return Math.round(h);
   }
 
   private _ispanel(): boolean {
@@ -1365,7 +1378,7 @@ export class Floor3dCard extends LitElement {
     const w = this._renderer.domElement.parentElement.clientWidth;
     // the editor's preview keeps a 4:3 box that follows its width (see render); elsewhere the
     // box's own height rules
-    const h = this._inPreview() && !this._config.style ? Math.round((w * 3) / 4) : this._renderer.domElement.parentElement.clientHeight;
+    const h = this._inPreview() && !this._config.style ? this._previewHeight(w) : this._renderer.domElement.parentElement.clientHeight;
 
     if (!w || !h) {
       return;
@@ -4756,19 +4769,18 @@ export class Floor3dCard extends LitElement {
     }
 
     // In the card editor's preview the dashboard's view type says nothing about the box the card is
-    // in: a panel-view height (the whole viewport) would make a very tall preview, so the preview
-    // keeps a 4:3 box that follows its width instead.
+    // in: a panel-view height (the whole viewport) would make a very tall preview. The preview's
+    // height is set from the window instead (_previewHeight, on every resize).
     let htmlHeight: string;
     const preview = this._inPreview();
     if (!preview && this._ispanel()) htmlHeight = 'calc(100vh - var(--header-height))';
-    else htmlHeight = 'auto';
-    const box = preview ? ' aspect-ratio: 4 / 3;' : '';
+    else htmlHeight = preview ? '240px' : 'auto';
 
     return html`
       <ha-card
         tabindex="0"
         .style=${`${
-          this._config.style || 'overflow: hidden; width: auto; height: ' + htmlHeight + '; position: relative;' + box
+          this._config.style || 'overflow: hidden; width: auto; height: ' + htmlHeight + '; position: relative;'
         }`}
         id="${this._card_id}"
       >
