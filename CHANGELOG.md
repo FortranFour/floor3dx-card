@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.10
+
+### Fixed
+- `hide_spare_panels` now also hides whole unused items. Sweet Home 3D names a furniture item's parts `<item>_<part>` and a copy's `<item>_<copy>_<part>` (`Frame7_1_9`); a label frame is such an item, panel plus frame pieces. An item of a bound family none of whose parts is bound, about the size of a bound item (10%) and within six widths of it, is hidden with all its parts, frame pieces included; the bound item keeps its frame. The flat-object rule stays for numeric names (`1_14`), which have no item level.
+
 ## 1.9.9
 
 ### Added

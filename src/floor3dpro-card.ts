@@ -1985,6 +1985,52 @@ export class Floor3dCard extends LitElement {
         if (near && nearMisses.length < 12) nearMisses.push(o.name + ' ' + sh.dims.map((d) => d.toFixed(1)).join('x'));
       }
     });
+    // Whole unused items. Sweet Home 3D names the parts of a furniture item <item>_<part>, and a
+    // copy of it <item>_<copy>_<part> (Frame7_1_9: item Frame7, copy 1, part 9). A label frame is one
+    // such item: the panel the card writes on plus the pieces of the frame around it. An item of a
+    // bound family (Frame…) none of whose parts is bound, about the size of a bound item, is a
+    // spare: all its parts go. Only for named families, since a numeric name (1_13) has no item level.
+    const itemOf = (name: string): string | null => {
+      const m = /^([A-Za-z][^_]*(?:_\d+)*)_\d+$/.exec(name);
+      return m ? m[1] : null;
+    };
+    const items = new Map<string, THREE.Object3D[]>();
+    this._scene.traverse((o: any) => {
+      if (!o.name || o.name.startsWith('f3dx_')) return;
+      const item = itemOf(o.name);
+      if (!item) return;
+      let mesh = false;
+      o.traverse((m: any) => {
+        if (m.isMesh) mesh = true;
+      });
+      if (!mesh) return;
+      const list = items.get(item) || [];
+      list.push(o);
+      items.set(item, list);
+    });
+    const boundItems: { item: string; dims: number[]; c: THREE.Vector3 }[] = [];
+    bound.forEach((name) => {
+      const item = itemOf(name);
+      if (!item || !items.has(item) || boundItems.some((b) => b.item === item)) return;
+      box.makeEmpty();
+      items.get(item).forEach((o) => box.expandByObject(o));
+      if (box.isEmpty()) return;
+      box.getSize(size);
+      boundItems.push({ item, dims: [size.x, size.y, size.z].sort((a, b) => a - b), c: box.getCenter(new THREE.Vector3()) });
+    });
+    items.forEach((parts, item) => {
+      if (boundItems.some((b) => b.item === item)) return;
+      if (parts.some((o) => bound.has(o.name))) return;
+      const family = stem(item);
+      box.makeEmpty();
+      parts.forEach((o) => box.expandByObject(o));
+      if (box.isEmpty()) return;
+      box.getSize(size);
+      const dims = [size.x, size.y, size.z].sort((a, b) => a - b);
+      const c = box.getCenter(new THREE.Vector3());
+      const spare = boundItems.some((b) => stem(b.item) === family && dims.every((d, k) => Math.abs(d - b.dims[k]) <= b.dims[2] * 0.1) && c.distanceTo(b.c) <= b.dims[2] * 6);
+      if (spare) parts.forEach((o) => hidden.push(o.name));
+    });
     hidden.forEach((name) => {
       const o = this._scene.getObjectByName(name);
       if (o) o.visible = false;
