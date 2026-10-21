@@ -5,7 +5,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const libs = path.join(path.dirname(require.resolve('three/package.json')), 'examples', 'js', 'libs');
+const libs = path.join(__dirname, '..', 'node_modules', 'three', 'examples', 'jsm', 'libs');
 const dist = path.join(__dirname, '..', 'dist');
 
 const sets = {

@@ -55,7 +55,7 @@ if __name__ == '__main__':
     check('time override wins over the real sun', r['override12'] == 0.4 and r['override0'] == 0.05)
     check('exterior object on its own layer, camera sees both', r['extLayer'] == 2 and r['camLayers'] == 3)
     check('gradient: full horizon colour at 0 degrees, partial either side, dawn colour when rising',
-          r['dusk0'] == '#ff9a4a' and r['dusk4'] not in ('#ff9a4a', '#e9f0ff') and r['duskm4'] not in ('#ff9a4a', '#8a9bc4') and r['dawn0'] == '#ff6a39')
+          r['dusk0'] == '#ff9a4a' and r['dusk4'] not in ('#ff9a4a', '#e9f0ff') and r['duskm4'] not in ('#ff9a4a', '#8a9bc4') and r['dawn0'] in ('#ff6a3a', '#ff6a39'))  # r130 rounded the hex down one
     check('sun_colors: beam has its own colour, orange at dusk and warm by day', r['spotColDusk'] == '#ff8a3a' and r['spotColDay'] == '#fff3dc')
     check('exterior sun: on by day, off at night', r['extSunDay'] > 0 and r['extSunNight'] == 0)
     check('beam aim follows the sun: pool moves across the floor between high and low sun', r['beamTravel'] > 50 and r['beamFloor'] == [0, 0])

@@ -37,6 +37,9 @@ VIEWS = [
     ('daylight', {'daylight': {'sun_entity': 'sun.sun'}, 'north': {'x': 0, 'z': -1}, 'globalLightPower': 0.77}),
     ('look-day', {'look': {'theme': 'day', 'edge_skip': 'seams, floors'}}),
     ('look-neon', {'look': {'theme': 'neon', 'edge_skip': 'seams, floors'}, 'lights': True}),
+    # 2.0 opt-ins (ignored by a 1.x build, so these views only compare 2.x builds with each other)
+    ('lights-physical', {'lights': True, 'shadow': 'yes', 'globalLightPower': 0.77, 'lights_mode': 'physical'}),
+    ('managed', {'lights': True, 'shadow': 'yes', 'globalLightPower': 0.77, 'color_management': 'managed'}),
 ]
 
 JS = r"""async ([model, view, extra]) => {
@@ -44,7 +47,7 @@ JS = r"""async ([model, view, extra]) => {
   const cfg=Object.assign({},base._config,{type:'custom:floor3dx-card',pro_skill:'mobile',shadow:'no',object_groups:[],entities:[],backgroundColor:'#848C8F',objfile:model.file});
   delete cfg.style; delete cfg.camera_rotate; delete cfg.look; delete cfg.daylight;
   if(model.camera){cfg.camera_position=model.camera.position;cfg.camera_target=model.camera.target;}
-  Object.keys(extra).forEach(k=>{ if(k==='lights'){cfg.entities=model.lights;} else cfg[k]=extra[k]; });
+  Object.keys(extra).forEach(k=>{ if(k==='lights'){cfg.entities=model.lights;} else if(k==='lights_mode'){cfg.lights=extra[k];} else cfg[k]=extra[k]; });
   const states={'light.a':{state:'on',attributes:{}},'light.b':{state:'on',attributes:{}},'light.c':{state:'on',attributes:{}},'light.d':{state:'on',attributes:{}},'light.e':{state:'on',attributes:{}},
     'sun.sun':{state:'above_horizon',attributes:{elevation:35,azimuth:140,rising:true}}};
   const c=document.createElement('floor3dx-card');c.setConfig(JSON.parse(JSON.stringify(cfg)));c.hass={states,language:'en',themes:{},config:{},user:{},callService(){}};
@@ -59,7 +62,7 @@ for name in todo:
     model = MODELS[name]
     def after(page, model=model, name=name):
         for view, extra in VIEWS:
-            if name == 'garage' and view == 'lights':
+            if name == 'garage' and view in ('lights', 'lights-physical', 'managed'):
                 continue
             ok = page.evaluate(JS, [model, view, extra])
             page.wait_for_timeout(500)

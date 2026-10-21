@@ -108,6 +108,20 @@ export const SECTIONS: Section[] = [
     icon: 'mdi:lightbulb-on-outline',
     content: () => [
       [text('globalLightPower'), row(bool('shadow'), bool('extralightmode')), row(num('shadow_budget', { min: 1, max: 32, step: 1 }), bool('sky')), num('wall_seal', { min: 0, max: 10, step: 0.1 })],
+      'Render model (2.0; leave as is to keep the 1.x picture)',
+      [
+        row(
+          choice('lights', [
+            ['legacy', 'Legacy (1.x): reach = distance, linear falloff'],
+            ['physical', 'Physical: candela, inverse-square falloff'],
+          ]),
+          choice('color_management', [
+            ['legacy', 'Legacy (1.x): colours as given'],
+            ['managed', 'Managed: sRGB colours and output'],
+          ]),
+        ),
+        num('exposure', { min: 0.05, max: 5, step: 0.05 }),
+      ],
       'daylight',
     ],
   },
@@ -529,6 +543,8 @@ const LABELS: { [name: string]: string } = {
   walls: 'Wall object prefixes',
   floors: 'Floor object prefixes',
   shadow_budget: 'Shadow-casting lights (max)',
+  lights: 'Light model',
+  color_management: 'Colour management',
   wall_seal: 'Seal wall joints (model units)',
   draco_path: 'Draco decoder folder',
   basis_path: 'KTX2 transcoder folder',
@@ -695,6 +711,8 @@ const HELPERS: { [name: string]: string } = {
   walls: 'Comma separated. Default wall',
   floors: 'Comma separated. Default room, floor',
   shadow_budget: 'Default: from the GPU. Lights past it shine without a shadow',
+  lights: 'Physical needs re-tuned lumens and globalLightPower. Default legacy',
+  color_management: 'Managed shows textures as authored, brighter. Default legacy',
   wall_seal: 'Stretches every wall this much at each end, so light cannot leak between two segments that do not quite meet. 0.5 for a cm model. Default: off',
   draco_path: 'Only for Draco models. Default: next to the card',
   basis_path: 'Only for KTX2 textures. Default: next to the card',
@@ -724,7 +742,7 @@ const HELPERS: { [name: string]: string } = {
   backgroundColor: 'A colour, #rrggbb or transparent. Default #aaaaaa',
   globalLightPower: 'From 0 to 1, or a numeric sensor. Default 0.2',
   light_power: 'Multiplies all the lamps. Default 1',
-  exposure: 'Default 1',
+  exposure: 'Tone-mapping exposure. Default 0.6',
   sun_power: 'Default 1',
   extralightmode: 'Only the lights that are on cast shadows',
   click: 'Off: a double click runs it',

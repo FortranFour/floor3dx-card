@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.0.0
+
+### Changed
+- three.js r130 → r186, Lit 2 → 3, TypeScript 4 → 5; the bundle is built with esbuild (rollup, babel and their plugins are gone). Imports and the renderer, loader, light and material APIs are updated to r186 (`outputColorSpace`, `BoxGeometry`, the `examples/jsm` paths, decoders under `examples/jsm/libs`).
+- The picture does not change: the reference views of two real models (plain, lamps with shadows, daylight, `look` day and neon) differ from 1.9.12 by 0.00% of their pixels. Two three.js changes are held at their 1.x behaviour by default, as options:
+  - `lights: legacy` (default) keeps the r130 light model: a lamp's reach is its `distance`, the brightness falls off linearly raised to `decay`, and every light carries the π factor that model had. `lights: physical` uses three.js' physically based model (candela, inverse-square falloff); the card converts `lumens` to candela and the model's centimetres to metres, and `lumens`, `globalLightPower` and `exposure` need re-tuning.
+  - `color_management: legacy` (default) takes hex colours as given and leaves the output linear, as 1.x did. `color_management: managed` turns on three.js' colour management: sRGB colours, sRGB-encoded output, textures as authored.
+- Editor: Light model, Colour management and Exposure fields in the Light and shadows section.
+
+### Added
+- `exposure`: the tone-mapping exposure (default 0.6, as before).
+- `dev/harness/render_views.py` and `compare_views.py`: reference renders of a model and a pixel comparison between two builds.
+
+### Development
+- `npm run build` lints and bundles with esbuild; `npm start` watches. `npm run typecheck` runs tsc. `fork-identity.mjs` applies the element names and build id to the bundle, as the rollup plugin did.
+
 ## 1.9.12
 
 ### Fixed

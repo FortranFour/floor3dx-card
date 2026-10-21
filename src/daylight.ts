@@ -14,6 +14,7 @@
 // the sun on the horizon, 0 away from it), both from elevation, with the day part scaled by weather.
 
 import * as THREE from 'three';
+import { lightIntensity } from './render-mode';
 
 export interface DaylightConfig {
   sun_entity?: string; // default sun.sun
@@ -59,6 +60,7 @@ interface Deps {
   ambient: THREE.Light; // the card's ambient light
   torch?: THREE.Light; // the card's camera light
   baseIntensity: number; // globalLightPower as configured
+  cardConfig?: any; // the card's config, for the lights mode (render-mode.ts)
   baseBackground: THREE.Color | null;
   stageColor?: (daylight: number) => THREE.Color | null; // from an active look
 }
@@ -289,7 +291,7 @@ export class Daylight {
       const facing = Math.max(0, s.outward.dot(sunDir));
       const full = this.cfg.beam_full !== undefined ? Number(this.cfg.beam_full) : 4;
       const low = smoothstep(0, Math.max(0.1, full), sun.elevation); // no beam until the sun is a little up
-      s.light.intensity = 0.003 * s.lumens * facing * low * wf;
+      s.light.intensity = lightIntensity(s.lumens, facing * low * wf, this.d.cardConfig);
       s.light.color.copy(s.color ? new THREE.Color(s.color) : sunColor);
       // aim the beam the way the sun actually comes through the window: along -sunDir from the pane
       // to where that line meets the floor (capped), so the pool travels across the room through the day

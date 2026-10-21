@@ -32,12 +32,13 @@ import { localize } from './localize/localize';
 //import three.js libraries for 3D rendering
 import * as TWEEN from '@tweenjs/tween.js';
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
-import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader';
-import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader';
-import { GLTF } from 'three/examples/jsm/loaders/GLTFLoader';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
+import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js';
+import { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { loadCompressedGLTF, applyTextureQuality } from './model-loader';
-import { Sky } from 'three/examples/jsm/objects/Sky';
+import { Sky } from 'three/examples/jsm/objects/Sky.js';
+import { applyRenderMode, lightIntensity, exposure } from './render-mode';
 import { Object3D } from 'three';
 import '../elements/button';
 
@@ -231,7 +232,7 @@ export class Floor3dCard extends LitElement {
   // asks for more than the GPU has fails to compile and draws nothing. _shadowCandidates are the
   // lights whose entry wants a shadow, in config order; _applyShadowBudget grants castShadow to the
   // first N of them (the ones that are on, with extralightmode) and warns once about the rest.
-  private _shadowCandidates: { light: THREE.Light; name: string; entity: string; wantsShadow: boolean }[] = [];
+  private _shadowCandidates: { light: THREE.PointLight | THREE.SpotLight; name: string; entity: string; wantsShadow: boolean }[] = [];
   private _shadowBudget = 0;
   private _shadowWarned = '';
   // Faz-0 Engine Backbone: (Stabil.Patch.0.0) deterministic render scheduler
@@ -528,7 +529,7 @@ export class Floor3dCard extends LitElement {
       this._content.removeEventListener('keydown', this._performActionListener);
     }
     if (this._controls) {
-      this._controls.removeEventListener('change', this._changeListener);
+      this._controls.removeEventListener('change', this._changeListener as any);
     }
 
     if (this._renderer) {
@@ -2120,6 +2121,7 @@ export class Floor3dCard extends LitElement {
       ambient: this._ambient_light,
       torch: this._torch,
       baseIntensity: base,
+      cardConfig: this._config,
       baseBackground: this._scene.background instanceof THREE.Color ? this._scene.background : null,
       stageColor: this._look && this._look.active ? (k: number) => this._look.stageColor(k) : undefined,
     });
@@ -2346,15 +2348,12 @@ export class Floor3dCard extends LitElement {
       this._scene.background = new THREE.Color('#aaaaaa');
     }
 
-    //this._renderer.physicallyCorrectLights = true;
-    if (this._config.sky && this._config.sky == 'yes') {
-      this._renderer.outputEncoding = THREE.sRGBEncoding;
-    }
+    // lights / color_management: legacy (the 1.x picture) unless configured; see render-mode.ts
+    applyRenderMode(this._renderer, this._config);
     this._renderer.toneMapping = THREE.LinearToneMapping;
     //this._renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this._renderer.toneMappingExposure = 0.6;
+    this._renderer.toneMappingExposure = exposure(this._config);
     this._renderer.localClippingEnabled = true;
-    this._renderer.physicallyCorrectLights = false;
 
 // Faz-0 Asset Cache: game engine, deterministic, per-instance clone   
     if (this._config.path && this._config.path != '') {
@@ -2425,16 +2424,16 @@ export class Floor3dCard extends LitElement {
                     path + objfile,
                     (object) => resolve(object),
                     this._onLoadObjectProgress.bind(this),
-                    function (error: ErrorEvent): void {
-                      reject(new Error(error.error));
+                    function (error: any): void {
+                      reject(new Error(error && error.error ? error.error : String(error)));
                     },
                   );
 
                   console.log('Material loaded end');
                 },
                 this._onLoadMaterialProgress.bind(this),
-                function (error: ErrorEvent): void {
-                  reject(new Error(error.error));
+                function (error: any): void {
+                  reject(new Error(error.error || error.message || String(error)));
                 },
               );
             } else {
@@ -2443,8 +2442,8 @@ export class Floor3dCard extends LitElement {
                 path + objfile,
                 (object) => resolve(object),
                 this._onLoadObjectProgress.bind(this),
-                function (error: ErrorEvent): void {
-                  reject(new Error(error.error));
+                function (error: any): void {
+                  reject(new Error(error.error || error.message || String(error)));
                 },
               );
             }
@@ -2499,8 +2498,8 @@ export class Floor3dCard extends LitElement {
     console.log('End Build Renderer');
   }
 
-  private _onLoadError(event: ErrorEvent): void {
-    this._showError(event.error);
+  private _onLoadError(event: any): void {
+    this._showError(event && event.error ? event.error : String(event));
   }
 
   private _onloadedGLTF3DProgress(_progress: ProgressEvent): void {
@@ -2621,7 +2620,7 @@ export class Floor3dCard extends LitElement {
       this._renderer.setPixelRatio(this._pixelRatioIdle());
 
       this._controls.maxPolarAngle = (0.85 * Math.PI) / 2;
-      this._controls.addEventListener('change', this._changeListener);
+      this._controls.addEventListener('change', this._changeListener as any);
 
       this._setLookAt();
 
@@ -3247,8 +3246,8 @@ export class Floor3dCard extends LitElement {
       path + this._config.objfile,
       this._onLoaded3DModel.bind(this),
       this._onLoadObjectProgress.bind(this),
-      function (error: ErrorEvent): void {
-        throw new Error(error.error);
+      function (error: any): void {
+        throw new Error(error.error || error.message || String(error));
       },
     );
     console.log('Material loaded end');
@@ -3525,7 +3524,7 @@ export class Floor3dCard extends LitElement {
                     const box: THREE.Box3 = new THREE.Box3();
                     box.setFromObject(_foundobject);
 
-                    let light = new THREE.Light();
+                    let light: THREE.PointLight | THREE.SpotLight = new THREE.PointLight();
 
                     let x: number, y: number, z: number;
 
@@ -3796,7 +3795,7 @@ export class Floor3dCard extends LitElement {
           newRoomBox.expandByVector(expansion);
 
           const dimensions = new THREE.Vector3().subVectors(newRoomBox.max, newRoomBox.min);
-          const newRoomGeometry: THREE.BoxBufferGeometry = new THREE.BoxBufferGeometry(
+          const newRoomGeometry: THREE.BoxGeometry = new THREE.BoxGeometry(
             dimensions.x - 4,
             dimensions.y - 4,
             dimensions.z - 4,
@@ -4371,9 +4370,9 @@ export class Floor3dCard extends LitElement {
 
       if (this._states[i] == 'on') {
         if (this._brightness[i] != -1) {
-          light.intensity = 0.003 * max * (this._brightness[i] / 255);
+          light.intensity = lightIntensity(max, this._brightness[i] / 255, this._config);
         } else {
-          light.intensity = 0.003 * max;
+          light.intensity = lightIntensity(max, 1, this._config);
         }
         if (!this._color[i]) {
           if (entity.light.color) {

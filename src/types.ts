@@ -110,6 +110,9 @@ export interface Floor3dCardConfig {
   follow_entity?: string;
   radius: number;
   sky: string;
+  lights?: 'legacy' | 'physical';
+  color_management?: 'legacy' | 'managed';
+  exposure?: number;
   north: any;
   x: number;
   y: number;

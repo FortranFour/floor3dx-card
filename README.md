@@ -38,6 +38,19 @@ The card registers its own element names (`floor3dx-*`), so it can be installed 
 
 For the full configuration reference, see the [floor3dpro-card README](docs/floor3dpro-card-README.md) (kept here unmodified) and the [floor3d-card documentation](https://github.com/adizanni/floor3d-card#readme).
 
+## Version 2.0: current three.js, same picture
+
+2.0 moves the card from three.js r130 (2021) to r186, Lit 3 and TypeScript 5, built with esbuild. Nothing in the configuration changes, and an existing dashboard renders the same: the reference views of two real models (plain, lamps with shadows, daylight, two `look` themes) differ from 1.9.12 by 0.00% of pixels. Two things that three.js changed on the way are kept at their old behaviour by default, with the new behaviour as an option:
+
+| Option | `legacy` (default: the 1.x picture) | the new value |
+|---|---|---|
+| `lights` | A lamp's reach is its `distance` and its brightness falls off linearly to it, raised to `decay`; `lumens` means what it meant in 1.x | `physical`: three.js' physically based model. Intensity is in candela (the card converts: `lumens` / 4π, and centimetres to metres), the falloff is inverse-square with `distance` as a soft cutoff, and the camera light, ambient and daylight lose the 1.x π factor. Lamps are much brighter close up and dimmer far away; `lumens`, `globalLightPower` (about ×3) and `exposure` need re-tuning |
+| `color_management` | Hex colours are taken as given and the output is not sRGB-encoded | `managed`: colours are sRGB and the output is sRGB-encoded, so textures come out as authored, brighter and less saturated than 1.x. The `look` themes and `daylight` colours were tuned for `legacy` |
+
+`exposure` sets the tone-mapping exposure (default 0.6, as in 1.x) and is the simplest way to re-balance a dashboard after switching either option. Both settings are page wide in three.js, so all floor3dx cards on one dashboard view should use the same values. The three fields are in the editor's Light and shadows section.
+
+What else the upgrade brings: three.js' current GLTF loader (KHR material extensions, meshopt), KTX2 and Draco decoders, and a bundle that builds in under a second. The last 1.x release, 1.9.12, stays available; a `1.x` branch can receive fixes if a model turns out to need the old engine.
+
 ## What this fork changes
 
 ### Compressed models
@@ -444,6 +457,9 @@ On a Home Assistant without `ha-form` the previous editor is shown instead. `day
 | `type3d: transparent` | `transparent.transparency`, `transparent.transparency_off`, `transparent.state`, `transparent.invert` | |
 | `shadow_budget` | number of shadow-casting lights | from the GPU's texture units |
 | `wall_seal` | model units each wall is stretched at each end | off |
+| `lights` | `legacy`, `physical`; see Version 2.0 above | `legacy` |
+| `color_management` | `legacy`, `managed`; see Version 2.0 above | `legacy` |
+| `exposure` | tone-mapping exposure | 0.6 |
 | `color_entity` | an entity id, on `light` and `color` entries | `entity` |
 | `colorcondition[].color` | `entity`, `entity_color` in addition to any colour | |
 | `type3d: image` | see above | |
@@ -533,7 +549,7 @@ npm run typecheck    # tsc
 
 The source stays close to upstream so that upstream changes remain easy to merge. The element names and the build id are applied to the bundle at build time by `fork-identity.mjs` (see `build.mjs`); source files still say `floor3dpro-*`.
 
-`dev/harness/` runs the built card in headless Chromium against `demo/demo.glb`. See its README.
+`dev/harness/` runs the built card in headless Chromium against `demo/demo.glb`. See its README. `render_views.py` and `compare_views.py` render fixed reference views of a model with the built card and compare two builds pixel by pixel; that is how the 2.0 engine upgrade was checked.
 
 Pushing a tag such as `v1.0.1` builds the card and publishes a release with the card and decoder files attached.
 
