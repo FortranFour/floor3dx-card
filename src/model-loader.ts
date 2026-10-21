@@ -17,6 +17,7 @@ import { GLTFLoader, GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+import { CARD_VERSION } from './const';
 
 const EXT_DRACO = 'KHR_draco_mesh_compression';
 const EXT_MESHOPT = 'EXT_meshopt_compression';
@@ -67,6 +68,39 @@ async function probe(url: string): Promise<boolean> {
   }
 }
 
+const DECODER_FILES: { [kind: string]: string[] } = {
+  draco: ['draco_wasm_wrapper.js', 'draco_decoder.wasm', 'draco_decoder.js'],
+  basis: ['basis_transcoder.js', 'basis_transcoder.wasm'],
+};
+const REFRESH_KEY = 'floor3dx-card.decoders';
+
+/**
+ * The decoder files must match the bundled three.js, but their URLs carry no version: the card's own
+ * URL is cache-busted by Home Assistant, the decoders' are not, so after an update the browser can
+ * keep serving the previous card's decoders to the new loader (which then fails in its worker).
+ * Once per card version per browser, fetch each file with cache: 'reload' so the HTTP cache holds the
+ * files that came with this version. Without localStorage, revalidate on every load instead.
+ */
+async function refreshDecoderFiles(kind: string, folder: string, log: (m: string) => void): Promise<void> {
+  let stored: string | null = null;
+  let storage: Storage | null = null;
+  try {
+    storage = window.localStorage;
+    stored = storage.getItem(REFRESH_KEY + '.' + kind + '.' + folder);
+  } catch (e) {
+    storage = null;
+  }
+  if (stored === CARD_VERSION) return;
+  const mode: RequestCache = storage ? 'reload' : 'no-cache';
+  try {
+    await Promise.all(DECODER_FILES[kind].map((file) => fetch(folder + file, { cache: mode })));
+    log(`${kind} decoder: files refreshed for ${CARD_VERSION}`);
+    if (storage) storage.setItem(REFRESH_KEY + '.' + kind + '.' + folder, CARD_VERSION);
+  } catch (e) {
+    // the loader will report the real problem
+  }
+}
+
 /**
  * Pick the decoder folder: explicit config > folder next to the card > CDN.
  * "Next to the card" means the card's own folder first, then a draco/ or basis/ sub-folder.
@@ -80,7 +114,7 @@ function resolveDecoderPath(
   log: (m: string) => void,
 ): Promise<string> {
   if (configured && configured !== '') {
-    return Promise.resolve(withSlash(configured));
+    return refreshDecoderFiles(kind, withSlash(configured), log).then(() => withSlash(configured));
   }
 
   if (!resolvedPaths.has(kind)) {
@@ -94,6 +128,7 @@ function resolveDecoderPath(
           for (const local of [base, `${base}${kind}/`]) {
             if (await probe(local + probeFile)) {
               log(`${kind} decoder: local (${local})`);
+              await refreshDecoderFiles(kind, local, log);
               return local;
             }
           }
@@ -188,11 +223,15 @@ export async function loadCompressedGLTF(
 
   const gltf = await new Promise<GLTF>((resolve, reject) => {
     loader.parse(data, path, resolve, (err: any) => {
-      const message = err && err.message ? err.message : String(err);
+      // a DRACOLoader worker failure arrives as { type: 'error', error: '<message>' }
+      const message = err && err.message ? err.message : err && err.error ? String(err.error) : String(err);
       reject(
         new Error(
           used.indexOf(EXT_DRACO) >= 0 || used.indexOf(EXT_BASISU) >= 0
-            ? `${message} (model uses ${used.join(', ')}; check draco_path / basis_path)`
+            ? `${message} (model uses ${used.join(', ')}; check draco_path / basis_path` +
+              (/DRACOLoader|KTX2Loader/.test(message)
+                ? `, and that the decoder files next to the card are the ones of version ${CARD_VERSION})`
+                : ')')
             : message,
         ),
       );

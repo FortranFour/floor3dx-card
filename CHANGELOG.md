@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.1
+
+### Fixed
+- After the update to 2.0.0 a Draco model could fail with `Model load error: [object Object]`: the browser kept the 1.x decoder files in its cache (their URLs carry no version, unlike the card's) and the r186 loader cannot use them. Once per card version the card now re-fetches the decoder files past the cache, and a decoder failure is reported with its message and a hint to check that the decoder files next to the card are the version's own.
+
 ## 2.0.0
 
 ### Changed
