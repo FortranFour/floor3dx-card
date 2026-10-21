@@ -526,11 +526,12 @@ WebP textures need a current browser. Safari before version 14 shows them blank.
 
 ```bash
 npm ci
-npm run build        # lint, bundle to dist/floor3dx-card.js, copy the decoders into dist/
-npm start            # watch mode, served on port 5000
+npm run build        # lint, bundle to dist/floor3dx-card.js with esbuild, copy the decoders into dist/
+npm start            # rebuild on change
+npm run typecheck    # tsc
 ```
 
-The source stays close to upstream so that upstream changes remain easy to merge. The element names and the build id are applied at build time by `rollup-fork-identity.js`; source files still say `floor3dpro-*`.
+The source stays close to upstream so that upstream changes remain easy to merge. The element names and the build id are applied to the bundle at build time by `fork-identity.mjs` (see `build.mjs`); source files still say `floor3dpro-*`.
 
 `dev/harness/` runs the built card in headless Chromium against `demo/demo.glb`. See its README.
 

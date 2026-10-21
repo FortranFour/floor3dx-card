@@ -148,3 +148,4 @@ __pycache__/
 node_modules
 dev/harness/unit/look-bundle.js
 dev/private/
+tools/package-lock.json

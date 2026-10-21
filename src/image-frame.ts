@@ -180,7 +180,7 @@ export class ImageFrame {
     if (seq !== this.loadSeq) return false;
     this.clear();
     this.gif = frames.map((f) => ({
-      image: new ImageData(f.patch, f.dims.width, f.dims.height),
+      image: new ImageData(new Uint8ClampedArray(f.patch), f.dims.width, f.dims.height),
       delay: f.delay > 0 ? f.delay : 100, // browsers treat 0 as ~100 ms
       dims: f.dims,
       disposal: f.disposalType,

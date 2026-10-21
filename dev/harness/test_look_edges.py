@@ -64,7 +64,7 @@ JS = r"""() => {
 }"""
 
 if __name__ == '__main__':
-    subprocess.run(['npx', 'rollup', '-c', 'dev/harness/unit/rollup.config.js'], cwd=ROOT, check=True, capture_output=True)
+    subprocess.run(['npx', 'esbuild', 'dev/harness/unit/look-entry.ts', '--bundle', '--format=iife', '--outfile=dev/harness/unit/look-bundle.js', '--log-level=warning'], cwd=ROOT, check=True)
     from playwright.sync_api import sync_playwright
     with sync_playwright() as p:
         b = p.chromium.launch(); page = b.new_page(); errors = []

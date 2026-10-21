@@ -20,15 +20,7 @@ function buildId() {
   return new Date().toISOString().slice(0, 16) + 'Z';
 }
 
-export default function forkIdentity(prefix = 'floor3dx') {
-  const id = buildId();
-  return {
-    name: 'fork-identity',
-    renderChunk(code) {
-      const out = code
-        .replace(TAG_PATTERN, (_m, tag) => `${prefix}-${tag}`)
-        .replace(/__FLOOR3DX_BUILD__/g, id);
-      return { code: out, map: null };
-    },
-  };
+/** The output text with the fork's identity applied. */
+export function applyForkIdentity(code, prefix = 'floor3dx') {
+  return code.replace(TAG_PATTERN, (_m, tag) => `${prefix}-${tag}`).replace(/__FLOOR3DX_BUILD__/g, buildId());
 }

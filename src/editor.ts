@@ -12,8 +12,8 @@
 // the names of the objects of the model and for the current view, and turns on picking objects with
 // a tap and highlighting them (see _onPreview() and the "Editor" part of floor3d-card.ts).
 import { LitElement, html, css, nothing, TemplateResult, CSSResultGroup } from 'lit';
-import { customElement, property, state } from 'lit/decorators';
-import { repeat } from 'lit/directives/repeat';
+import { customElement, property, state } from 'lit/decorators.js';
+import { repeat } from 'lit/directives/repeat.js';
 import { fireEvent, HomeAssistant, LovelaceCardEditor } from 'custom-card-helpers';
 import {
   mdiArrowLeft,

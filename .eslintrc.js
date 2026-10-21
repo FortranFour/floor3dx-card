@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-var-requires */
-const { default: typescript } = require("rollup-plugin-typescript2")
 
 module.exports = {
     parser: "@typescript-eslint/parser", // Specifies the ESLint parser

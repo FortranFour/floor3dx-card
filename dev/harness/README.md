@@ -15,6 +15,6 @@ only meaningful relative to each other.
 `test_load_order.py <model.draco.glb>` checks that a Draco model comes out in the same object order on
 every load, with one decode worker and with four. The file's docstring explains how to make a test model.
 
-`test_look_edges.py` is different from the others: it bundles `src/look.ts` on its own (`unit/rollup.config.js`, output `unit/look-bundle.js`, not committed) and checks the edge-line rules on a hand-built scene of open quads, where the expected line counts are known exactly.
+`test_look_edges.py` is different from the others: it bundles `src/look.ts` on its own with esbuild (output `unit/look-bundle.js`, not committed) and checks the edge-line rules on a hand-built scene of open quads, where the expected line counts are known exactly.
 
 `test_wall_seal.py` checks `wall_seal` on the demo's walls (longer by the seal at each end, nothing else changed, own geometry per wall) and that a card rebuilt with another `look` rebuilds its edge lines.
