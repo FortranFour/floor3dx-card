@@ -672,7 +672,11 @@ export class Look {
       g.setAttribute('position', new THREE.Float32BufferAttribute(out, 3));
       const line = new THREE.LineSegments(g, this.edgeMaterial);
       line.name = 'f3dx_edge_' + item.mesh.name;
-      line.renderOrder = 10;
+      // Drawn in the transparent pass in depth order like any other translucent thing, not after
+      // everything: the lines of what stands behind a glass dome or a see-through wall are then
+      // covered by it as the model itself is, instead of showing through at full strength. Lines
+      // on their own surface still pass the depth test (less-or-equal) against it.
+      line.renderOrder = 0;
       line.layers.mask = item.mesh.layers.mask;
       // follow the mesh: same parent, same transform, so doors and shades carry their lines along
       item.mesh.add(line);

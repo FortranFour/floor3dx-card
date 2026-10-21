@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.11
+
+### Fixed
+- `look`: edge lines were drawn after everything else, so the outlines of objects behind a translucent surface (a frosted glass dome, a wall made see-through with `transparent`) showed through it at full strength and the surface looked clear. Lines are now drawn in depth order with the other translucent things, so the glass covers them as it covers the model.
+
 ## 1.9.10
 
 ### Fixed
