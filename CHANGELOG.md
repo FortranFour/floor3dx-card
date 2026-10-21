@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.6
+
+### Added
+- `look.keep`: objects the theme leaves exactly as the model has them, materials and edge lines alike (ids, `*` patterns, `<group>`s). For a frosted glass dome, a photograph, a screen. Editor field.
+
 ## 1.9.5
 
 ### Changed

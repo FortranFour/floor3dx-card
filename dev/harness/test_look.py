@@ -38,6 +38,8 @@ JS = r"""async () => {
   const custom=await make({theme:'custom',custom:{dark:'#102030',light:'#80a0c0',walls:'#a0b0c0',edges:'#ff8800',stage:'#f0f0f0',stage_day:'#ffffff',hue:0.3}});
   out.customBg='#'+custom._scene.background.getHexString(); out.customEdge='#'+custom._look.edgeMaterial.color.getHexString(); out.customBlendNormal=custom._look.edgeMaterial.blending===1;
   const cm2=custom._scene.getObjectByName(names[2]).material; const u=(cm2.userData&&cm2.userData.f3dxThemedOf)?custom._look.themed.get(cm2.userData.f3dxThemedOf):null; out.customUniforms=u?[u.uniforms.uTheme.value,+u.uniforms.uCustomHue.value.toFixed(2),'#'+new (custom._scene.background.constructor)(u.uniforms.uCustomWall.value.x,u.uniforms.uCustomWall.value.y,u.uniforms.uCustomWall.value.z).getHexString()]:null;
+  const kept=await make({theme:'neon',keep:names[3]+', '+names[4]}); const km=kept._scene.getObjectByName(names[3]).material; const other=kept._scene.getObjectByName(names[2]).material;
+  out.keepUntouched=!(km.userData&&km.userData.f3dxThemedOf); out.keepNoEdges=!kept._scene.getObjectByName(names[3]).children.some(c=>c.name.startsWith('f3dx_edge_')); out.othersThemed=!!(other.userData&&other.userData.f3dxThemedOf);
   const noEdges=await make({theme:'blueprint',edges:'no'}); out.noEdges=noEdges._look.edgeLines.length; out.bpBg='#'+noEdges._scene.background.getHexString();
   return out;
 }"""
@@ -61,6 +63,7 @@ if __name__ == '__main__':
     check('day and blueprint stage colours differ from neon', len({r['neonBg'], r['dayBg'], r['bpBg']}) == 3)
     check('custom theme: stage midway between stage and stage_day, edge colour and normal blending on a light stage, uniforms set',
           r['customBg'] in ('#f7f7f7', '#f8f8f8') and r['customEdge'] == '#ff8800' and r['customBlendNormal'] and r['customUniforms'] == [6, 0.3, '#a0b0c0'])
+    check('keep: named objects keep their material and get no lines, the rest is themed', r['keepUntouched'] and r['keepNoEdges'] and r['othersThemed'])
     check('edges: no draws none', r['noEdges'] == 0)
     check('no page errors', not errors)
     for e in errors:

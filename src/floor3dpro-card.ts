@@ -1830,7 +1830,8 @@ export class Floor3dCard extends LitElement {
     if (!cfg || !this._scene) return;
     if (!this._look) this._look = new Look(cfg, this._scene);
     if (!this._look.active) return;
-    this._look.applyMaterials(this._lookMeshes());
+    const keep = this._lookKeepNames();
+    this._look.applyMaterials(this._lookMeshes().filter((mesh) => !keep.has(mesh.name)));
     const stage = this._look.stageColor(0.5);
     if (stage) this._scene.background = stage;
   }
@@ -1892,6 +1893,21 @@ export class Floor3dCard extends LitElement {
         geometry.computeBoundingSphere();
       });
     });
+  }
+
+  // look.keep: the model objects the look leaves exactly as the model has them, materials and lines
+  // (a frosted glass dome, a screen, a photograph): object ids, * patterns or <group>s.
+  private _lookKeepNames(): Set<string> {
+    const out = new Set<string>();
+    const cfg: any = (this._config as any).look;
+    const keep = cfg && cfg.keep;
+    if (!keep) return out;
+    const names = this._modelObjectNames();
+    (Array.isArray(keep) ? keep : String(keep).split(',')).forEach((entry: any) => {
+      const id = String(entry).trim();
+      if (id) this._resolveObjectId(id, names).forEach((name) => out.add(name));
+    });
+    return out;
   }
 
   // look.edge_skip: the model objects that get no edge line. `images` stands for the objects of the
@@ -2412,7 +2428,11 @@ export class Floor3dCard extends LitElement {
     this._add3dObjects();
     // edge lines last: door, shade and rotate setup re-centres geometry on its pivot and moves the
     // mesh, so lines built earlier would sit offset by the pivot
-    if (this._look && this._look.active) this._look.applyEdges(this._lookMeshes(), this._edgeSkipNames());
+    if (this._look && this._look.active) {
+      const skip = this._edgeSkipNames();
+      this._lookKeepNames().forEach((name) => skip.add(name));
+      this._look.applyEdges(this._lookMeshes(), skip);
+    }
     this._bindTransparency();
 
     console.log('Object loaded end');

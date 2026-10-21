@@ -12,6 +12,8 @@
 //   edges      yes | no: draw outline lines along mesh edges (default yes)
 //   edge_angle degrees; an edge is drawn where two faces meet at more than this angle (default 40)
 //   edge_opacity 0..1 (default 0.85)
+//   keep       objects the look leaves as the model has them, materials and lines: object ids, *
+//              patterns or <group>s (a list or comma-separated string; resolved by the card). Default: none
 //   edge_skip  what gets no line (default: nothing). A list or a comma-separated string of:
 //                images    the objects of type3d: image rows (pictures, screens) and nothing on them
 //                texts     the objects of type3d: text rows (labels, readouts)
@@ -57,6 +59,7 @@ export interface LookConfig {
   edge_angle?: number | string;
   edge_opacity?: number | string;
   edge_skip?: string | string[];
+  keep?: string | string[];
   flat?: string | boolean;
   keep_signal?: string | boolean;
   walls?: string | string[];

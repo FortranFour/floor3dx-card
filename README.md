@@ -135,7 +135,10 @@ look:
   walls: wall            # object name prefixes that get the wall tint
   floors: room, floor
   edge_skip: images, texts, seams, floors   # see below; default: nothing skipped
+  keep: meter_glass, <photos>              # objects the theme leaves exactly as the model has them
 ```
+
+`keep` names objects (ids, `*` patterns, `<group>`s) that the theme does not touch at all: their own material and shading stay and they get no edge lines, so a frosted glass dome, a photograph or a screen keeps its look inside a themed house.
 
 **Which edges are drawn.** A line is drawn where two faces meet at more than `edge_angle`, and along the open edge of a surface. On an exported model some of those open edges are not outlines you want: the joint where one straight wall was exported as two segments, the border between two rooms' floors where there is no wall, the edges of a picture or screen. `edge_skip` names what gets no line, in a list or a comma-separated string:
 
@@ -428,6 +431,7 @@ On a Home Assistant without `ha-form` the previous editor is shown instead. `day
 | `look` | see above | off |
 | `look.edge_skip` | `images`, `texts`, `seams`, `floors`, `coplanar`, object ids / patterns / `<group>` | nothing skipped |
 | `look.custom` | colours of `theme: custom`; see above | defaults |
+| `look.keep` | objects the theme leaves as the model has them: ids / patterns / `<group>` | none |
 | `transparent` | card-level list of `{objects, transparency}` rules; see above | off |
 | `type3d: transparent` | `transparent.transparency`, `transparent.transparency_off`, `transparent.state`, `transparent.invert` | |
 | `shadow_budget` | number of shadow-casting lights | from the GPU's texture units |
