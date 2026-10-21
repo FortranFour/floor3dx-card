@@ -171,6 +171,9 @@ Three more themes, not from those projects: **paper**, an architect's drawing on
 
 **Your own colours** (`theme: custom`). The same colour function with colours you choose, as `#rrggbb`; the editor shows them as colour pickers once Custom is selected:
 
+<img width="634" height="900" alt="Picture1" src="https://github.com/user-attachments/assets/d016f5f2-3520-49b5-89de-a61e22494295" />
+
+
 ```yaml
 look:
   theme: custom
