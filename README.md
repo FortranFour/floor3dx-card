@@ -166,6 +166,9 @@ A changed `look` takes effect when the card is rebuilt (the editor's reload, or 
 
 Three more themes, not from those projects: **paper**, an architect's drawing on cream card with ink lines, walls a shade warmer and floors parchment; **ember**, charcoal surfaces with a warm cast and amber lines that glow, for a dark dashboard that is not blue; **pastel**, the model's own colours lightened and softened on a pale stage, for a house whose textures and furniture colours should still read.
 
+<img width="2600" height="2478" alt="image" src="https://github.com/user-attachments/assets/be1569ba-0544-4602-9b26-99053574021c" />
+
+
 Every mesh keeps its original material; a themed copy maps the colour to the theme per pixel in a small shader patch (adapted from NextFloor's `viewer/theme.ts`, MIT), so textures still show through as pattern and switching themes is a uniform change. Edges are `EdgesGeometry` line segments drawn additively, normal blending in the day theme where additive glow would vanish. Colour conditions, lights, images, shades and daylight all work on top: a `Gold` colour condition stays gold because it is a signal colour, `LightSteelBlue` goes to the muted base, and a `type3d: light` entry's objects take an emissive glow in the light's colour while it is on, which is what makes lamps visible on surfaces this dark. With `daylight`, the stage background runs from the theme's night colour to its day colour.
 
 What is not taken from those projects, because it depends on their generated geometry: fold-away walls, the painted room-light surface, the plan editor and furniture library.
