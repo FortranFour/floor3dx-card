@@ -35,6 +35,9 @@ JS = r"""async () => {
   const lampMat=()=>{const m=neon._scene.getObjectByName(names[0]).material; return m.emissive?'#'+m.emissive.getHexString():null;};
   out.glowOff=lampMat(); neon.hass=hass; await new Promise(r=>setTimeout(r,300)); out.glowOn=lampMat();
   const day=await make({theme:'day',edges:'yes'}); out.dayBg='#'+day._scene.background.getHexString(); out.dayBlendNormal=day._look.edgeMaterial.blending===1;
+  const custom=await make({theme:'custom',custom:{dark:'#102030',light:'#80a0c0',walls:'#a0b0c0',edges:'#ff8800',stage:'#f0f0f0',stage_day:'#ffffff',hue:0.3}});
+  out.customBg='#'+custom._scene.background.getHexString(); out.customEdge='#'+custom._look.edgeMaterial.color.getHexString(); out.customBlendNormal=custom._look.edgeMaterial.blending===1;
+  const cm2=custom._scene.getObjectByName(names[2]).material; const u=(cm2.userData&&cm2.userData.f3dxThemedOf)?custom._look.themed.get(cm2.userData.f3dxThemedOf):null; out.customUniforms=u?[u.uniforms.uTheme.value,+u.uniforms.uCustomHue.value.toFixed(2),'#'+new (custom._scene.background.constructor)(u.uniforms.uCustomWall.value.x,u.uniforms.uCustomWall.value.y,u.uniforms.uCustomWall.value.z).getHexString()]:null;
   const noEdges=await make({theme:'blueprint',edges:'no'}); out.noEdges=noEdges._look.edgeLines.length; out.bpBg='#'+noEdges._scene.background.getHexString();
   return out;
 }"""
@@ -56,6 +59,8 @@ if __name__ == '__main__':
     check('colour condition still works on the themed material', r['condOn'] == '#ffd700' and r['condOff'] == '#b0c4de')
     check('lit lamp object glows in its light colour, dark when off', r['glowOff'] == '#000000' and r['glowOn'] not in (None, '#000000'))
     check('day and blueprint stage colours differ from neon', len({r['neonBg'], r['dayBg'], r['bpBg']}) == 3)
+    check('custom theme: stage midway between stage and stage_day, edge colour and normal blending on a light stage, uniforms set',
+          r['customBg'] in ('#f7f7f7', '#f8f8f8') and r['customEdge'] == '#ff8800' and r['customBlendNormal'] and r['customUniforms'] == [6, 0.3, '#a0b0c0'])
     check('edges: no draws none', r['noEdges'] == 0)
     check('no page errors', not errors)
     for e in errors:

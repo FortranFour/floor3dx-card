@@ -112,7 +112,7 @@ export const SECTIONS: Section[] = [
     key: 'look',
     title: 'Look (NeonPlan / NextFloor style)',
     icon: 'mdi:palette-swatch-outline',
-    content: () => [
+    content: (config) => [
       [
         {
           name: 'look',
@@ -127,6 +127,7 @@ export const SECTIONS: Section[] = [
               ['paper', 'Paper (architect\'s drawing)'],
               ['ember', 'Ember (charcoal, amber lines)'],
               ['pastel', 'Pastel (own colours, softened)'],
+              ['custom', 'Custom (your colours)'],
             ]),
             text('accent'),
             choice('edges', [
@@ -154,6 +155,7 @@ export const SECTIONS: Section[] = [
           ],
         },
       ],
+      ...(config && config.look && String(config.look.theme).toLowerCase() === 'custom' ? ['look_custom'] : []),
     ],
   },
   {

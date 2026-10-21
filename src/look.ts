@@ -5,7 +5,9 @@
 // open window) kept saturated against the muted base. This module reproduces that on a Sweet Home 3D
 // or glTF model the card has loaded, without touching the model file:
 //
-//   theme      neon | blueprint | day | paper | ember | pastel | off (default: off, the model as it is)
+//   theme      neon | blueprint | day | paper | ember | pastel | custom | off (default: off, the model as it is)
+//   custom     the colours of theme custom (see CustomTheme): dark, light, walls, floors, edges, stage,
+//              stage_day as #rrggbb, hue 0..1
 //   accent     the edge-line colour of the neon theme (default #37e0ff)
 //   edges      yes | no: draw outline lines along mesh edges (default yes)
 //   edge_angle degrees; an edge is drawn where two faces meet at more than this angle (default 40)
@@ -46,7 +48,7 @@
 
 import * as THREE from 'three';
 
-export type Theme = 'neon' | 'blueprint' | 'day' | 'paper' | 'ember' | 'pastel' | 'off';
+export type Theme = 'neon' | 'blueprint' | 'day' | 'paper' | 'ember' | 'pastel' | 'custom' | 'off';
 
 export interface LookConfig {
   theme?: Theme | string;
@@ -61,9 +63,24 @@ export interface LookConfig {
   floors?: string | string[];
   stage?: string | boolean;
   glow?: number | string;
+  custom?: CustomTheme;
 }
 
-const THEMES: Theme[] = ['neon', 'blueprint', 'day', 'paper', 'ember', 'pastel'];
+/** The colours of theme: custom, as #rrggbb. */
+export interface CustomTheme {
+  dark?: string; // the surface colour where the model is dark (default #1c2230)
+  light?: string; // where it is bright (default #6c7a96)
+  walls?: string; // bright colour of walls (default: light)
+  floors?: string; // bright colour of floors (default: light)
+  edges?: string; // edge lines (default #e8f0ff)
+  stage?: string; // background at night, or always (default #10141c)
+  stage_day?: string; // background by day with daylight (default: stage)
+  hue?: number | string; // 0..1, how much of the model's own hue remains (default 0.15)
+}
+
+const CUSTOM_DEFAULTS = { dark: '#1c2230', light: '#6c7a96', edges: '#e8f0ff', stage: '#10141c', hue: 0.15 };
+
+const THEMES: Theme[] = ['neon', 'blueprint', 'day', 'paper', 'ember', 'pastel', 'custom'];
 /** Themes on a light stage: edge lines blend normally (additive glow would vanish on a light background). */
 const LIGHT_STAGE: Theme[] = ['day', 'paper', 'pastel'];
 
@@ -75,10 +92,11 @@ export const STAGE: Record<Exclude<Theme, 'off'>, { night: number[]; day: number
   paper: { night: [196, 184, 160], day: [240, 232, 212] },
   ember: { night: [20, 16, 18], day: [58, 46, 42] },
   pastel: { night: [196, 200, 220], day: [240, 242, 250] },
+  custom: { night: [16, 20, 28], day: [16, 20, 28] }, // replaced by look.custom.stage / stage_day
 };
 
 /** Edge line colour per theme. */
-const EDGE: Record<Exclude<Theme, 'off'>, number> = { neon: 0x37e0ff, blueprint: 0xcce6ff, day: 0x142b61, paper: 0x4a3826, ember: 0xff9a3c, pastel: 0x6a6e96 };
+const EDGE: Record<Exclude<Theme, 'off'>, number> = { neon: 0x37e0ff, blueprint: 0xcce6ff, day: 0x142b61, paper: 0x4a3826, ember: 0xff9a3c, pastel: 0x6a6e96, custom: 0xe8f0ff };
 
 // Fragment function: a material colour -> the themed colour. 0 neon, 1 blueprint, 2 day, 3 paper, 4 ember, 5 pastel. Adapted from
 // NextFloor (viewer/theme.ts); isWall / isFloor pick the surface tints of the neon look, keepSignal
@@ -88,6 +106,11 @@ uniform int uTheme;
 uniform vec3 uAccent;
 uniform int uKeepSignal;
 uniform int uSurface; // 0 generic, 1 wall, 2 floor
+uniform vec3 uCustomDark;
+uniform vec3 uCustomLight;
+uniform vec3 uCustomWall;
+uniform vec3 uCustomFloor;
+uniform float uCustomHue;
 vec3 f3dxThemed(vec3 c) {
   float strongest = max(c.r, max(c.g, c.b));
   float weakest = min(c.r, min(c.g, c.b));
@@ -123,6 +146,12 @@ vec3 f3dxThemed(vec3 c) {
     vec3 m = mix(base, lit, clamp(luma * 1.3, 0.0, 1.0));
     return mix(m, m * hue * 1.4, 0.15);
   }
+  if (uTheme == 6) {
+    // custom: the user's colours; dark where the model is dark, light (per surface) where it is bright
+    vec3 light = uSurface == 1 ? uCustomWall : uSurface == 2 ? uCustomFloor : uCustomLight;
+    vec3 m = mix(uCustomDark, light, clamp(luma * 1.3, 0.0, 1.0));
+    return mix(m, m * hue, uCustomHue);
+  }
   if (uTheme == 5) {
     // pastel: the model's own colours, lightened and softened, on a pale stage
     vec3 grey = vec3(clamp(0.70 + luma * 0.27, 0.0, 0.97));
@@ -153,10 +182,12 @@ export class Look {
   private accent = new THREE.Vector3(0.22, 0.88, 1);
   private wallPrefixes: string[];
   private floorPrefixes: string[];
+  private custom: { dark: THREE.Vector3; light: THREE.Vector3; walls: THREE.Vector3; floors: THREE.Vector3; hue: number; edges: number; stage: number[]; stageDay: number[] };
 
   constructor(cfg: LookConfig, scene: THREE.Scene) {
     this.cfg = cfg || {};
     this.scene = scene;
+    this.custom = Look.customColours(this.cfg.custom);
     this.wallPrefixes = list(this.cfg.walls, ['wall']);
     this.floorPrefixes = list(this.cfg.floors, ['room', 'floor']);
     const theme = this.theme();
@@ -244,8 +275,8 @@ export class Look {
     this.themed.forEach((t) => (t.uniforms.uTheme.value = this.themeIndex));
     this.themedFlat.forEach((t) => (t.uniforms.uTheme.value = this.themeIndex));
     if (this.edgeMaterial) {
-      this.edgeMaterial.color.set(theme === 'neon' ? this.accentHex() : EDGE[theme]);
-      this.edgeMaterial.blending = LIGHT_STAGE.includes(theme) ? THREE.NormalBlending : THREE.AdditiveBlending;
+      this.edgeMaterial.color.set(this.edgeColour(theme));
+      this.edgeMaterial.blending = this.lightStage(theme) ? THREE.NormalBlending : THREE.AdditiveBlending;
       this.edgeMaterial.needsUpdate = true;
     }
   }
@@ -254,7 +285,7 @@ export class Look {
   stageColor(daylight = 0): THREE.Color | null {
     const theme = this.theme();
     if (theme === 'off' || !yes(this.cfg.stage, true)) return null;
-    const s = STAGE[theme];
+    const s = theme === 'custom' ? { night: this.custom.stage, day: this.custom.stageDay } : STAGE[theme];
     const k = Math.max(0, Math.min(1, daylight));
     return new THREE.Color(
       (s.night[0] + (s.day[0] - s.night[0]) * k) / 255,
@@ -301,6 +332,47 @@ export class Look {
 
   // ---- internals ------------------------------------------------------------------------------
 
+  private edgeColour(theme: Theme): number {
+    if (theme === 'neon') return this.accentHex();
+    if (theme === 'custom') return this.custom.edges;
+    return EDGE[theme as Exclude<Theme, 'off'>];
+  }
+
+  // lines blend normally on a light stage, where additive glow would vanish
+  private lightStage(theme: Theme): boolean {
+    if (theme === 'custom') {
+      const [r, g, b] = this.custom.stage;
+      return 0.299 * r + 0.587 * g + 0.114 * b > 128;
+    }
+    return LIGHT_STAGE.includes(theme);
+  }
+
+  /** The colours of theme: custom from its block, with defaults for what is missing. */
+  static customColours(cfg?: CustomTheme): { dark: THREE.Vector3; light: THREE.Vector3; walls: THREE.Vector3; floors: THREE.Vector3; hue: number; edges: number; stage: number[]; stageDay: number[] } {
+    const c = cfg || {};
+    const vec = (hex: any, dflt: string): THREE.Vector3 => {
+      const v = parseHex(hex) || (parseHex(dflt) as [number, number, number]);
+      return new THREE.Vector3(v[0], v[1], v[2]);
+    };
+    const bytes = (hex: any, dflt: string): number[] => (parseHex(hex) || (parseHex(dflt) as number[])).map((x) => Math.round(x * 255));
+    const hex = (h: any, dflt: string): number => {
+      const v = parseHex(h) || (parseHex(dflt) as number[]);
+      return (Math.round(v[0] * 255) << 16) | (Math.round(v[1] * 255) << 8) | Math.round(v[2] * 255);
+    };
+    const light = vec(c.light, CUSTOM_DEFAULTS.light);
+    const hue = Number(c.hue);
+    return {
+      dark: vec(c.dark, CUSTOM_DEFAULTS.dark),
+      light,
+      walls: parseHex(c.walls) ? vec(c.walls, CUSTOM_DEFAULTS.light) : light.clone(),
+      floors: parseHex(c.floors) ? vec(c.floors, CUSTOM_DEFAULTS.light) : light.clone(),
+      hue: isNaN(hue) ? CUSTOM_DEFAULTS.hue : Math.max(0, Math.min(1, hue)),
+      edges: hex(c.edges, CUSTOM_DEFAULTS.edges),
+      stage: bytes(c.stage, CUSTOM_DEFAULTS.stage),
+      stageDay: parseHex(c.stage_day) ? bytes(c.stage_day, CUSTOM_DEFAULTS.stage) : bytes(c.stage, CUSTOM_DEFAULTS.stage),
+    };
+  }
+
   private accentHex(): number {
     return (Math.round(this.accent.x * 255) << 16) | (Math.round(this.accent.y * 255) << 8) | Math.round(this.accent.z * 255);
   }
@@ -331,6 +403,11 @@ export class Look {
       uKeepSignal: { value: yes(this.cfg.keep_signal, true) ? 1 : 0 },
       uSurface: { value: surface },
       uDrop: this.drop,
+      uCustomDark: { value: this.custom.dark },
+      uCustomLight: { value: this.custom.light },
+      uCustomWall: { value: this.custom.walls },
+      uCustomFloor: { value: this.custom.floors },
+      uCustomHue: { value: this.custom.hue },
     };
     if (yes(this.cfg.flat, true)) {
       (material as any).flatShading = true;
@@ -373,11 +450,11 @@ export class Look {
     const mergeWalls = mergeAll || skip.includes('seams');
     const mergeFloors = mergeAll || skip.includes('floors');
     this.edgeMaterial = new THREE.LineBasicMaterial({
-      color: theme === 'neon' ? this.accentHex() : EDGE[theme],
+      color: this.edgeColour(theme),
       transparent: true,
       opacity,
       depthWrite: false,
-      blending: LIGHT_STAGE.includes(theme) ? THREE.NormalBlending : THREE.AdditiveBlending,
+      blending: this.lightStage(theme) ? THREE.NormalBlending : THREE.AdditiveBlending,
     });
     // pass 1: each mesh's edges in its own frame; open edges are kept aside to be matched against
     // the faces of the other objects

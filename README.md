@@ -127,7 +127,7 @@ Upstream intended `yes` but the code compared colour arrays by reference and ass
 
 ```yaml
 look:
-  theme: neon            # neon | blueprint | day | paper | ember | pastel | off
+  theme: neon            # neon | blueprint | day | paper | ember | pastel | custom | off
   accent: '#37e0ff'      # edge colour of the neon theme
   edges: 'yes'           # outline lines along mesh edges
   edge_angle: 60         # draw an edge where faces meet at more than this; 40 is denser, 60 thins window mullions
@@ -168,6 +168,23 @@ Three more themes, not from those projects: **paper**, an architect's drawing on
 
 <img width="2600" height="2478" alt="image" src="https://github.com/user-attachments/assets/be1569ba-0544-4602-9b26-99053574021c" />
 
+
+**Your own colours** (`theme: custom`). The same colour function with colours you choose, as `#rrggbb`; the editor shows them as colour pickers once Custom is selected:
+
+```yaml
+look:
+  theme: custom
+  custom:
+    dark: '#1c2230'        # surfaces where the model is dark
+    light: '#6c7a96'       # where it is bright
+    walls: '#7a8aa6'       # bright colour of walls (default: light)
+    floors: '#56637a'      # bright colour of floors (default: light)
+    edges: '#e8f0ff'       # edge lines
+    stage: '#10141c'       # background; by day with daylight: stage_day (default: stage)
+    hue: 0.15              # 0..1, how much of the model's own hue remains
+```
+
+Lines blend additively on a dark background and normally on a light one, judged from `stage`. Signal colours are kept as in every theme.
 
 Every mesh keeps its original material; a themed copy maps the colour to the theme per pixel in a small shader patch (adapted from NextFloor's `viewer/theme.ts`, MIT), so textures still show through as pattern and switching themes is a uniform change. Edges are `EdgesGeometry` line segments drawn additively, normal blending in the day theme where additive glow would vanish. Colour conditions, lights, images, shades and daylight all work on top: a `Gold` colour condition stays gold because it is a signal colour, `LightSteelBlue` goes to the muted base, and a `type3d: light` entry's objects take an emissive glow in the light's colour while it is on, which is what makes lamps visible on surfaces this dark. With `daylight`, the stage background runs from the theme's night colour to its day colour.
 

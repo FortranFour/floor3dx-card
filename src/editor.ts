@@ -426,6 +426,55 @@ export class Floor3dxCardEditor extends LitElement implements LovelaceCardEditor
     `;
   }
 
+  // The colours of look.theme: custom, as colour pickers (ha-form's color_rgb selector works in
+  // [r, g, b]; the YAML keeps #rrggbb).
+  private _renderLookCustom(config: any, onChange: (data: any) => void): TemplateResult {
+    const custom = (config.look && isObject(config.look.custom) ? config.look.custom : {}) as any;
+    const defaults: { [k: string]: string } = { dark: '#1c2230', light: '#6c7a96', walls: '#6c7a96', floors: '#6c7a96', edges: '#e8f0ff', stage: '#10141c', stage_day: '#10141c' };
+    const toRgb = (hex: any): number[] | undefined => {
+      const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim());
+      if (!m) return undefined;
+      const v = parseInt(m[1], 16);
+      return [(v >> 16) & 255, (v >> 8) & 255, v & 255];
+    };
+    const toHex = (rgb: any): string | undefined =>
+      Array.isArray(rgb) && rgb.length >= 3 ? '#' + rgb.slice(0, 3).map((n) => Math.max(0, Math.min(255, Math.round(Number(n) || 0))).toString(16).padStart(2, '0')).join('') : undefined;
+    const data: any = {};
+    Object.keys(defaults).forEach((key) => {
+      const fallback = key === 'walls' || key === 'floors' ? custom.light : key === 'stage_day' ? custom.stage : undefined;
+      data[key] = toRgb(custom[key]) || toRgb(fallback) || toRgb(defaults[key]);
+    });
+    data.hue = custom.hue !== undefined && custom.hue !== '' ? Number(custom.hue) : 0.15;
+    const colour = (name: string, label: string, helper?: string): Schema => ({ name, label, helper, selector: { color_rgb: {} } });
+    const schema: Schema[] = [
+      {
+        type: 'grid',
+        name: '',
+        flatten: true,
+        column_min_width: '140px',
+        schema: [
+          colour('dark', 'Dark surfaces', 'Where the model is dark'),
+          colour('light', 'Light surfaces', 'Where the model is bright'),
+          colour('walls', 'Walls, bright', 'Default: light surfaces'),
+          colour('floors', 'Floors, bright', 'Default: light surfaces'),
+          colour('edges', 'Edge lines'),
+          colour('stage', 'Background'),
+          colour('stage_day', 'Background by day', 'With daylight. Default: background'),
+          { name: 'hue', label: 'Own hue kept', helper: '0 none .. 1 all. Default 0.15', selector: { number: { mode: 'slider', min: 0, max: 1, step: 0.05 } } },
+        ],
+      },
+    ];
+    return this._form(schema, data, (value) => {
+      const next: any = {};
+      Object.keys(defaults).forEach((key) => {
+        const hex = toHex(value[key]);
+        if (hex) next[key] = hex;
+      });
+      if (value.hue !== undefined && value.hue !== null && value.hue !== '') next.hue = Number(value.hue);
+      onChange({ ...config, look: { ...(config.look || {}), custom: next } });
+    }, 'Custom theme colours');
+  }
+
   // Forms, headings and the parts that aren't plain fields, in the order of the schema.
   private _renderContent(
     items: (Schema[] | string)[],
@@ -444,6 +493,8 @@ export class Floor3dxCardEditor extends LitElement implements LovelaceCardEditor
       switch (item) {
         case 'daylight':
           return this._renderDaylight(data, onChange);
+        case 'look_custom':
+          return this._renderLookCustom(data, onChange);
         case 'use_current_view':
           return html`
             <ha-button appearance="plain" size="s" @click=${() => this._useCurrentView()}>

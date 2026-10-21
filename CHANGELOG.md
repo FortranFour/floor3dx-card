@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.0
+
+### Added
+- `look.theme: custom` with a `look.custom` block of colours: `dark` and `light` surfaces, `walls` and `floors` bright colours, `edges`, `stage` and `stage_day`, and `hue` for how much of the model's own hue remains. Edge lines blend additively on a dark stage, normally on a light one. In the editor, choosing Custom shows the colours as colour pickers (ha-form's colour selector), written back as `#rrggbb`.
+
 ## 1.8.0
 
 ### Added
