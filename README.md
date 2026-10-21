@@ -127,7 +127,7 @@ Upstream intended `yes` but the code compared colour arrays by reference and ass
 
 ```yaml
 look:
-  theme: neon            # neon | blueprint | day | off
+  theme: neon            # neon | blueprint | day | paper | ember | pastel | off
   accent: '#37e0ff'      # edge colour of the neon theme
   edges: 'yes'           # outline lines along mesh edges
   edge_angle: 60         # draw an edge where faces meet at more than this; 40 is denser, 60 thins window mullions
@@ -163,6 +163,8 @@ A changed `look` takes effect when the card is rebuilt (the editor's reload, or 
 
 <img width="1001" height="1080" alt="Screenshot 2026-10-16 173503" src="https://github.com/user-attachments/assets/e3a9536c-c791-4fcf-8df8-5d0c10fb3880" />
 
+
+Three more themes, not from those projects: **paper**, an architect's drawing on cream card with ink lines, walls a shade warmer and floors parchment; **ember**, charcoal surfaces with a warm cast and amber lines that glow, for a dark dashboard that is not blue; **pastel**, the model's own colours lightened and softened on a pale stage, for a house whose textures and furniture colours should still read.
 
 Every mesh keeps its original material; a themed copy maps the colour to the theme per pixel in a small shader patch (adapted from NextFloor's `viewer/theme.ts`, MIT), so textures still show through as pattern and switching themes is a uniform change. Edges are `EdgesGeometry` line segments drawn additively, normal blending in the day theme where additive glow would vanish. Colour conditions, lights, images, shades and daylight all work on top: a `Gold` colour condition stays gold because it is a signal colour, `LightSteelBlue` goes to the muted base, and a `type3d: light` entry's objects take an emissive glow in the light's colour while it is on, which is what makes lamps visible on surfaces this dark. With `daylight`, the stage background runs from the theme's night colour to its day colour.
 

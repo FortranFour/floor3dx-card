@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.8.0
+
+### Added
+- `look` themes `paper` (architect's drawing: cream card, ink lines, warmer walls, parchment floors), `ember` (charcoal with a warm cast, amber glowing lines) and `pastel` (the model's own colours, lightened and softened, on a pale stage). Each has its stage colours for `daylight` and its edge colour; paper and pastel blend their lines normally like day, ember additively like neon. Editor choices.
+
 ## 1.7.3
 
 ### Fixed

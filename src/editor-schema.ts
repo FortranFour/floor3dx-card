@@ -124,6 +124,9 @@ export const SECTIONS: Section[] = [
               ['neon', 'Neon'],
               ['blueprint', 'Blueprint'],
               ['day', 'Day'],
+              ['paper', 'Paper (architect\'s drawing)'],
+              ['ember', 'Ember (charcoal, amber lines)'],
+              ['pastel', 'Pastel (own colours, softened)'],
             ]),
             text('accent'),
             choice('edges', [

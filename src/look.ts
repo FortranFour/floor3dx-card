@@ -5,7 +5,7 @@
 // open window) kept saturated against the muted base. This module reproduces that on a Sweet Home 3D
 // or glTF model the card has loaded, without touching the model file:
 //
-//   theme      neon | blueprint | day | off (default: off, the model as it is)
+//   theme      neon | blueprint | day | paper | ember | pastel | off (default: off, the model as it is)
 //   accent     the edge-line colour of the neon theme (default #37e0ff)
 //   edges      yes | no: draw outline lines along mesh edges (default yes)
 //   edge_angle degrees; an edge is drawn where two faces meet at more than this angle (default 40)
@@ -46,7 +46,7 @@
 
 import * as THREE from 'three';
 
-export type Theme = 'neon' | 'blueprint' | 'day' | 'off';
+export type Theme = 'neon' | 'blueprint' | 'day' | 'paper' | 'ember' | 'pastel' | 'off';
 
 export interface LookConfig {
   theme?: Theme | string;
@@ -63,19 +63,24 @@ export interface LookConfig {
   glow?: number | string;
 }
 
-const THEMES: Theme[] = ['neon', 'blueprint', 'day'];
+const THEMES: Theme[] = ['neon', 'blueprint', 'day', 'paper', 'ember', 'pastel'];
+/** Themes on a light stage: edge lines blend normally (additive glow would vanish on a light background). */
+const LIGHT_STAGE: Theme[] = ['day', 'paper', 'pastel'];
 
 /** Background per theme (sky), from NextFloor's STAGE table, at night and by day. */
 export const STAGE: Record<Exclude<Theme, 'off'>, { night: number[]; day: number[] }> = {
   neon: { night: [11, 17, 32], day: [26, 44, 78] },
   blueprint: { night: [26, 70, 130], day: [34, 86, 150] },
   day: { night: [214, 224, 238], day: [242, 246, 251] },
+  paper: { night: [196, 184, 160], day: [240, 232, 212] },
+  ember: { night: [20, 16, 18], day: [58, 46, 42] },
+  pastel: { night: [196, 200, 220], day: [240, 242, 250] },
 };
 
 /** Edge line colour per theme. */
-const EDGE: Record<Exclude<Theme, 'off'>, number> = { neon: 0x37e0ff, blueprint: 0xcce6ff, day: 0x142b61 };
+const EDGE: Record<Exclude<Theme, 'off'>, number> = { neon: 0x37e0ff, blueprint: 0xcce6ff, day: 0x142b61, paper: 0x4a3826, ember: 0xff9a3c, pastel: 0x6a6e96 };
 
-// Fragment function: a material colour -> the themed colour. 0 neon, 1 blueprint, 2 day. Adapted from
+// Fragment function: a material colour -> the themed colour. 0 neon, 1 blueprint, 2 day, 3 paper, 4 ember, 5 pastel. Adapted from
 // NextFloor (viewer/theme.ts); isWall / isFloor pick the surface tints of the neon look, keepSignal
 // leaves bright saturated colours alone in every theme.
 const LOOK_FUNCTION = /* glsl */ `
@@ -103,9 +108,29 @@ vec3 f3dxThemed(vec3 c) {
     // blueprint: shades of blue, lighter where the model was lighter
     return mix(vec3(0.04, 0.13, 0.3), vec3(0.2, 0.42, 0.75), clamp(luma * 1.6, 0.0, 1.0));
   }
+  vec3 hue = c / max(strongest, 0.001);
+  if (uTheme == 3) {
+    // paper: an architect's drawing, cream card with ink lines; walls a shade warmer, floors parchment
+    vec3 light = uSurface == 1 ? vec3(0.90, 0.84, 0.72) : uSurface == 2 ? vec3(0.87, 0.80, 0.66) : vec3(0.93, 0.89, 0.80);
+    vec3 shade = vec3(0.55, 0.47, 0.36);
+    vec3 m = mix(shade, light, clamp(0.35 + luma * 0.8, 0.0, 1.0));
+    return mix(m, m * hue, 0.08);
+  }
+  if (uTheme == 4) {
+    // ember: charcoal surfaces with a warm cast, amber lines; walls lighter, floors darkest
+    vec3 base = uSurface == 1 ? vec3(0.15, 0.125, 0.115) : uSurface == 2 ? vec3(0.095, 0.08, 0.075) : vec3(0.17, 0.145, 0.13);
+    vec3 lit = vec3(0.36, 0.28, 0.22);
+    vec3 m = mix(base, lit, clamp(luma * 1.3, 0.0, 1.0));
+    return mix(m, m * hue * 1.4, 0.15);
+  }
+  if (uTheme == 5) {
+    // pastel: the model's own colours, lightened and softened, on a pale stage
+    vec3 grey = vec3(clamp(0.70 + luma * 0.27, 0.0, 0.97));
+    return clamp(grey * mix(vec3(1.0), hue, 0.45), 0.0, 0.97);
+  }
   // day: light surfaces with a trace of their hue
   vec3 grey = vec3(clamp(0.62 + luma * 0.36, 0.0, 0.97));
-  return mix(grey, grey * (c / max(strongest, 0.001)), 0.12);
+  return mix(grey, grey * hue, 0.12);
 }
 `;
 
@@ -220,7 +245,7 @@ export class Look {
     this.themedFlat.forEach((t) => (t.uniforms.uTheme.value = this.themeIndex));
     if (this.edgeMaterial) {
       this.edgeMaterial.color.set(theme === 'neon' ? this.accentHex() : EDGE[theme]);
-      this.edgeMaterial.blending = theme === 'day' ? THREE.NormalBlending : THREE.AdditiveBlending;
+      this.edgeMaterial.blending = LIGHT_STAGE.includes(theme) ? THREE.NormalBlending : THREE.AdditiveBlending;
       this.edgeMaterial.needsUpdate = true;
     }
   }
@@ -352,7 +377,7 @@ export class Look {
       transparent: true,
       opacity,
       depthWrite: false,
-      blending: theme === 'day' ? THREE.NormalBlending : THREE.AdditiveBlending,
+      blending: LIGHT_STAGE.includes(theme) ? THREE.NormalBlending : THREE.AdditiveBlending,
     });
     // pass 1: each mesh's edges in its own frame; open edges are kept aside to be matched against
     // the faces of the other objects
