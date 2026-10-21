@@ -4,7 +4,7 @@ A Home Assistant dashboard card that shows a live 3D model of your home and bind
 
 ![License MIT](https://img.shields.io/badge/License-MIT-97CA00.svg) ![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)
 
-<img width="1506" height="1270" alt="A house model in floor3dx-card: lamps lit in their colours, daylight through the windows, a video on the garage TV" src="https://github.com/user-attachments/assets/ac00ac78-1e9b-40bb-be79-fba8cefa117e" />
+<img src="https://github.com/user-attachments/assets/ac00ac78-1e9b-40bb-be79-fba8cefa117e" alt="A house model in floor3dx-card: lamps lit in their colours, daylight through the windows, a video on the garage TV" width="100%">
 
 **What this fork adds**
 
@@ -14,7 +14,7 @@ A Home Assistant dashboard card that shows a live 3D model of your home and bind
 - **Pictures and video on any surface** (`type3d: image`): camera snapshots, album art, animated GIFs decoded in the card, a looping video while a switch is on and a dark still while it is off. Works on surfaces the model exported without texture coordinates.
 - **Shades that shrink with their position** (`type3d: shade`), with a second motor for top-down/bottom-up shades.
 - **Time of day without a roof** (`daylight`): ambient and colour from the sun's elevation and a weather entity, beams through the windows that follow the sun round the house, glass that glows after dark, a slider to scrub through the day.
-- **The NeonPlan 3D / NextFloor look** (`look`): neon, blueprint and day themes on your own model, with glowing edge lines and lit lamps that shine.
+- **The NeonPlan 3D / NextFloor look** (`look`): neon, blueprint, day, paper, ember and pastel themes, or your own colours, on your own model, with glowing edge lines, lit lamps that shine, and outlines that skip wall seams and room borders.
 - **Transparent walls** (`transparent`): any walls see-through by a fixed amount, or by an amount a switch or slider sets, down to not drawn at all.
 - **Fixes.** Doors and windows no longer displace on a return visit; Draco models render in a stable order; `rotate.axis: y` works unquoted; a scene with more shadow-casting lights than the GPU can take no longer goes black; entity colour tracking no longer re-renders on every state change.
 
@@ -55,8 +55,7 @@ Upstream loads compressed files with a bare `GLTFLoader`, which stalls at "Loadi
 
 Compressed models can run more fluidly on low-powered devices, such as phones.
 
-<img width="1290" height="2796" alt="IMG_0216 PNG" src="https://github.com/user-attachments/assets/5dfd6451-f165-4c28-8faa-c60e3a6afd0b" />
-
+<img src="https://github.com/user-attachments/assets/5dfd6451-f165-4c28-8faa-c60e3a6afd0b" alt="The compressed model running on a phone" width="300">
 
 ### Full-resolution rendering
 
@@ -116,10 +115,7 @@ A virtual light takes its brightness and colour from the Home Assistant entity w
 
 Upstream intended `yes` but the code compared colour arrays by reference and assigned where it meant to compare, so a light with a `color_mode` attribute was re-lit and the whole scene re-rendered on every state change anywhere in Home Assistant. That is fixed.
 
-<img width="1212" height="993" alt="Screenshot 2026-09-26 112931" src="https://github.com/user-attachments/assets/e989f401-c82d-4cf5-8575-099bb0fb585d" />
-<img width="1206" height="995" alt="Screenshot 2026-09-26 113005" src="https://github.com/user-attachments/assets/82cf36ea-d78d-43ed-bb0e-26990fb69535" />
-
-
+<p><img src="https://github.com/user-attachments/assets/e989f401-c82d-4cf5-8575-099bb0fb585d" alt="Light colour and brightness from the entity (1)" width="49%"> <img src="https://github.com/user-attachments/assets/82cf36ea-d78d-43ed-bb0e-26990fb69535" alt="Light colour and brightness from the entity (2)" width="49%"></p>
 
 ### The NeonPlan / NextFloor look (`look`)
 
@@ -157,22 +153,17 @@ Walls and floors are told apart by the `walls` and `floors` prefixes. The joints
 The bottom and top faces of a wall lie in the plane of the floor and the ceiling, and a Sweet Home 3D wall keeps its full footprint under a doorway, so with two different tints the floor and the wall's underside would fight for the same pixels and show a broken line across every opening. The themed material of a flat wall face lowers it by a hair (a ten-thousandth of the model), so the floor or ceiling always wins; the mesh itself and its edge lines are not moved.
 
 A changed `look` takes effect when the card is rebuilt (the editor's reload, or a saved dashboard); the edge lines are rebuilt with it.
-<img width="1337" height="652" alt="Screenshot 2026-10-16 173414" src="https://github.com/user-attachments/assets/379c0215-a064-4155-bcf8-8817e4c2d89e" />
+<p><img src="https://github.com/user-attachments/assets/379c0215-a064-4155-bcf8-8817e4c2d89e" alt="The look on a house model (1)" width="49%"> <img src="https://github.com/user-attachments/assets/aa9841bd-19a2-4bed-81b0-3bdc4909538d" alt="The look on a house model (2)" width="49%"></p>
 
-<img width="1342" height="665" alt="Screenshot 2026-10-16 173148" src="https://github.com/user-attachments/assets/aa9841bd-19a2-4bed-81b0-3bdc4909538d" />
-
-<img width="1001" height="1080" alt="Screenshot 2026-10-16 173503" src="https://github.com/user-attachments/assets/e3a9536c-c791-4fcf-8df8-5d0c10fb3880" />
-
+<img src="https://github.com/user-attachments/assets/e3a9536c-c791-4fcf-8df8-5d0c10fb3880" alt="The look on a house model (3)" width="480">
 
 Three more themes, not from those projects: **paper**, an architect's drawing on cream card with ink lines, walls a shade warmer and floors parchment; **ember**, charcoal surfaces with a warm cast and amber lines that glow, for a dark dashboard that is not blue; **pastel**, the model's own colours lightened and softened on a pale stage, for a house whose textures and furniture colours should still read.
 
-<img width="2600" height="2478" alt="image" src="https://github.com/user-attachments/assets/be1569ba-0544-4602-9b26-99053574021c" />
-
+<img src="https://github.com/user-attachments/assets/be1569ba-0544-4602-9b26-99053574021c" alt="The same house in the day, paper, ember and pastel themes" width="100%">
 
 **Your own colours** (`theme: custom`). The same colour function with colours you choose, as `#rrggbb`; the editor shows them as colour pickers once Custom is selected:
 
-<img width="634" height="900" alt="Picture1" src="https://github.com/user-attachments/assets/d016f5f2-3520-49b5-89de-a61e22494295" />
-
+<img src="https://github.com/user-attachments/assets/d016f5f2-3520-49b5-89de-a61e22494295" alt="The custom theme colours as colour pickers in the editor" width="360">
 
 ```yaml
 look:
@@ -224,12 +215,7 @@ entities:
     transparent:
       invert: 'no'                      # yes: 100 - value, for a slider that means opacity
 ```
-<img width="1502" height="916" alt="Screenshot 2026-10-18 121912" src="https://github.com/user-attachments/assets/d83b05f6-acb6-42c7-8f31-1bed437ce5da" />
-<img width="1477" height="914" alt="Screenshot 2026-10-18 122013" src="https://github.com/user-attachments/assets/4104da5c-2056-47ae-b90a-fb1e9f8b2ede" />
-<img width="1482" height="920" alt="Screenshot 2026-10-18 122059" src="https://github.com/user-attachments/assets/159a3421-8de8-4388-9712-ff82aea43070" />
-
-
-
+<p><img src="https://github.com/user-attachments/assets/d83b05f6-acb6-42c7-8f31-1bed437ce5da" alt="Transparent walls (1)" width="32%"> <img src="https://github.com/user-attachments/assets/4104da5c-2056-47ae-b90a-fb1e9f8b2ede" alt="Transparent walls (2)" width="32%"> <img src="https://github.com/user-attachments/assets/159a3421-8de8-4388-9712-ff82aea43070" alt="Transparent walls (3)" width="32%"></p>
 
 A numeric entity state is the transparency itself: 0 to 100, or 0 to 1 when the entity's `max` is 1 or below. Each mesh keeps its material and only its opacity is lowered; a material shared with an object outside the rules is cloned first so that object stays solid. At 100 the mesh is hidden, so it stops casting shadows as well; back at 0 the material is restored exactly. Works on top of `look` (the themed material is the one faded; the edge lines stay, which gives an x-ray outline) and of colour conditions on other objects.
 
@@ -307,10 +293,7 @@ daylight:
 
 `colors` tints the room light (ambient, hemisphere and camera light); `sun_colors`, when given, tints only the window beams, so the house can stay neutral grey while the sun goes orange. The light colour and the background run along a gradient by sun elevation: the night colour at or below the `night` stop, the dusk (or dawn, when the sun is rising) colour at the `dusk` stop, the day colour at or above the `day` stop, blended smoothly in between, so the low sun is fully orange and both sides of it fade out of it gradually. `north` (the card's existing option) tells the card which way the model faces, so the window spots follow the real sun. `time_entity` accepts a number of hours 0 to 24, a time (an `input_datetime` such as `06:40:00`; 6:00 sunrise, 12:00 noon, 18:00 sunset) or any entity with `elevation` and `azimuth` attributes. `beam_full` is the elevation at which the window beams reach full strength (default 4°). Exterior objects are moved to their own render layer: only the exterior ambient and `exterior_sun`, a directional light that follows the real sun, reach them, and the window spots never touch them; they remain clickable. Each window spot sits just inside its pane and is aimed along the sun's actual direction to where that line meets the floor, so its pool lands near the sill under a high sun, reaches deep into the room under a low one, and swings sideways between morning and afternoon. YAML only for now; no editor section.
 
-<img width="836" height="730" alt="Screenshot 2026-09-29 164839" src="https://github.com/user-attachments/assets/1dce8df7-31b4-4fb4-9537-043ca22721c8" />
-
-<img width="1452" height="884" alt="Screenshot 2026-09-30 202624" src="https://github.com/user-attachments/assets/254dfcff-3556-4319-9d59-e9dbe6cb2fa5" />
-
+<p><img src="https://github.com/user-attachments/assets/1dce8df7-31b4-4fb4-9537-043ca22721c8" alt="Daylight on the plan (1)" width="49%"> <img src="https://github.com/user-attachments/assets/254dfcff-3556-4319-9d59-e9dbe6cb2fa5" alt="Daylight on the plan (2)" width="49%"></p>
 
 ### Shades that shrink with their position (`type3d: shade`)
 
@@ -323,8 +306,7 @@ daylight:
   shade:
     top_entity: cover.bedroom_shade_top
 ```
-<img width="1320" height="1377" alt="Screenshot 2026-09-27 095937" src="https://github.com/user-attachments/assets/a7fa1d87-e596-4181-92d0-0738289ee6b9" />
-
+<img src="https://github.com/user-attachments/assets/a7fa1d87-e596-4181-92d0-0738289ee6b9" alt="A shade drawn at its position" width="480">
 
 ### Mesh colour from the light itself
 
@@ -411,10 +393,7 @@ Objects exported without texture coordinates (Sweet Home 3D panels, plain boxes:
 
 Animated GIFs are decoded in the card, so they animate in every browser and keep the scene's animation loop running while they show. Video files (`.mp4`, `.webm`) play muted in a loop. The card re-draws the object when the URL changes, when `refresh` fires, and on every animation frame while a GIF or video is showing. `/api/` URLs without an access token are fetched with the dashboard's credentials, so `entity_picture` of a camera works as is. An entity is required; use any entity, `sun.sun` for example, for a fixed picture.
 
-<img width="1175" height="947" alt="Screenshot 2026-09-26 152711" src="https://github.com/user-attachments/assets/99c383e7-6533-45f6-a700-f6298ab1d474" />
-
-<img width="320" height="672" alt="Recording 2026-09-26 144845" src="https://github.com/user-attachments/assets/cf826aa1-d8ad-40a6-aea2-342679830b51" />
-
+<p><img src="https://github.com/user-attachments/assets/99c383e7-6533-45f6-a700-f6298ab1d474" alt="Pictures on model objects" width="64%"> <img src="https://github.com/user-attachments/assets/cf826aa1-d8ad-40a6-aea2-342679830b51" alt="Recording: a video playing on a model object" width="24%"></p>
 
 ## Visual editor
 
@@ -429,8 +408,7 @@ The card editor is built on Home Assistant's own form components (`ha-form`, ent
 
 On a Home Assistant without `ha-form` the previous editor is shown instead. `daylight.windows`, `exterior` and `glow` lists, and `image.url` as a state map, are edited in YAML.
 
-<img width="1201" height="922" alt="Screenshot 2026-10-02 183720" src="https://github.com/user-attachments/assets/8ee30132-4fa0-4cc2-8eb2-85c41609e310" />
-
+<img src="https://github.com/user-attachments/assets/8ee30132-4fa0-4cc2-8eb2-85c41609e310" alt="The visual editor: sections on the left, the live preview on the right" width="100%">
 
 ## Options added by this fork
 
@@ -448,7 +426,8 @@ On a Home Assistant without `ha-form` the previous editor is shown instead. `day
 | `daylight` | see above | off |
 | `type3d: shade` | `shade.top_entity`, `shade.invert` | |
 | `look` | see above | off |
-| `look.edge_skip` | `images`, `seams`, `floors`, `coplanar`, object ids / patterns / `<group>` | nothing skipped |
+| `look.edge_skip` | `images`, `texts`, `seams`, `floors`, `coplanar`, object ids / patterns / `<group>` | nothing skipped |
+| `look.custom` | colours of `theme: custom`; see above | defaults |
 | `transparent` | card-level list of `{objects, transparency}` rules; see above | off |
 | `type3d: transparent` | `transparent.transparency`, `transparent.transparency_off`, `transparent.state`, `transparent.invert` | |
 | `shadow_budget` | number of shadow-casting lights | from the GPU's texture units |
@@ -469,8 +448,7 @@ It shares this card's conventions: the Neon, Blueprint and Day themes of `look`,
 
 Floor3DX Card is one component of a Home Assistant digital twin ecosystem, combining learned household routines, weekly schedule planning, and 3D previews with real device control and energy management: https://github.com/FortranFour/home-scheduler.
 
-<img width="1440" height="1628" alt="demo-night" src="https://github.com/user-attachments/assets/f905ea31-7ebf-446e-a773-dab3eaea00df" />
-
+<img src="https://github.com/user-attachments/assets/f905ea31-7ebf-446e-a773-dab3eaea00df" alt="The home-scheduler dashboard at night" width="480">
 
 ## Installation
 
