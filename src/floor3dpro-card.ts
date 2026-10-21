@@ -4770,6 +4770,15 @@ export class Floor3dCard extends LitElement {
 
   // https://lit-element.polymer-project.org/guide/styles
   static get styles(): CSSResultGroup {
-    return css``;
+    // A custom element is inline unless styled, and an inline host is as wide as its content: the
+    // canvas. In a container that does not stretch its children (the card editor's preview pane,
+    // say) the card then never grows past the canvas's last size, however wide the pane gets.
+    return css`
+      :host {
+        display: block;
+        width: 100%;
+        box-sizing: border-box;
+      }
+    `;
   }
 }

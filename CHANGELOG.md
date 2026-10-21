@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.1
+
+### Fixed
+- The card did not widen with its container in a pane that centres its children instead of stretching them, such as the card editor's preview when the dialog is expanded: the host element took the width of its content, the canvas, so the canvas could never grow past its last size. The host is now `display: block; width: 100%`; the resize observer then sees the new width and resizes the canvas as it does in every other view.
+
 ## 1.9.0
 
 ### Added
