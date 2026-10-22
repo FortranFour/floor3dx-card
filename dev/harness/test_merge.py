@@ -32,6 +32,8 @@ JS = r"""async () => {
   out.merged = merged.length; out.mergedLines = merged.filter(m => m[1] === 'lines').length;
   out.meshesLeft = c._levels.reduce((n, l) => n + (l ? l.children.filter(o => o.isMesh && !o.name.startsWith('f3dx_')).length : 0), 0);
   out.raycastHasMerged = c._raycastinglevels.some(l => l.some(o => o.name && o.name.startsWith('f3dx_merged')));
+  out.raycastHasOriginal = c._raycastinglevels.some(l => l.some(o => o.userData && o.userData.f3dxMergedInto));
+  out.raycastHasGone = c._raycastinglevels.some(l => l.some(o => !o.parent)); // a merged original is detached from its level
   out.raycastCount = c._raycastinglevels.reduce((n, l) => n + l.length, 0);
   c._renderer.render(c._scene, c._camera); out.calls = c._renderer.info.render.calls;
   // level menu: hiding every level hides the merged meshes too
@@ -55,7 +57,7 @@ if __name__ == '__main__':
     check('every configured object still there by name', all(k[1] != 'MISSING' for k in r['kept']))
     check('text panel keeps its own material', any(k[2] and str(k[2]).startswith('f3dmat') for k in r['kept']))
     check('edge lines merged too', r['mergedLines'] > 0)
-    check('raycasting list without the merged originals', not r['raycastHasMerged'] and r['raycastCount'] < r['total'])
+    check('raycasting list: merged meshes in (a tap on a wall still lands on the wall), originals out', r['raycastHasMerged'] and not r['raycastHasGone'] and r['raycastCount'] < r['total'])
     check('draw calls well below the mesh count', r['calls'] < r['total'] / 3)
     check('level menu still hides the merged meshes', r['callsNoLevel'] < r['calls'] / 4)
     check('hide type and hide_objects still work', r['hiddenOk'])

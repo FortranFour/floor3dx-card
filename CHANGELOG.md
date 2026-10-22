@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.2.1
+
+### Fixed
+- With `merge_static: yes`, a tap anywhere on the model could fire the action of an object behind the tapped wall (the garage's `type3d: camera` on the floor opened from a single tap on any wall): the merged meshes had been taken out of the raycasting lists, so taps passed through them. They are back in, standing in for the originals, and a tap on merged geometry does nothing, as a tap on a wall always did.
+
 ## 2.2.0
 
 ### Fixed

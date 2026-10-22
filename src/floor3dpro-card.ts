@@ -1046,6 +1046,7 @@ export class Floor3dCard extends LitElement {
   private _defaultaction(intersects: THREE.Intersection[]): void {
     if (intersects.length > 0 && intersects[0].object && intersects[0].object.name != '') {
       const objectName = intersects[0].object.name;
+      if (objectName.startsWith('f3dx_merged_')) return; // merged static geometry: a wall, nothing to select
 
       if (getLovelace().editMode && this._config.editModeNotifications != 'no') {
         window.prompt('Object:', objectName);
@@ -1879,7 +1880,15 @@ export class Floor3dCard extends LitElement {
     const removed = new Set<THREE.Object3D>();
     const { stats, geometries } = mergeStatic(this._levels, reserved, (mesh) => removed.add(mesh));
     this._mergedGeometries.push(...geometries);
-    this._raycastinglevels = (this._raycastinglevels || []).map((level) => (level || []).filter((o) => !removed.has(o)));
+    // The merged meshes take the originals' place in the raycasting lists: a tap on a wall must still
+    // land on the wall (and do nothing), not pass through it onto a bound floor or object behind.
+    this._raycastinglevels = (this._raycastinglevels || []).map((level, i) => {
+      const kept = (level || []).filter((o) => !removed.has(o));
+      (this._levels[i] ? this._levels[i].children : []).forEach((o: any) => {
+        if (o.isMesh && o.name && o.name.startsWith('f3dx_merged_')) kept.push(o);
+      });
+      return kept;
+    });
     console.log(
       `floor3d-card: merge_static: ${stats.merged} of ${stats.meshes} meshes merged into ${stats.into}` +
         (stats.lines ? `, ${stats.lines} edge lines into ${stats.intoLines}` : '') +
