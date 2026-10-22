@@ -247,9 +247,18 @@ export class ImageFrame {
     }
   }
 
+  // three.js (r186) allocates a texture's GPU storage once, at the size of the first upload, and
+  // later uploads write into that storage; a canvas that has grown since (2x2 until the picture
+  // arrives) would never show. Disposing the texture makes the next upload allocate at the new size.
+  private resize(w: number, h: number): void {
+    if (this.canvas.width === w && this.canvas.height === h) return;
+    this.canvas.width = w;
+    this.canvas.height = h;
+    this.texture.dispose();
+  }
+
   private paintEmpty(): void {
-    this.canvas.width = 2;
-    this.canvas.height = 2;
+    this.resize(2, 2);
     this.ctx.clearRect(0, 0, 2, 2);
     if (this.opts.background !== 'transparent') {
       this.ctx.fillStyle = this.opts.background;
@@ -292,10 +301,7 @@ export class ImageFrame {
     const aspect = this.opts.aspect > 0 ? this.opts.aspect : srcW / srcH;
     const w = Math.max(2, Math.round(aspect >= 1 ? this.opts.maxSize : this.opts.maxSize * aspect));
     const h = Math.max(2, Math.round(aspect >= 1 ? this.opts.maxSize / aspect : this.opts.maxSize));
-    if (this.canvas.width !== w || this.canvas.height !== h) {
-      this.canvas.width = w;
-      this.canvas.height = h;
-    }
+    this.resize(w, h);
     const ctx = this.ctx;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, w, h);

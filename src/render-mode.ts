@@ -55,6 +55,13 @@ const PI_SCALED: [string, string][] = [
 
 let legacyChunk: string | null = null;
 
+// Off from the moment the card's module loads, not only once a renderer exists: three.js turns
+// colour management on by default, and a colour parsed from hex before the first card's renderer was
+// set up (a card's `backgroundColor` on a fresh page, say) would be converted to linear and come out
+// dark, while the same colour on a page where a card had already run would not. `managed` turns it
+// back on when a card asks for it.
+THREE.ColorManagement.enabled = false;
+
 function buildLegacyChunk(): string {
   let chunk = ORIGINAL_LIGHTS.replace(/float getDistanceAttenuation\([\s\S]*?\n}\n/, LEGACY_ATTENUATION);
   PI_SCALED.forEach(([from, to]) => {

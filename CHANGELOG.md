@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.3
+
+### Fixed
+- `type3d: image` pictures (stills, GIFs, camera streams) did not show on 2.0: three.js r186 allocates a texture's GPU storage at the size of the first upload, and the picture's canvas is a 2x2 placeholder until the file arrives, so the panel stayed blank (or black). The texture is now re-created when its canvas changes size.
+- On a fresh page load the first card's hex colours (`backgroundColor`, say) came out dark, while the same card after navigating within the dashboard was right: three.js turns colour management on by default and the card switched it off only when its renderer was set up, after the background colour had been parsed. Colour management is now off from the moment the card loads, and the render mode is applied before any colour of the scene is made.
+- Harness: `test_engine.py` covers both (the pixel comparison draws a second card on a page where the first has already run, so it could not see either).
+
 ## 2.0.2
 
 ### Fixed

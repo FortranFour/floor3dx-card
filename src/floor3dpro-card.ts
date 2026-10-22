@@ -2334,6 +2334,10 @@ export class Floor3dCard extends LitElement {
     this._renderer.domElement.style.height = '100%';
     this._renderer.domElement.style.display = 'block';
 
+    // lights / color_management: legacy (the 1.x picture) unless configured; see render-mode.ts.
+    // Before any colour of this scene is made: a hex colour is converted while colour management is on.
+    applyRenderMode(this._renderer, this._config);
+
     if ((this._config as any).look && !this._look) this._look = new Look((this._config as any).look, this._scene);
     const stage = this._look && this._look.stageColor(0.5);
     if (stage) {
@@ -2348,8 +2352,6 @@ export class Floor3dCard extends LitElement {
       this._scene.background = new THREE.Color('#aaaaaa');
     }
 
-    // lights / color_management: legacy (the 1.x picture) unless configured; see render-mode.ts
-    applyRenderMode(this._renderer, this._config);
     this._renderer.toneMapping = THREE.LinearToneMapping;
     //this._renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this._renderer.toneMappingExposure = exposure(this._config);
