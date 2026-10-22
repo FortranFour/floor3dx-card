@@ -1,4 +1,4 @@
-export const CARD_VERSION = '2.0.4';
+export const CARD_VERSION = '2.0.5';
 /** The upstream this fork is built on; shown in the console banner only. */
 export const UPSTREAM_VERSION = 'floor3dpro-card 1.5.3-Pro.Faz.2.1';
 

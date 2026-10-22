@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.5
+
+### Fixed
+- `tools/remove-objects.mjs` dropped the texture coordinates of every mesh whose material has no texture (gltf-transform's `prune()` default), and those are exactly the panels the card draws text and pictures onto: a model trimmed with the 1.9.12 tool showed no readouts on any card version. The tool now prunes with `keepAttributes`; re-run it on the original model to get a file with its UVs back.
+- A model replaced on the server under the same name is now picked up at once: the card fetches it with `cache: 'no-cache'` (revalidated with the server, a 304 when unchanged), where Home Assistant's 31-day `max-age` on `/local/` kept the browser on the old file.
+
 ## 2.0.4
 
 ### Fixed

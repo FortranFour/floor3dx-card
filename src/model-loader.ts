@@ -226,17 +226,36 @@ function readGltfJson(data: ArrayBuffer): any {
   }
 }
 
-function fetchModel(url: string, onProgress?: (event: ProgressEvent) => void): Promise<ArrayBuffer> {
-  return new Promise((resolve, reject) => {
-    const fileLoader = new THREE.FileLoader();
-    fileLoader.setResponseType('arraybuffer');
-    fileLoader.load(
-      url,
-      (data) => resolve(data as unknown as ArrayBuffer),
-      onProgress,
-      (err: any) => reject(new Error(`Unable to download ${url}${err && err.message ? ': ' + err.message : ''}`)),
-    );
+// cache: 'no-cache' revalidates the file with the server on every load (a 304 when unchanged), so a
+// model replaced under the same name shows at once. Home Assistant serves /local/ with a 31-day
+// max-age, and the default cache mode kept serving the old file for that long.
+async function fetchModel(url: string, onProgress?: (event: ProgressEvent) => void): Promise<ArrayBuffer> {
+  let res: Response;
+  try {
+    res = await fetch(url, { cache: 'no-cache', credentials: 'same-origin' });
+  } catch (e: any) {
+    throw new Error(`Unable to download ${url}${e && e.message ? ': ' + e.message : ''}`);
+  }
+  if (!res.ok) throw new Error(`Unable to download ${url}: ${res.status} ${res.statusText}`);
+  if (!res.body || !onProgress) return res.arrayBuffer();
+  const total = Number(res.headers.get('content-length')) || 0;
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let loaded = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    loaded += value.byteLength;
+    onProgress(new ProgressEvent('progress', { lengthComputable: total > 0, loaded, total }));
+  }
+  const out = new Uint8Array(loaded);
+  let offset = 0;
+  chunks.forEach((c) => {
+    out.set(c, offset);
+    offset += c.byteLength;
   });
+  return out.buffer;
 }
 
 export async function loadCompressedGLTF(

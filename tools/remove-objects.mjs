@@ -39,7 +39,9 @@ for(const spec of specs){
   remove.add(spec);
 }
 for(const name of remove){const n=byName.get(name); if(n) n.dispose();}
-await doc.transform(prune());
+// keepAttributes: prune() would otherwise drop the UVs of meshes whose material has no texture, and the
+// card draws text and pictures onto exactly such panels (2.0.4: garage readouts went blank)
+await doc.transform(prune({keepAttributes:true, keepLeaves:true}));
 if(hadDraco) doc.createExtension(KHRDracoMeshCompression).setRequired(true).setEncoderOptions({
   method:KHRDracoMeshCompression.EncoderMethod.EDGEBREAKER, encodeSpeed:0, decodeSpeed:5,
   quantizationBits:{POSITION:14,NORMAL:10,COLOR:8,TEX_COORD:12,GENERIC:12}, quantizationVolume:'mesh'});
