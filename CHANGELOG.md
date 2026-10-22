@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.3.2
+
+### Fixed
+- On phones and tablets (iOS, and any browser that fires touch events), a single tap anywhere on the card ran the default action of an arbitrary object: in the garage every tap, inside or outside the model, opened the camera's popup; in the house it happened to hit nothing actionable. The card runs the default action from `touchstart` with the event's `offsetX`/`offsetY`, which a TouchEvent does not have; three.js r130 cast that NaN ray and hit nothing, so on 1.x the listener was inert, while r186 reports every triangle of every object as hit and the first of them got the action (2.0 to 2.3.1). A ray without coordinates now hits nothing, as before; taps act through the mouse events the browser synthesises (double tap, long press, `click: yes`), as on 1.x. Regression test `dev/harness/test_touch.py`.
+
 ## 2.3.1
 
 ### Fixed

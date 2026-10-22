@@ -17,6 +17,8 @@ every load, with one decode worker and with four. The file's docstring explains 
 
 `test_look_edges.py` is different from the others: it bundles `src/look.ts` on its own with esbuild (output `unit/look-bundle.js`, not committed) and checks the edge-line rules on a hand-built scene of open quads, where the expected line counts are known exactly.
 
+`test_touch.py` checks taps on phones: a `touchstart` (a TouchEvent has no offsetX/offsetY) runs no action, while a double-click on a camera's object opens its more-info and one elsewhere does not. In three.js r186 a ray cast from NaN coordinates reports every triangle of every object as hit (r130: none), so from 2.0 to 2.3.1 every tap anywhere on a card on iOS ran the default action of whatever object came first.
+
 `test_wall_seal.py` checks `wall_seal` on the demo's walls (longer by the seal at each end, nothing else changed, own geometry per wall) and that a card rebuilt with another `look` rebuilds its edge lines.
 
 ## Reference renders across versions

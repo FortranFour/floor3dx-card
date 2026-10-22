@@ -923,6 +923,11 @@ export class Floor3dCard extends LitElement {
   }
   // Faz-0 Engine Backbone: (Stabil.Patch.0.0) Functions Ends
   private _getintersect(e: any): THREE.Intersection[] {
+    // A TouchEvent has no offsetX/offsetY. A ray cast from NaN coordinates hit nothing in three.js
+    // r130, so the touchstart listener was inert on phones; r186 reports every triangle of every
+    // object as hit, and the first of them got the default action on every tap anywhere on the card
+    // (iOS, 2.0 to 2.3.1). Taps on phones act through the mouse events the browser synthesises.
+    if (!Number.isFinite(e.offsetX) || !Number.isFinite(e.offsetY)) return [];
     const mouse: THREE.Vector2 = new THREE.Vector2();
     mouse.x = (e.offsetX / this._content.clientWidth) * 2 - 1;
     mouse.y = -(e.offsetY / this._content.clientHeight) * 2 + 1;
