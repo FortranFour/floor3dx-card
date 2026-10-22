@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.3.1
+
+### Fixed
+- With `merge_static: yes`, the editor's object menus listed only the objects left unmerged when the editor was opened on a card that had not been in preview while it loaded (the editor asks the card for the list on demand; embedding hosts such as Home Scheduler open it that way). The card now keeps the full list from before the merge.
+
 ## 2.3.0
 
 ### Changed

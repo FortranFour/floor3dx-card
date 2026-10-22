@@ -41,6 +41,7 @@ JS = r"""async () => {
   // the hidden group object is hidden (hide type), the hide_objects one too
   out.hiddenOk = !c._scene.getObjectByName(other[1]).visible && !c._scene.getObjectByName(other[2]).visible;
   out.total = names.length;
+  out.editorNames = c._modelObjectNames().length; // what the editor's object menus get
   return out;
 }"""
 
@@ -61,5 +62,6 @@ if __name__ == '__main__':
     check('draw calls well below the mesh count', r['calls'] < r['total'] / 3)
     check('level menu still hides the merged meshes', r['callsNoLevel'] < r['calls'] / 4)
     check('hide type and hide_objects still work', r['hiddenOk'])
+    check('the editor still gets the full object list (holes and slabs never were in it)', r['editorNames'] > r['total'] * 0.9)
     check('no page errors', not errors)
     raise SystemExit(0 if ok else 1)

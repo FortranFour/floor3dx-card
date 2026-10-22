@@ -1212,7 +1212,12 @@ export class Floor3dCard extends LitElement {
     this._objectIndex = index;
   }
 
+  // Every object of the model by name, as loaded. Kept from before merge_static folds the unbound
+  // meshes together, so the editor's object menus (which ask for the list on demand, also when the
+  // editor is opened on a card that was not in preview when it loaded) still list every object.
+  private _allObjectNames: string[] | null = null;
   private _modelObjectNames(): string[] {
+    if (this._allObjectNames) return this._allObjectNames;
     const names = new Set<string>();
     (this._raycastinglevels || []).forEach((level) => (level || []).forEach((o) => o.name && names.add(o.name)));
     return Array.from(names);
@@ -1875,6 +1880,7 @@ export class Floor3dCard extends LitElement {
   private _mergeStatic(): void {
     if ((this._config as any).merge_static != 'yes' || this.preview) return;
     const names = this._modelObjectNames();
+    this._allObjectNames = names.slice();
     const resolved = (this._object_ids || []).map((e: any) => (e.objects || []).map((o: any) => o.object_id));
     const reserved = reservedNames(this._config, names, resolved);
     const removed = new Set<THREE.Object3D>();
@@ -2379,6 +2385,7 @@ export class Floor3dCard extends LitElement {
     this._mergedGeometries.forEach((g) => g.dispose());
     this._mergedGeometries = [];
     this._objectIndex = null;
+    this._allObjectNames = null;
     this._scene = new THREE.Scene();
 
     this._camera = new THREE.PerspectiveCamera(45, 1, 0.1, 10000);
