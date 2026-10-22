@@ -141,6 +141,56 @@ function resolveDecoderPath(
   return resolvedPaths.get(kind);
 }
 
+/**
+ * Object names as three.js r130 gave them, which is what every 1.x configuration refers to.
+ *
+ * A glTF file may name two nodes alike (Sweet Home 3D exports do: two pieces `1_1`, say). r130's
+ * GLTFLoader made the names unique by appending `_1`, `_2`, ... and checking the result against
+ * every name given so far, so the second `1_1` became `1_1_1` and the file's own `1_1_1`, coming
+ * later, `1_1_1_1`. r186 appends a counter without that check, so the second `1_1` and the file's
+ * `1_1_1` both end up as `1_1_1` and a configured `1_1_1_1` finds nothing. The r130 names are
+ * recomputed here from the glTF JSON in the loader's reservation order (the scene's root nodes in
+ * order, then their children) and written onto the objects, so names do not move between versions.
+ */
+function restoreLegacyNames(gltf: GLTF, json: any): number {
+  const scenes = json.scenes || [];
+  const sceneDef = scenes[json.scene || 0];
+  if (!sceneDef || !json.nodes) return 0;
+  const used: { [name: string]: boolean } = {};
+  const unique = (original: string): string => {
+    const sanitized = THREE.PropertyBinding.sanitizeNodeName(original || '');
+    let name = sanitized;
+    for (let i = 1; used[name]; ++i) name = sanitized + '_' + i;
+    used[name] = true;
+    return name;
+  };
+  if (sceneDef.name) unique(sceneDef.name);
+  const names: { [nodeIndex: number]: string } = {};
+  const reserve = (indices: number[]): void => {
+    indices.forEach((i) => {
+      const def = json.nodes[i];
+      if (def && def.name) names[i] = unique(def.name);
+    });
+    indices.forEach((i) => {
+      const def = json.nodes[i];
+      if (def && def.children) reserve(def.children);
+    });
+  };
+  reserve(sceneDef.nodes || []);
+
+  const associations: Map<THREE.Object3D, any> = (gltf.parser as any).associations;
+  let renamed = 0;
+  if (!associations) return 0;
+  gltf.scene.traverse((object) => {
+    const a = associations.get(object);
+    if (a && a.nodes !== undefined && names[a.nodes] !== undefined && object.name !== names[a.nodes]) {
+      object.name = names[a.nodes];
+      renamed++;
+    }
+  });
+  return renamed;
+}
+
 /** Read the glTF JSON out of a .glb container (or a plain .gltf) without parsing the geometry. */
 function readGltfJson(data: ArrayBuffer): any {
   try {
@@ -239,6 +289,8 @@ export async function loadCompressedGLTF(
   });
 
   restoreFileOrder(gltf);
+  const renamed = restoreLegacyNames(gltf, json);
+  if (renamed) log(`${renamed} duplicate node names made unique the r130 way (as in 1.x)`);
 
   const t2 = performance.now();
   log(

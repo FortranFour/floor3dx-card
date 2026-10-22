@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.2
+
+### Fixed
+- Objects configured by name could go missing after 2.0 (`Object issue for Entity ... reading 'material'`, text and picture panels gone): a glTF file may name two nodes alike, and Sweet Home 3D exports do. three.js r130 made such names unique by appending `_1`, `_2`, ... and checking the result against every name so far; r186 appends a counter without that check, so the second `1_1` and the file's own `1_1_1` both come out as `1_1_1` and a configured `1_1_1_1` finds nothing. The card now recomputes the r130 names from the glTF JSON and puts them on the objects, so every name a 1.x configuration refers to is still there. Checked on two real models: the object names are identical to 1.9.12.
+
 ## 2.0.1
 
 ### Fixed
