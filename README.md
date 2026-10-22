@@ -436,7 +436,7 @@ On a Home Assistant without `ha-form` the previous editor is shown instead. `day
 
 | Option | Values | Default |
 |---|---|---|
-| `draco_path` | folder holding the Draco decoder files | found automatically |
+| `draco_path` | folder holding a custom Draco decoder | embedded decoder |
 | `basis_path` | folder holding the Basis transcoder files | found automatically |
 | `pixel_ratio` | `device`, `adaptive`, or a number | `device`; `adaptive` under `pro_skill: mobile` |
 | `antialias` | `yes`, `no` | `yes`; see the mobile profile above |
@@ -498,7 +498,7 @@ Install the card one way only. Two resources that both define `floor3dx-card` co
 
 ### Decoder files
 
-The card looks for the Draco and Basis decoders in this order: the `draco_path` or `basis_path` option, the card's own folder, a `draco/` or `basis/` sub-folder of it, then jsDelivr. With the files from a release in place, nothing is fetched from the internet. With `pro_log: engine`, the console reports which source was used.
+Since 2.0.4 the Draco decoder is embedded in the card's JS, so a Draco model needs no extra file and always decodes with the decoder that matches the card's three.js; `draco_path` is only for a custom build of the decoder. The Basis transcoder (KTX2 textures only) is still a set of files: the `basis_path` option, the card's own folder, a `basis/` sub-folder of it, then jsDelivr. With `pro_log: engine`, the console reports which source was used.
 
 ## Compressing a model
 

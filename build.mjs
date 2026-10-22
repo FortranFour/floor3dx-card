@@ -7,6 +7,7 @@
 import { build, context } from 'esbuild';
 import { createRequire } from 'node:module';
 import fs from 'node:fs';
+import path from 'node:path';
 import { applyForkIdentity } from './fork-identity.mjs';
 
 const require = createRequire(import.meta.url);
@@ -27,6 +28,22 @@ const stubPlugin = {
   name: 'stub-mwc-elements',
   setup(b) {
     b.onLoad({ filter: /\.js$/ }, (args) => (stubbed.includes(args.path) ? { contents: '', loader: 'js' } : null));
+  },
+};
+
+// The Draco decoder that matches the bundled three.js, embedded in the card: Home Assistant / HACS
+// install only the card's JS, so decoder files next to it may be missing or from another version
+// (2.0.0-2.0.3 decoded geometry with whatever draco_wasm_wrapper.js the server had).
+const dracoDir = path.dirname(require.resolve('three/examples/jsm/libs/draco/gltf/draco_wasm_wrapper.js'));
+const embedPlugin = {
+  name: 'embed-draco',
+  setup(b) {
+    b.onResolve({ filter: /^embedded:draco-(wrapper|wasm)$/ }, (args) => ({ path: args.path, namespace: 'embedded' }));
+    b.onLoad({ filter: /.*/, namespace: 'embedded' }, (args) =>
+      args.path === 'embedded:draco-wrapper'
+        ? { contents: fs.readFileSync(path.join(dracoDir, 'draco_wasm_wrapper.js')), loader: 'text' }
+        : { contents: fs.readFileSync(path.join(dracoDir, 'draco_decoder.wasm')), loader: 'binary' },
+    );
   },
 };
 
@@ -52,7 +69,7 @@ const options = {
   legalComments: 'none',
   write: false, // the identity plugin writes the processed text
   logLevel: 'info',
-  plugins: [stubPlugin, identityPlugin],
+  plugins: [stubPlugin, embedPlugin, identityPlugin],
 };
 
 if (watch) {

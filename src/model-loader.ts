@@ -18,13 +18,14 @@ import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { CARD_VERSION } from './const';
+import dracoWrapper from 'embedded:draco-wrapper';
+import dracoWasm from 'embedded:draco-wasm';
 
 const EXT_DRACO = 'KHR_draco_mesh_compression';
 const EXT_MESHOPT = 'EXT_meshopt_compression';
 const EXT_BASISU = 'KHR_texture_basisu';
 
 // Same decoder builds that ship with the bundled three.js release.
-const CDN_DRACO = `https://cdn.jsdelivr.net/npm/three@0.${THREE.REVISION}.1/examples/js/libs/draco/gltf/`;
 const CDN_BASIS = `https://cdn.jsdelivr.net/npm/three@0.${THREE.REVISION}.1/examples/js/libs/basis/`;
 
 export interface CompressedModelOptions {
@@ -45,6 +46,20 @@ let sharedKtx2: KTX2Loader | undefined;
 let sharedKtx2Path: string | undefined;
 
 const resolvedPaths: Map<string, Promise<string>> = new Map();
+
+const EMBEDDED = 'embedded';
+let embeddedUrls: { js: string; wasm: string } | null = null;
+
+/** Blob URLs of the embedded Draco decoder, made once; DRACOLoader fetches them like any other file. */
+function embeddedDracoUrls(): { js: string; wasm: string } {
+  if (!embeddedUrls) {
+    embeddedUrls = {
+      js: URL.createObjectURL(new Blob([dracoWrapper], { type: 'text/javascript' })),
+      wasm: URL.createObjectURL(new Blob([dracoWasm as unknown as ArrayBuffer], { type: 'application/wasm' })),
+    };
+  }
+  return embeddedUrls;
+}
 
 function withSlash(path: string): string {
   return path.charAt(path.length - 1) === '/' ? path : path + '/';
@@ -241,11 +256,20 @@ export async function loadCompressedGLTF(
   const loader = new GLTFLoader();
 
   if (used.indexOf(EXT_DRACO) >= 0) {
-    const dracoPath = await resolveDecoderPath('draco', options.dracoPath, 'draco_wasm_wrapper.js', CDN_DRACO, log);
+    // The decoder is embedded in the card (always the one matching the bundled three.js); draco_path
+    // still selects decoder files on the server, for a custom build of the decoder.
+    const dracoPath = options.dracoPath && options.dracoPath !== '' ? withSlash(options.dracoPath) : EMBEDDED;
     if (!sharedDraco || sharedDracoPath !== dracoPath) {
       if (sharedDraco) sharedDraco.dispose();
       sharedDraco = new DRACOLoader();
-      sharedDraco.setDecoderPath(dracoPath);
+      if (dracoPath === EMBEDDED) {
+        sharedDraco.setDecoderPath(embeddedDracoUrls());
+        log('draco decoder: embedded in the card');
+      } else {
+        await refreshDecoderFiles('draco', dracoPath, log);
+        sharedDraco.setDecoderPath(dracoPath);
+        log(`draco decoder: ${dracoPath}`);
+      }
       sharedDraco.setWorkerLimit(Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1)));
       sharedDracoPath = dracoPath;
     }

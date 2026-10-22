@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.4
+
+### Fixed
+- Text and picture panels of a Draco model stayed blank although their canvases were drawn: the panels' geometry had lost its UV coordinates. HACS installs only the card's JS (`hacs.json` names that one file), so the Draco decoder files next to it on the server were whatever had been copied there before, and a decoder from another generation than the card's three.js r186 decoded the meshes without their texture coordinates. The Draco decoder (wrapper and wasm, the ones shipped with the bundled three.js) is now embedded in the card's JS and handed to the loader as blob URLs; nothing on the server has to match any more, and no decoder file is needed for a Draco model. `draco_path` remains for a custom decoder build. The bundle grows by about 300 KB.
+
 ## 2.0.3
 
 ### Fixed
