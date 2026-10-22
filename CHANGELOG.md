@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.3.0
+
+### Changed
+- `lights: physical` and `color_management: managed` now keep the 1.x picture as closely as the new models allow, so switching either on needs no re-tuning:
+  - physical: every lamp's intensity is derived from its `lumens`, `distance` and `decay` so that the inverse-square falloff gives the same light as the legacy falloff halfway along the lamp's reach (for `distance: 0`, at 200 cm); the camera light, ambient and daylight keep the π factor of the legacy model. House with five lamps and shadows against the 1.9.12 render: 0.4% of pixels differ (legacy itself: 0.03%).
+  - managed: the light amounts (intensity, falloff, the cosine to the light) are raised to the power 1.8 in the shader, which undoes most of the lift the sRGB output encoding gives them; the look's shader palette and stage colours are converted to linear so they show as the numbers say; the default exposure stays 0.6. Against the 1.9.12 renders: the garage within 2 levels on all views, the house's shading a little flatter (mean 2–9 levels). Found by rendering the reference views over a grid of exponent and exposure (`render_views.py` with `EXTRA`).
+- Editor hints and README for the two options updated. `render_views.py` takes `EXTRA` (options added to every view) and `ONLY` (a list of views) for such comparisons.
+
+### Added
+- Unit tests of the render-mode maths (`test/unit/render-mode.test.ts`).
+
 ## 2.2.1
 
 ### Fixed

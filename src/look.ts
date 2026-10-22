@@ -114,7 +114,8 @@ uniform vec3 uCustomLight;
 uniform vec3 uCustomWall;
 uniform vec3 uCustomFloor;
 uniform float uCustomHue;
-vec3 f3dxThemed(vec3 c) {
+uniform int uLinear; // 1 under managed colours: the palette below is in display values
+vec3 f3dxThemedRaw(vec3 c) {
   float strongest = max(c.r, max(c.g, c.b));
   float weakest = min(c.r, min(c.g, c.b));
   float saturation = strongest > 0.0 ? (strongest - weakest) / strongest : 0.0;
@@ -187,9 +188,14 @@ export class Look {
   private floorPrefixes: string[];
   private custom: { dark: THREE.Vector3; light: THREE.Vector3; walls: THREE.Vector3; floors: THREE.Vector3; hue: number; edges: number; stage: number[]; stageDay: number[] };
 
-  constructor(cfg: LookConfig, scene: THREE.Scene) {
+  // managed colours (render-mode.ts): the shader palette and the stage colours are display values
+  // and are converted to linear so they show as before
+  linear = false;
+
+  constructor(cfg: LookConfig, scene: THREE.Scene, linear = false) {
     this.cfg = cfg || {};
     this.scene = scene;
+    this.linear = linear;
     this.custom = Look.customColours(this.cfg.custom);
     this.wallPrefixes = list(this.cfg.walls, ['wall']);
     this.floorPrefixes = list(this.cfg.floors, ['room', 'floor']);
@@ -290,11 +296,12 @@ export class Look {
     if (theme === 'off' || !yes(this.cfg.stage, true)) return null;
     const s = theme === 'custom' ? { night: this.custom.stage, day: this.custom.stageDay } : STAGE[theme];
     const k = Math.max(0, Math.min(1, daylight));
-    return new THREE.Color(
+    const c = new THREE.Color(
       (s.night[0] + (s.day[0] - s.night[0]) * k) / 255,
       (s.night[1] + (s.day[1] - s.night[1]) * k) / 255,
       (s.night[2] + (s.day[2] - s.night[2]) * k) / 255,
     );
+    return this.linear ? c.convertSRGBToLinear() : c;
   }
 
   /** Emissive glow on a lamp object: its light colour while on, nothing while off. The glow strength
@@ -425,6 +432,7 @@ export class Look {
       uCustomWall: { value: this.custom.walls },
       uCustomFloor: { value: this.custom.floors },
       uCustomHue: { value: this.custom.hue },
+      uLinear: { value: this.linear ? 1 : 0 },
     };
     if (yes(this.cfg.flat, true)) {
       (material as any).flatShading = true;
@@ -440,6 +448,12 @@ export class Look {
       shader.fragmentShader = shader.fragmentShader
         .replace('#include <common>', '#include <common>\n' + LOOK_FUNCTION)
         .replace('#include <color_fragment>', '#include <color_fragment>\n  diffuseColor.rgb = f3dxThemed(diffuseColor.rgb);');
+      // the palette was tuned on the 1.x card, where the shader's numbers were the display values; under
+      // managed colours the input is linear and the output gets encoded, so convert on the way in and out
+      shader.fragmentShader = shader.fragmentShader.replace(
+        'void main() {',
+        'vec3 f3dxThemed(vec3 c) {\n  if (uLinear == 1) return pow(f3dxThemedRaw(pow(c, vec3(1.0 / 2.2))), vec3(2.2));\n  return f3dxThemedRaw(c);\n}\nvoid main() {',
+      );
       if (flat) {
         // lowered by uDrop along the model's up axis, so the floor or ceiling in the same plane wins
         // the depth test (a depth offset would not: with the logarithmic depth buffer the fragment

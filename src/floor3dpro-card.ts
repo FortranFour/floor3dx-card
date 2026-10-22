@@ -38,7 +38,7 @@ import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js';
 import { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { loadCompressedGLTF, applyTextureQuality } from './model-loader';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
-import { applyRenderMode, lightIntensity, exposure } from './render-mode';
+import { applyRenderMode, lightIntensity, exposure, colorMode } from './render-mode';
 import { mergeStatic, reservedNames } from './merge-static';
 import { Object3D } from 'three';
 import '../elements/button';
@@ -1899,7 +1899,7 @@ export class Floor3dCard extends LitElement {
   private _applyLook(): void {
     const cfg: any = (this._config as any).look;
     if (!cfg || !this._scene) return;
-    if (!this._look) this._look = new Look(cfg, this._scene);
+    if (!this._look) this._look = new Look(cfg, this._scene, colorMode(this._config) === 'managed');
     if (!this._look.active) return;
     const keep = this._lookKeepNames();
     if ((this._config as any).look.keep) {
@@ -2411,7 +2411,7 @@ export class Floor3dCard extends LitElement {
     // Before any colour of this scene is made: a hex colour is converted while colour management is on.
     applyRenderMode(this._renderer, this._config);
 
-    if ((this._config as any).look && !this._look) this._look = new Look((this._config as any).look, this._scene);
+    if ((this._config as any).look && !this._look) this._look = new Look((this._config as any).look, this._scene, colorMode(this._config) === 'managed');
     const stage = this._look && this._look.stageColor(0.5);
     if (stage) {
       this._scene.background = stage;
@@ -4515,10 +4515,13 @@ export class Floor3dCard extends LitElement {
       }
 
       if (this._states[i] == 'on') {
+        // the light's own reach and decay (as set up in _add3dObjects), for the physical mode's match
+        const reach = (light as any).distance !== undefined ? (light as any).distance : 600;
+        const decay = (light as any).decay !== undefined ? (light as any).decay : 2;
         if (this._brightness[i] != -1) {
-          light.intensity = lightIntensity(max, this._brightness[i] / 255, this._config);
+          light.intensity = lightIntensity(max, this._brightness[i] / 255, this._config, reach, decay);
         } else {
-          light.intensity = lightIntensity(max, 1, this._config);
+          light.intensity = lightIntensity(max, 1, this._config, reach, decay);
         }
         if (!this._color[i]) {
           if (entity.light.color) {
