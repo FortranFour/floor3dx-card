@@ -42,6 +42,8 @@ build/Release
 node_modules/
 jspm_packages/
 test*/
+!test/
+!test/unit/
 
 # Snowpack dependency directory (https://snowpack.dev/)
 web_modules/
@@ -149,3 +151,4 @@ node_modules
 dev/harness/unit/look-bundle.js
 dev/private/
 tools/package-lock.json
+dev/out/

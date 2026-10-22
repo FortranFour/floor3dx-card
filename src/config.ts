@@ -53,7 +53,7 @@ const BLOCK_NUMBERS: { [block: string]: string[] } = {
   door: ['degrees', 'percentage'],
   room: ['transparency', 'elevation', 'width', 'height'],
   image: ['rotate', 'refresh', 'aspect', 'max_size', 'fps'],
-  rotate: ['round_per_second'],
+  rotate: ['round_per_second', 'ramp'],
   transparent: ['transparency', 'transparency_off'],
 };
 

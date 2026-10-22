@@ -97,6 +97,7 @@ export interface Floor3dCardConfig {
   gesture: any;
   rotate: any;
   round_per_second: number;
+  ramp?: number;
   axis: string;
   span: string;
   vertical_alignment: string;

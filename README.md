@@ -51,6 +51,17 @@ For the full configuration reference, see the [floor3dpro-card README](docs/floo
 
 What else the upgrade brings: three.js' current GLTF loader (KHR material extensions, meshopt), KTX2 and Draco decoders, and a bundle that builds in under a second. The last 1.x release, 1.9.12, stays available; a `1.x` branch can receive fixes if a model turns out to need the old engine.
 
+## Version 2.2: sturdier, lighter, two small extras
+
+- **One bad entry no longer blanks the card.** An entity whose object is not in the model (or whose template fails) used to stop the whole setup, and every readout after it stayed empty with an error in the card. It is now left out with a console warning naming it, and the others work.
+- **No more texture leak.** Every state change of a text panel left the previous texture on the GPU; on a dashboard that stays open, a readout updating every few seconds leaked a texture each time. Fixed, and guarded by a test.
+- **Cheaper state changes.** The objects of a changed entity are found through an index instead of a walk over the whole model (two to three thousand objects) per bound object.
+- **Shadows at most every 300 ms while something moves.** A fan turning with shadows on re-rendered every shadow map every frame; now a few times a second, and exactly once when the movement stops.
+- **Fans that speed up and slow down** (`rotate.ramp: 2`, seconds to full speed and back; default: at once, as before).
+- **A loading screen**: the model's name and the step (downloading, materials, geometry, preparing the scene), a bar in the theme's colours, the percentage and the megabytes.
+
+Checked by the pixel comparison (unchanged picture), by Node unit tests (`npm test`) and by two tests on a fake WebGL context that count draw calls and textures without a GPU (`dev/harness/test_budget.py`, `test_leaks.py`).
+
 ## Version 2.1: merged static geometry (`merge_static`)
 
 A Sweet Home 3D export is one mesh per wall, panel, chair leg or picture frame — a house is two to three thousand of them — and the card issued one draw call for each, every frame. Only the objects a configuration refers to need to stay separate. With `merge_static: yes` the rest is merged when the model loads, per level, material and shadow setting, and the look's edge lines of those meshes with them:
@@ -459,6 +470,7 @@ On a Home Assistant without `ha-form` the previous editor is shown instead. `day
 | `light.shadow_map_size` | 128 to 4096 | 512 |
 | `daylight` | see above | off |
 | `type3d: shade` | `shade.top_entity`, `shade.invert` | |
+| `rotate.ramp` | seconds a fan takes to reach its speed, and to stop | at once |
 | `look` | see above | off |
 | `look.edge_skip` | `images`, `texts`, `seams`, `floors`, `coplanar`, object ids / patterns / `<group>` | nothing skipped |
 | `look.custom` | colours of `theme: custom`; see above | defaults |

@@ -167,7 +167,7 @@ function resolveDecoderPath(
  * recomputed here from the glTF JSON in the loader's reservation order (the scene's root nodes in
  * order, then their children) and written onto the objects, so names do not move between versions.
  */
-function restoreLegacyNames(gltf: GLTF, json: any): number {
+export function restoreLegacyNames(gltf: GLTF, json: any): number {
   const scenes = json.scenes || [];
   const sceneDef = scenes[json.scene || 0];
   if (!sceneDef || !json.nodes) return 0;

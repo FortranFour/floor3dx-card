@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.2.0
+
+### Fixed
+- An entity whose setup fails (an object that is not in the model, a template that throws) is left out with a console warning that names it, and the other entities keep their objects and updates. Before, the first such entity stopped the whole setup (`Error adding 3D Object … Object issue for Entity`) and every entity after it did nothing. A failing update of one entity is handled the same way.
+- Text panels (`type3d: text`, and room labels) leaked one GPU texture per state change: the previous canvas texture was never disposed. `test_leaks.py` counts textures across 40 updates (80 leaked on 2.1.0, 0 now).
+
+### Changed
+- Objects are looked up through an index built when the model is ready, instead of a walk over the whole scene per bound object on every state change; a name not in the index falls back to the walk.
+- While something animates, the shadow maps are redrawn at most every 300 ms, and once more exactly when the movement stops; before, every frame.
+- The loading screen: the model's name and the step (downloading, materials, geometry, preparing the 3D scene), a progress bar in the theme's colours, percentage and megabytes (megabytes alone when the server does not send the size).
+
+### Added
+- `rotate.ramp`: seconds a rotating object takes to reach its speed and to come to rest (default: at once, as before). Editor field in the rotate options.
+- `npm test`: Node unit tests of the logic that needs no browser (`test/unit/`: configuration normalisation and patterns, `merge_static` reservation and merging, the r130 object names), bundled with esbuild and run with `node --test`; also run by the Build workflow.
+- `dev/harness/fakegl.js`: a stand-in WebGL2 context (`?fakegl=1`) that counts draw calls, programs and texture create/delete calls; three.js runs its whole pipeline against it in a couple of seconds with no GPU. `test_budget.py` (draw calls with and without `merge_static`) and `test_leaks.py` (textures across state changes) use it; `test_robust.py` covers the broken-entity isolation.
+- The materials of the cached model carry a source id (2.1.0) — now also used by the unit tests.
+
 ## 2.1.0
 
 ### Added

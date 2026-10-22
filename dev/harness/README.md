@@ -27,3 +27,11 @@ python3 dev/harness/compare_views.py dev/out/<before> dev/out/<after> [dev/out/<
 ```
 
 `render_views.py` renders fixed views (plain, lamps with shadows, daylight at a fixed sun, `look` day and neon, and the 2.0 `lights: physical` and `color_management: managed` opt-ins) of the private models in `dev/private/` with the built card, one PNG per view. `compare_views.py` prints, per view, the share of pixels that differ by more than 12 levels and the mean difference, and can write side-by-side images with an amplified diff. The 2.0 engine upgrade (three.js r130 → r186) was accepted at 0.00% changed pixels against the 1.9.12 build.
+
+## Fake WebGL (`?fakegl=1`)
+
+`fakegl.js` replaces the WebGL2 context with an object that does nothing but count (draw calls, programs, texture create/delete, uploads; `window.__fakegl`). three.js runs its whole pipeline against it, so a test gets `renderer.info` and those counts in a couple of seconds with no GPU. There are no pixels: a shader that renders garbage still passes here, so it complements the rendering tests. `test_budget.py` and `test_leaks.py` use it. The sampler uniforms of each program are read off the shader sources, so textures are bound and uploaded as they would be on a GPU.
+
+## Unit tests
+
+`npm test` (from the repository root) bundles `test/unit/*.test.ts` with esbuild and runs them with `node --test`: the logic that needs neither a browser nor three.js' renderer.

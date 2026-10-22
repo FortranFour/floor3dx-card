@@ -1,7 +1,8 @@
 <!doctype html>
 <!-- Minimal stand-in for a Home Assistant dashboard: just enough DOM and a fake hass object for the card to run.
-     Query parameters: js, tag, path, model, skill, pr, draco_path, late, style. Served by run.py from the repository root. --><html><head><style>body{margin:0} #host{width:800px;height:500px} ha-card{display:block}</style></head>
+     Query parameters: js, tag, path, model, skill, pr, draco_path, late, style, cores, fakegl (see fakegl.js), merge. Served by run.py from the repository root. --><html><head><style>body{margin:0} #host{width:800px;height:500px} ha-card{display:block}</style></head>
 <body><home-assistant></home-assistant><div id="host"></div>
+<script src="/dev/harness/fakegl.js"></script>
 <script type="module">
 const p = new URLSearchParams(location.search);
 customElements.define('home-assistant', class extends HTMLElement{constructor(){super();this.attachShadow({mode:'open'})}});
@@ -23,6 +24,7 @@ const cfg = { type:'custom:'+(p.get('tag')||'floor3dx-card'), path:p.get('path')
 if (p.get('skill')) cfg.pro_skill = p.get('skill');
 if (p.get('pr')) cfg.pixel_ratio = isNaN(+p.get('pr')) ? p.get('pr') : +p.get('pr');
 if (p.get('draco_path')) cfg.draco_path = p.get('draco_path');
+if (p.get('merge')) cfg.merge_static = p.get('merge');
 card.setConfig(cfg);
 card.hass = { states:{}, language:'en', themes:{}, config:{}, user:{}, callService(){}, };
 const host=document.getElementById('host');

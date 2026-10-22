@@ -671,6 +671,7 @@ export class Floor3dCard extends LitElement {
         this._content.style.width = '100%';
         this._content.style.height = '100%';
         this._content.style.alignContent = 'center';
+        if (!this._content.style.position) this._content.style.position = 'relative'; // the loading screen is placed in it
         this._card.appendChild(this._content);
       }
 
@@ -1186,6 +1187,30 @@ export class Floor3dCard extends LitElement {
   }
 
   // Names of the objects of the model, for the object menus of the editor.
+  // Objects by name. A state change used to walk the whole scene (scene.getObjectByName, ~3000
+  // objects) once per bound object; the index answers from a Map once the model is ready, and is
+  // rebuilt whenever the scene is rebuilt. A name not in it falls back to the walk (an object added
+  // later) and is remembered; objects taken out of the scene are dropped from it.
+  private _objectIndex: Map<string, THREE.Object3D> | null = null;
+  private _findObject(name: string): THREE.Object3D | undefined {
+    if (name === undefined || name === null) return undefined;
+    if (this._objectIndex) {
+      const hit = this._objectIndex.get(name);
+      if (hit && hit.parent) return hit;
+      if (hit) this._objectIndex.delete(name);
+    }
+    const found = this._scene ? this._scene.getObjectByName(name) : undefined;
+    if (found && this._objectIndex) this._objectIndex.set(name, found);
+    return found;
+  }
+  private _buildObjectIndex(): void {
+    const index = new Map<string, THREE.Object3D>();
+    this._scene.traverse((o) => {
+      if (o.name && !index.has(o.name)) index.set(o.name, o);
+    });
+    this._objectIndex = index;
+  }
+
   private _modelObjectNames(): string[] {
     const names = new Set<string>();
     (this._raycastinglevels || []).forEach((level) => (level || []).forEach((o) => o.name && names.add(o.name)));
@@ -1231,7 +1256,7 @@ export class Floor3dCard extends LitElement {
       }
     });
     names.forEach((name) => {
-      const object = this._scene.getObjectByName(name);
+      const object = this._findObject(name);
       if (!object) return;
       // A box in the object's own frame, placed with its world matrix: it hugs the object whatever
       // its rotation. A world-axis box (BoxHelper) around a wall of a house drawn at an angle is a
@@ -1612,182 +1637,189 @@ export class Floor3dCard extends LitElement {
           this._config.entities.forEach((entity, i) => {
             // Faz-1 PRO Skill: LEVEL early-exit (workload filter)
             // Inactive levels: no state work, no update calls, no render reasons.
+            if (this._brokenEntities.has(i)) return; // its setup failed; the others carry on
             if (!this._isEntityActiveForCurrentLevel(entity)) {
               return;
             }
+            try {
 
-            if (hass.states[entity.entity]) {
-              let state = this._statewithtemplate(entity);
-              // Faz-0 Deterministic Correction: (Fix) Cover position initialization (Original file error correction)
-              // Cover position initialization and state/position synchronization.
-              //
-              // Root cause (first diagnosis):
-              // - Broken state + position sync.
-              // - `_states[i]` and `_position[i]` must ALWAYS represent the SAME entity at index `i`.
-              //
-              // Critical rules applied here:
-              // 1) `current_position = 0` is a VALID state (fully closed), NOT "missing".
-              // 2) Geometry updates for covers MUST be driven ONLY by `current_position`.
-              // 3) When `current_position` is missing (opening / closing), geometry MUST NOT be recalculated.
-              // 4) State updates alone must NEVER trigger geometry updates (prevents snap / closed-look bugs).
-              if (entity.type3d == 'cover') {
-                let toupdate = false;
-                // HA cover attribute:NOTE: 0 is VALID (fully closed), not "undefined"
-                const pos =
-                  hass.states[entity.entity].attributes['current_position'];
-                if (pos !== undefined && pos !== null) {
-                  // Position exists → geometry MAY be updated
-                  // Trigger geometry update ONLY if position actually changed
-                  if (this._position[i] != pos) {
-                    this._position[i] = pos;
-                    toupdate = true;
-                  }
-
-                  // State is updated ONLY for synchronization / memory purposes
-                  // State change alone MUST NOT be a geometry reason
-                  if (state != this._states[i]) {
-                    this._states[i] = state;
-                  }
-                } else {
-                  // current_position is NOT available:
-                  // - Happens during opening / closing
-                  // - Geometry MUST NOT be recalculated
-                  // - Prevents snapping / appearing fully closed
-                  // - Only state synchronization is allowed
-                  if (state != this._states[i]) {
-                    this._states[i] = state;
-                  }
-                }
-
-                // Geometry application is STRICTLY position-driven
-                if (toupdate) {
-                  this._updatecover(entity, this._states[i], i);
-                  torerender = true;
-                }
-              }
-              if (entity.type3d == 'light') {
-                let toupdate = false;
-                if (this._states[i] !== state) {
-                  this._states[i] = state;
-                  toupdate = true;
-                }
-                // Compare by value: the upstream code compared arrays by reference (always different) and
-                // assigned instead of comparing color_mode, so every hass update re-lit and re-rendered.
-                const fromEntity = this._lightFromEntity(entity, this._colorSource(entity, hass));
-                if (JSON.stringify(fromEntity.color) !== JSON.stringify(this._color[i])) {
-                  this._color[i] = fromEntity.color;
-                  toupdate = true;
-                }
-                if (fromEntity.brightness !== this._brightness[i]) {
-                  this._brightness[i] = fromEntity.brightness;
-                  toupdate = true;
-                }
-                if (toupdate) {
-                  this._updatelight(entity, i);
-                  torerender = true;
-                }
-              } else if (entity.type3d == 'text') {
-                let toupdate = false;
-                if (entity.text.attribute) {
-                  if (hass.states[entity.entity].attributes[entity.text.attribute]) {
-                    if (this._text[i] != hass.states[entity.entity].attributes[entity.text.attribute]) {
-                      this._text[i] = hass.states[entity.entity].attributes[entity.text.attribute];
-                      toupdate = true;
-                    }
-                  } else {
-                    this._text[i] = '';
-                    toupdate = true;
-                  }
-                } else {
-                  if (this._text[i] != this._statewithtemplate(entity)) {
-                    this._text[i] = this._statewithtemplate(entity);
-                    toupdate = true;
-                  }
-                }
-                if (this._canvas[i] && toupdate) {
-                  this._updatetext(entity, this._text[i], this._canvas[i], this._unit_of_measurement[i]);
-                  torerender = true;
-                }
-              } else if (entity.type3d == 'shade') {
-                this._states[i] = state;
-                const span = this._shadeSpan(entity, hass);
-                const signature = span.bottom + '|' + span.top;
-                if (this._shadeSignature[i] !== signature) {
-                  this._shadeSignature[i] = signature;
-                  this._updateShade(entity, i, span);
-                  torerender = true;
-                }
-              } else if (entity.type3d == 'color' && this._usesEntityColor(entity)) {
-                // the mesh follows the light's own colour and brightness, so re-colour on any change of
-                // those, not only on a state change
-                const signature = state + '|' + this._entityColorSignature(this._colorSource(entity, hass));
-                if (this._colorSignature[i] !== signature) {
-                  this._colorSignature[i] = signature;
-                  this._states[i] = state;
-                  this._updatecolor(entity, i);
-                  torerender = true;
-                }
-              } else if (entity.type3d == 'image') {
-                this._states[i] = state;
-                const url = this._imageUrlFor(entity, hass.states[entity.entity]);
-                if (url !== this._imageUrls[i]) {
-                  this._imageUrls[i] = url;
-                  this._loadImage(i, false);
-                }
-              } else if (entity.type3d == 'rotate') {
-                this._states[i] = state;
-                this._rotatecalc(entity, i);
-              } else if (this._states[i] !== state) {
-                this._states[i] = state;
-                if (entity.type3d == 'color') {
-                  this._updatecolor(entity, i);
-                  torerender = true;
-                } else if (entity.type3d == 'hide') {
-                  this._updatehide(entity, i);
-                  torerender = true;
-                } else if (entity.type3d == 'show') {
-                  this._updateshow(entity, i);
-                  torerender = true;
-                } else if (entity.type3d == 'door') {
-                  this._updatedoor(entity, i);
-                  torerender = true;
-                } else if (entity.type3d == 'room') {
+              if (hass.states[entity.entity]) {
+                let state = this._statewithtemplate(entity);
+                // Faz-0 Deterministic Correction: (Fix) Cover position initialization (Original file error correction)
+                // Cover position initialization and state/position synchronization.
+                //
+                // Root cause (first diagnosis):
+                // - Broken state + position sync.
+                // - `_states[i]` and `_position[i]` must ALWAYS represent the SAME entity at index `i`.
+                //
+                // Critical rules applied here:
+                // 1) `current_position = 0` is a VALID state (fully closed), NOT "missing".
+                // 2) Geometry updates for covers MUST be driven ONLY by `current_position`.
+                // 3) When `current_position` is missing (opening / closing), geometry MUST NOT be recalculated.
+                // 4) State updates alone must NEVER trigger geometry updates (prevents snap / closed-look bugs).
+                if (entity.type3d == 'cover') {
                   let toupdate = false;
-                  if (entity.room.attribute) {
-                    if (hass.states[entity.entity].attributes[entity.room.attribute]) {
-                      if (this._spritetext[i] != hass.states[entity.entity].attributes[entity.room.attribute]) {
-                        this._spritetext[i] = hass.states[entity.entity].attributes[entity.room.attribute];
-                        toupdate = true;
-                      }
-                    } else {
-                      this._spritetext[i] = '';
+                  // HA cover attribute:NOTE: 0 is VALID (fully closed), not "undefined"
+                  const pos =
+                    hass.states[entity.entity].attributes['current_position'];
+                  if (pos !== undefined && pos !== null) {
+                    // Position exists → geometry MAY be updated
+                    // Trigger geometry update ONLY if position actually changed
+                    if (this._position[i] != pos) {
+                      this._position[i] = pos;
                       toupdate = true;
                     }
+
+                    // State is updated ONLY for synchronization / memory purposes
+                    // State change alone MUST NOT be a geometry reason
+                    if (state != this._states[i]) {
+                      this._states[i] = state;
+                    }
                   } else {
-                    if (entity.room.label_text) {
-                      if (entity.room.label_text == 'template') {
-                        if (this._spritetext[i] != this._statewithtemplate(entity)) {
-                          this._spritetext[i] = this._statewithtemplate(entity);
-                          toupdate = true;
-                        }
-                      } else {
-                        if (this._spritetext[i] != this._states[i]) {
-                          this._spritetext[i] = this._states[i];
-                          toupdate = true;
-                        }
-                      }
+                    // current_position is NOT available:
+                    // - Happens during opening / closing
+                    // - Geometry MUST NOT be recalculated
+                    // - Prevents snapping / appearing fully closed
+                    // - Only state synchronization is allowed
+                    if (state != this._states[i]) {
+                      this._states[i] = state;
                     }
                   }
 
-                  if (this._canvas[i] && toupdate) {
-                    this._updateroom(entity, this._spritetext[i], this._unit_of_measurement[i], i);
-                    this._updateroomcolor(entity, i);
+                  // Geometry application is STRICTLY position-driven
+                  if (toupdate) {
+                    this._updatecover(entity, this._states[i], i);
                     torerender = true;
                   }
                 }
+                if (entity.type3d == 'light') {
+                  let toupdate = false;
+                  if (this._states[i] !== state) {
+                    this._states[i] = state;
+                    toupdate = true;
+                  }
+                  // Compare by value: the upstream code compared arrays by reference (always different) and
+                  // assigned instead of comparing color_mode, so every hass update re-lit and re-rendered.
+                  const fromEntity = this._lightFromEntity(entity, this._colorSource(entity, hass));
+                  if (JSON.stringify(fromEntity.color) !== JSON.stringify(this._color[i])) {
+                    this._color[i] = fromEntity.color;
+                    toupdate = true;
+                  }
+                  if (fromEntity.brightness !== this._brightness[i]) {
+                    this._brightness[i] = fromEntity.brightness;
+                    toupdate = true;
+                  }
+                  if (toupdate) {
+                    this._updatelight(entity, i);
+                    torerender = true;
+                  }
+                } else if (entity.type3d == 'text') {
+                  let toupdate = false;
+                  if (entity.text.attribute) {
+                    if (hass.states[entity.entity].attributes[entity.text.attribute]) {
+                      if (this._text[i] != hass.states[entity.entity].attributes[entity.text.attribute]) {
+                        this._text[i] = hass.states[entity.entity].attributes[entity.text.attribute];
+                        toupdate = true;
+                      }
+                    } else {
+                      this._text[i] = '';
+                      toupdate = true;
+                    }
+                  } else {
+                    if (this._text[i] != this._statewithtemplate(entity)) {
+                      this._text[i] = this._statewithtemplate(entity);
+                      toupdate = true;
+                    }
+                  }
+                  if (this._canvas[i] && toupdate) {
+                    this._updatetext(entity, this._text[i], this._canvas[i], this._unit_of_measurement[i]);
+                    torerender = true;
+                  }
+                } else if (entity.type3d == 'shade') {
+                  this._states[i] = state;
+                  const span = this._shadeSpan(entity, hass);
+                  const signature = span.bottom + '|' + span.top;
+                  if (this._shadeSignature[i] !== signature) {
+                    this._shadeSignature[i] = signature;
+                    this._updateShade(entity, i, span);
+                    torerender = true;
+                  }
+                } else if (entity.type3d == 'color' && this._usesEntityColor(entity)) {
+                  // the mesh follows the light's own colour and brightness, so re-colour on any change of
+                  // those, not only on a state change
+                  const signature = state + '|' + this._entityColorSignature(this._colorSource(entity, hass));
+                  if (this._colorSignature[i] !== signature) {
+                    this._colorSignature[i] = signature;
+                    this._states[i] = state;
+                    this._updatecolor(entity, i);
+                    torerender = true;
+                  }
+                } else if (entity.type3d == 'image') {
+                  this._states[i] = state;
+                  const url = this._imageUrlFor(entity, hass.states[entity.entity]);
+                  if (url !== this._imageUrls[i]) {
+                    this._imageUrls[i] = url;
+                    this._loadImage(i, false);
+                  }
+                } else if (entity.type3d == 'rotate') {
+                  this._states[i] = state;
+                  this._rotatecalc(entity, i);
+                } else if (this._states[i] !== state) {
+                  this._states[i] = state;
+                  if (entity.type3d == 'color') {
+                    this._updatecolor(entity, i);
+                    torerender = true;
+                  } else if (entity.type3d == 'hide') {
+                    this._updatehide(entity, i);
+                    torerender = true;
+                  } else if (entity.type3d == 'show') {
+                    this._updateshow(entity, i);
+                    torerender = true;
+                  } else if (entity.type3d == 'door') {
+                    this._updatedoor(entity, i);
+                    torerender = true;
+                  } else if (entity.type3d == 'room') {
+                    let toupdate = false;
+                    if (entity.room.attribute) {
+                      if (hass.states[entity.entity].attributes[entity.room.attribute]) {
+                        if (this._spritetext[i] != hass.states[entity.entity].attributes[entity.room.attribute]) {
+                          this._spritetext[i] = hass.states[entity.entity].attributes[entity.room.attribute];
+                          toupdate = true;
+                        }
+                      } else {
+                        this._spritetext[i] = '';
+                        toupdate = true;
+                      }
+                    } else {
+                      if (entity.room.label_text) {
+                        if (entity.room.label_text == 'template') {
+                          if (this._spritetext[i] != this._statewithtemplate(entity)) {
+                            this._spritetext[i] = this._statewithtemplate(entity);
+                            toupdate = true;
+                          }
+                        } else {
+                          if (this._spritetext[i] != this._states[i]) {
+                            this._spritetext[i] = this._states[i];
+                            toupdate = true;
+                          }
+                        }
+                      }
+                    }
+
+                    if (this._canvas[i] && toupdate) {
+                      this._updateroom(entity, this._spritetext[i], this._unit_of_measurement[i], i);
+                      this._updateroomcolor(entity, i);
+                      torerender = true;
+                    }
+                  }
+                }
+              } else {
+                this._warnMissingEntityOnce(entity);
               }
-            } else {
-              this._warnMissingEntityOnce(entity);
+            } catch (error) {
+              // a failing update of one entry (an object gone from the scene, a bad template) is
+              // reported once and the entry skipped from then on; the others keep updating
+              this._entityProblem(entity, error);
             }
           });
           if (torerender) {
@@ -1815,7 +1847,7 @@ export class Floor3dCard extends LitElement {
     if (!id) return [];
     const out: THREE.Mesh[] = [];
     const push = (name: string) => {
-      const o: any = this._scene.getObjectByName(name);
+      const o: any = this._findObject(name);
       if (o && o.isMesh) out.push(o);
     };
     if (id.charAt(0) == '<' && id.charAt(id.length - 1) == '>') {
@@ -1948,7 +1980,7 @@ export class Floor3dCard extends LitElement {
       const found = this._resolveObjectId(id, names);
       if (!found.length) console.warn('floor3d-card: hide_objects <' + id + '> matches no object of the model');
       found.forEach((name) => {
-        const o = this._scene.getObjectByName(name);
+        const o = this._findObject(name);
         if (o && o.visible) {
           o.visible = false;
           hidden.push(name);
@@ -1983,7 +2015,7 @@ export class Floor3dCard extends LitElement {
     };
     const shapes: { c: THREE.Vector3; dims: number[]; stem: string }[] = [];
     bound.forEach((name) => {
-      const o = this._scene.getObjectByName(name);
+      const o = this._findObject(name);
       const sh = o && shape(o);
       if (sh) shapes.push(sh);
     });
@@ -2062,7 +2094,7 @@ export class Floor3dCard extends LitElement {
       if (spare) parts.forEach((o) => hidden.push(o.name));
     });
     hidden.forEach((name) => {
-      const o = this._scene.getObjectByName(name);
+      const o = this._findObject(name);
       if (o) o.visible = false;
     });
     if (hidden.length) console.log('floor3d-card: hide_spare_panels hid ' + hidden.length + ' panel(s): ' + hidden.join(', '));
@@ -2337,6 +2369,7 @@ export class Floor3dCard extends LitElement {
     }
     this._mergedGeometries.forEach((g) => g.dispose());
     this._mergedGeometries = [];
+    this._objectIndex = null;
     this._scene = new THREE.Scene();
 
     this._camera = new THREE.PerspectiveCamera(45, 1, 0.1, 10000);
@@ -2535,21 +2568,63 @@ export class Floor3dCard extends LitElement {
     this._showError(event && event.error ? event.error : String(event));
   }
 
+  // The loading screen: the model's name and the step, a bar in the theme's colours, the percentage
+  // and the megabytes (megabytes alone when the server does not say the size). Replaces the bare
+  // 'Loading x: 45%' line; cleared when the canvas is shown.
+  private _loadingUi: { box: HTMLDivElement; label: HTMLDivElement; fill: HTMLDivElement; detail: HTMLDivElement } | null = null;
+  private _showLoading(step: string, loaded?: number, total?: number): void {
+    if (!this._content) return;
+    if (!this._loadingUi || !this._content.contains(this._loadingUi.box)) {
+      const box = document.createElement('div');
+      box.style.cssText = 'position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(70%,360px);font:14px/1.4 var(--paper-font-body1_-_font-family, Roboto, sans-serif);color:var(--primary-text-color, #212121);text-align:center;pointer-events:none;';
+      const label = document.createElement('div');
+      label.style.cssText = 'margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+      const track = document.createElement('div');
+      track.style.cssText = 'height:6px;border-radius:3px;background:var(--divider-color, rgba(128,128,128,.25));overflow:hidden;';
+      const fill = document.createElement('div');
+      fill.style.cssText = 'height:100%;width:0;border-radius:3px;background:var(--primary-color, #03a9f4);transition:width .15s linear;';
+      track.appendChild(fill);
+      const detail = document.createElement('div');
+      detail.style.cssText = 'margin-top:6px;font-size:12px;color:var(--secondary-text-color, #727272);';
+      box.appendChild(label);
+      box.appendChild(track);
+      box.appendChild(detail);
+      this._content.innerText = '';
+      this._content.appendChild(box);
+      this._loadingUi = { box, label, fill, detail };
+    }
+    const ui = this._loadingUi;
+    ui.label.textContent = this._modelLabel() + ' — ' + step;
+    const mb = (n: number) => (n / 1048576).toFixed(1) + ' MB';
+    if (loaded === undefined) {
+      ui.fill.style.width = '100%';
+      ui.fill.style.opacity = '0.5';
+      ui.detail.textContent = '';
+    } else if (total) {
+      const pct = Math.max(0, Math.min(100, Math.round((loaded / total) * 100)));
+      ui.fill.style.width = pct + '%';
+      ui.fill.style.opacity = '1';
+      ui.detail.textContent = pct + '% · ' + mb(loaded) + ' of ' + mb(total);
+    } else {
+      // total is 0 when the server compresses the response on the fly
+      ui.fill.style.width = '100%';
+      ui.fill.style.opacity = '0.5';
+      ui.detail.textContent = mb(loaded);
+    }
+  }
+
   private _onloadedGLTF3DProgress(_progress: ProgressEvent): void {
-    // total is 0 when the server compresses the response on the fly
-    this._content.innerText = _progress.total
-      ? 'Loading ' + this._modelLabel() + ': ' + Math.round((_progress.loaded / _progress.total) * 100) + '%'
-      : 'Loading ' + this._modelLabel() + ': ' + (_progress.loaded / 1048576).toFixed(1) + ' MB';
+    this._showLoading('downloading', _progress.loaded, _progress.total);
   }
 
   private _onLoadMaterialProgress(_progress: ProgressEvent): void {
     //progress function called at regular intervals during material loading process
-    this._content.innerText = 'Loading ' + this._modelLabel() + ' (materials): ' + Math.round((_progress.loaded / _progress.total) * 100) + '%';
+    this._showLoading('materials', _progress.loaded, _progress.total);
   }
 
   private _onLoadObjectProgress(_progress: ProgressEvent): void {
     //progress function called at regular intervals during object loading process
-    this._content.innerText = 'Loading ' + this._modelLabel() + ' (geometry): ' + Math.round((_progress.loaded / _progress.total) * 100) + '%';
+    this._showLoading('geometry', _progress.loaded, _progress.total);
   }
 
   private _onLoadedGLTF3DModel(gltf: GLTF) {
@@ -2560,6 +2635,7 @@ export class Floor3dCard extends LitElement {
     // Object Loaded Event: last root object passed to the function
 
     console.log('Object loaded start');
+    this._showLoading('preparing the 3D scene');
 
     // Render quality: anisotropic filtering keeps floor/wall textures sharp at shallow angles.
     // Must run before _initobjects, which re-parents every node out of this root.
@@ -2613,6 +2689,7 @@ export class Floor3dCard extends LitElement {
     this._bindTransparency();
     this._hideSparePanels();
     this._mergeStatic(); // last: everything above works per mesh
+    this._buildObjectIndex();
 
     console.log('Object loaded end');
 
@@ -3047,7 +3124,7 @@ export class Floor3dCard extends LitElement {
 
   private _setSelectionMaterials(show: boolean): void {
     this._selectedobjects.forEach((objectName) => {
-      let object: any = this._scene.getObjectByName(objectName);
+      let object: any = this._findObject(objectName);
       if (object) {
         object.material = show ? this._selectedmaterial : this._initialobjectmaterials[objectName];
       }
@@ -3287,7 +3364,19 @@ export class Floor3dCard extends LitElement {
     console.log('Material loaded end');
   }
 
+  // Entities whose setup failed (index into config.entities): skipped by the state updates.
+  private _brokenEntities: Set<number> = new Set();
+  private _entityProblem(entity: Floor3dCardConfig, error: any): void {
+    const i = this._config.entities.indexOf(entity);
+    if (i >= 0) this._brokenEntities.add(i);
+    console.warn(
+      `floor3d-card: entity <${entity.entity}> (${entity.type3d}, object_id ${entity.object_id}) left out: ` +
+        (error && error.message ? error.message : String(error)),
+    );
+  }
+
   private _add3dObjects(): void {
+    this._brokenEntities = new Set();
     try {
       // Add-Modify the objects bound to the entities in the card config
       console.log('Add Objects Start');
@@ -3336,9 +3425,9 @@ export class Floor3dCard extends LitElement {
                 let bbox: THREE.Box3;
                 let hinge: any;
                 if (entity.rotate.hinge) {
-                  hinge = this._scene.getObjectByName(entity.rotate.hinge);
+                  hinge = this._findObject(entity.rotate.hinge);
                 } else {
-                  hinge = this._scene.getObjectByName(this._object_ids[i].objects[0].object_id);
+                  hinge = this._findObject(this._object_ids[i].objects[0].object_id);
                 }
                 bbox = new THREE.Box3().setFromObject(hinge);
                 this._pivot[i] = new THREE.Vector3();
@@ -3346,7 +3435,7 @@ export class Floor3dCard extends LitElement {
                 this._pivot[i].add(bbox.min);
 
                 this._object_ids[i].objects.forEach((element) => {
-                  let _obj: any = this._scene.getObjectByName(element.object_id);
+                  let _obj: any = this._findObject(element.object_id);
                   this._recenterOnPivot(_obj, this._pivot[i]);
                 });
               }
@@ -3359,7 +3448,7 @@ export class Floor3dCard extends LitElement {
                   // console.log("Start Add Door Swing");
                   let position = new THREE.Vector3();
                   if (entity.door.hinge) {
-                    let hinge: THREE.Mesh = this._scene.getObjectByName(entity.door.hinge) as THREE.Mesh;
+                    let hinge: THREE.Mesh = this._findObject(entity.door.hinge) as THREE.Mesh;
                     hinge.geometry.computeBoundingBox();
                     let boundingBox = hinge.geometry.boundingBox;
                     position.subVectors(boundingBox.max, boundingBox.min);
@@ -3381,9 +3470,9 @@ export class Floor3dCard extends LitElement {
                     let pane: THREE.Mesh;
 
                     if (entity.door.pane) {
-                      pane = this._scene.getObjectByName(entity.door.pane) as THREE.Mesh;
+                      pane = this._findObject(entity.door.pane) as THREE.Mesh;
                     } else {
-                      pane = this._scene.getObjectByName(this._object_ids[i].objects[0].object_id) as THREE.Mesh;
+                      pane = this._findObject(this._object_ids[i].objects[0].object_id) as THREE.Mesh;
                     }
 
                     pane.geometry.computeBoundingBox();
@@ -3451,7 +3540,7 @@ export class Floor3dCard extends LitElement {
                   }
 
                   this._object_ids[i].objects.forEach((element) => {
-                    let _obj: any = this._scene.getObjectByName(element.object_id);
+                    let _obj: any = this._findObject(element.object_id);
 
                     this._recenterOnPivot(_obj, this._pivot[i]);
                   });
@@ -3463,7 +3552,7 @@ export class Floor3dCard extends LitElement {
                   // console.log("Start Add Door Slide");
 
                   this._object_ids[i].objects.forEach((element) => {
-                    let _obj: any = this._scene.getObjectByName(element.object_id);
+                    let _obj: any = this._findObject(element.object_id);
                     let objbbox = new THREE.Box3().setFromObject(_obj);
                     this._slidingdoorposition[i].push(objbbox.min);
                     this._recenterOnPivot(_obj, objbbox.min);
@@ -3476,11 +3565,11 @@ export class Floor3dCard extends LitElement {
                 this._setupShade(entity, i);
               }
               if (entity.type3d == 'cover') {
-                const pane: THREE.Mesh = this._scene.getObjectByName(entity.cover.pane) as THREE.Mesh;
+                const pane: THREE.Mesh = this._findObject(entity.cover.pane) as THREE.Mesh;
 
                 if (pane) {
                   this._object_ids[i].objects.forEach((element) => {
-                    let _obj: any = this._scene.getObjectByName(element.object_id);
+                    let _obj: any = this._findObject(element.object_id);
                     let objbbox = new THREE.Box3().setFromObject(_obj);
                     this._slidingdoorposition[i].push(objbbox.min);
                     this._recenterOnPivot(_obj, objbbox.min);
@@ -3526,7 +3615,7 @@ export class Floor3dCard extends LitElement {
                   const clipPlanes = [coverplane];
 
                   this._object_ids[i].objects.forEach((element) => {
-                    let _obj: any = this._scene.getObjectByName(element.object_id);
+                    let _obj: any = this._findObject(element.object_id);
                     (_obj.material as THREE.Material).clippingPlanes = clipPlanes;
                   });
 
@@ -3550,7 +3639,7 @@ export class Floor3dCard extends LitElement {
                 // Add Virtual Light Objects
                 // light_object: the whole object_id group stays clickable, but only this one object emits light
                 this._lightObjects(entity, i).forEach((element) => {
-                  const _foundobject: any = this._scene.getObjectByName(element.object_id);
+                  const _foundobject: any = this._findObject(element.object_id);
                   if (!_foundobject && entity.light && entity.light.light_object) {
                     console.warn('floor3d-card: light_object <' + element.object_id + '> not found in the model');
                   }
@@ -3627,7 +3716,7 @@ export class Floor3dCard extends LitElement {
                           z + entity.light.light_direction.z,
                         );
                       } else {
-                        const tobj: THREE.Object3D = this._scene.getObjectByName(entity.light.light_target);
+                        const tobj: THREE.Object3D = this._findObject(entity.light.light_target);
 
                         if (tobj) {
                           const tbox: THREE.Box3 = new THREE.Box3();
@@ -3683,7 +3772,7 @@ export class Floor3dCard extends LitElement {
                 // Clone Material to allow object color changes based on Color Conditions Objects
                 let j = 0;
                 this._object_ids[i].objects.forEach((element) => {
-                  let _foundobject: any = this._scene.getObjectByName(element.object_id);
+                  let _foundobject: any = this._findObject(element.object_id);
                   this._initialmaterial[i][j] = _foundobject.material;
                   if (!Array.isArray(_foundobject.material)) {
                     this._clonedmaterial[i][j] = _foundobject.material.clone();
@@ -3694,7 +3783,7 @@ export class Floor3dCard extends LitElement {
               if (entity.type3d == 'text') {
                 // Clone object to print the text
                 this._object_ids[i].objects.forEach((element) => {
-                  let _foundobject: any = this._scene.getObjectByName(element.object_id);
+                  let _foundobject: any = this._findObject(element.object_id);
 
                   let box: THREE.Box3 = new THREE.Box3();
                   box.setFromObject(_foundobject);
@@ -3709,12 +3798,15 @@ export class Floor3dCard extends LitElement {
               }
             }
           } catch (error) {
-            console.log(error);
-            throw new Error('Object issue for Entity: <' + entity.entity + '> ' + error);
+            // One entry's problem (an object not in the model, say) must not take the rest of the card
+            // down: the per-entity arrays above are already in place for this index, so the others
+            // keep their positions. Named in the console; the entry itself does nothing.
+            this._entityProblem(entity, error);
           }
         });
         this._config.entities.forEach((entity, i) => {
-          if (entity.entity !== '') {
+          if (entity.entity !== '' && !this._brokenEntities.has(i)) {
+            try {
             if (entity.type3d == 'light') {
               this._updatelight(entity, i);
             } else if (entity.type3d == 'color') {
@@ -3736,8 +3828,14 @@ export class Floor3dCard extends LitElement {
               this._createroom(entity, i);
               this._updateroom(entity, this._spritetext[i], this._unit_of_measurement[i], i);
             }
+            } catch (error) {
+              this._entityProblem(entity, error);
+            }
           }
         });
+        if (this._brokenEntities.size) {
+          console.warn(`floor3d-card: ${this._brokenEntities.size} entit${this._brokenEntities.size == 1 ? 'y' : 'ies'} left out (see the warnings above); the others work`);
+        }
         this._startImageRefresh();
       }
       this._applyShadowBudget();
@@ -3756,7 +3854,7 @@ export class Floor3dCard extends LitElement {
         // For each element of the Zoom Area array calculate zoom position and initialize zoom array
 
         if (element.object_id && element.object_id != '') {
-          let _foundobject: any = this._scene.getObjectByName(element.object_id);
+          let _foundobject: any = this._findObject(element.object_id);
 
           if (_foundobject && _foundobject instanceof THREE.Mesh) {
             const _targetMesh: THREE.Mesh = _foundobject as THREE.Mesh;
@@ -3813,7 +3911,7 @@ export class Floor3dCard extends LitElement {
     const transparency: number = entity.room.transparency ? entity.room.transparency : 50;
     const color: string = entity.room.color ? entity.room.color : '#ffffff';
 
-    const _foundroom: THREE.Object3D = this._scene.getObjectByName(entity.object_id);
+    const _foundroom: THREE.Object3D = this._findObject(entity.object_id);
 
     if (_foundroom) {
       if (_foundroom.name.includes('room') && _foundroom instanceof THREE.Mesh) {
@@ -3915,8 +4013,8 @@ export class Floor3dCard extends LitElement {
   private _updateroom(entity: Floor3dCardConfig, text: string, uom: string, i: number): void {
     //update sprite text and other change conditions
 
-    const _roomMesh: THREE.Object3D = this._scene.getObjectByName(this._rooms[i]);
-    const _roomSprite: THREE.Object3D = this._scene.getObjectByName(this._sprites[i]);
+    const _roomMesh: THREE.Object3D = this._findObject(this._rooms[i]);
+    const _roomSprite: THREE.Object3D = this._findObject(this._sprites[i]);
     const _roomCanvas: HTMLCanvasElement = this._canvas[i];
 
     if (_roomMesh && entity) {
@@ -3957,7 +4055,7 @@ export class Floor3dCard extends LitElement {
   private _setupShade(entity: Floor3dCardConfig, i: number): void {
     const targets = this._object_ids[i] && this._object_ids[i].objects ? this._object_ids[i].objects : [{ object_id: entity.object_id }];
     targets.forEach((element) => {
-      const mesh: any = this._scene.getObjectByName(element.object_id);
+      const mesh: any = this._findObject(element.object_id);
       if (!mesh || !mesh.geometry) {
         console.warn('floor3d-card: shade object <' + element.object_id + '> not found in the model');
         return;
@@ -3980,7 +4078,7 @@ export class Floor3dCard extends LitElement {
     const targetY = base.y0 + span.bottom * base.height;
     const targets = this._object_ids[i] && this._object_ids[i].objects ? this._object_ids[i].objects : [{ object_id: entity.object_id }];
     targets.forEach((element) => {
-      const mesh: any = this._scene.getObjectByName(element.object_id);
+      const mesh: any = this._findObject(element.object_id);
       if (!mesh) return;
       if (!animate) {
         mesh.scale.y = visible;
@@ -3997,7 +4095,7 @@ export class Floor3dCard extends LitElement {
   }
 
   private _updatecover(item: Floor3dCardConfig, state: string, i: number): void {
-    let pane = this._scene.getObjectByName(item.cover.pane);
+    let pane = this._findObject(item.cover.pane);
 
     if (this._position[i] == null) {
       if (state == 'open') {
@@ -4009,7 +4107,7 @@ export class Floor3dCard extends LitElement {
     }
 
     if (!pane) {
-      pane = this._scene.getObjectByName(this._object_ids[i].objects[0].object_id);
+      pane = this._findObject(this._object_ids[i].objects[0].object_id);
     }
     this._translatedoor(pane, this._position[i], item.cover.side, i, state);
     this._renderer.shadowMap.needsUpdate = true;
@@ -4076,6 +4174,9 @@ export class Floor3dCard extends LitElement {
         texture.flipY = false;
       }
       if (((_foundobject as THREE.Mesh).material as THREE.MeshBasicMaterial).name.startsWith('f3dmat')) {
+        // the previous text's texture is ours: free it on the GPU, or every state change leaks one
+        const previous = ((_foundobject as THREE.Mesh).material as THREE.MeshBasicMaterial).map;
+        if (previous && previous !== texture) previous.dispose();
         ((_foundobject as THREE.Mesh).material as THREE.MeshBasicMaterial).map = texture;
       } else {
         const material = new THREE.MeshBasicMaterial({
@@ -4096,6 +4197,8 @@ export class Floor3dCard extends LitElement {
     texture.repeat.set(1, 1);
 
     if (object.material.name.startsWith('f3dmat')) {
+      const previous = (object.material as THREE.SpriteMaterial).map;
+      if (previous && previous !== texture) previous.dispose();
       (object.material as THREE.SpriteMaterial).map = texture;
     } else {
       const material = new THREE.SpriteMaterial({
@@ -4214,7 +4317,7 @@ export class Floor3dCard extends LitElement {
   }
 
   private _createImage(entity: Floor3dCardConfig, i: number): void {
-    const object: any = this._scene.getObjectByName(entity.object_id);
+    const object: any = this._findObject(entity.object_id);
     if (!object || !(object instanceof THREE.Mesh)) {
       console.warn('floor3d-card: image object <' + entity.object_id + '> not found in the model');
       return;
@@ -4333,7 +4436,7 @@ export class Floor3dCard extends LitElement {
   }
 
   private _updatetext(entity: Floor3dCardConfig, state: string, canvas: HTMLCanvasElement, uom: string): void {
-    const _foundobject: any = this._scene.getObjectByName(entity.object_id);
+    const _foundobject: any = this._findObject(entity.object_id);
 
     if (_foundobject) {
       this._updateTextCanvas(entity.text, canvas, state + uom);
@@ -4389,7 +4492,7 @@ export class Floor3dCard extends LitElement {
     // Illuminate the light object when, for the bound device, one of its attribute gets modified in HA. See set hass property
 
     this._lightObjects(entity, i).forEach((element) => {
-      const light: any = this._scene.getObjectByName(element.object_id + '_light');
+      const light: any = this._findObject(element.object_id + '_light');
 
       if (!light) {
         return;
@@ -4432,7 +4535,7 @@ export class Floor3dCard extends LitElement {
         const glow = this._states[i] == 'on' ? light.color : null;
         const k = glow && this._brightness[i] != -1 ? Math.max(0.25, this._brightness[i] / 255) : 1;
         this._object_ids[i].objects.forEach((o) => {
-          const mesh: any = this._scene.getObjectByName(o.object_id);
+          const mesh: any = this._findObject(o.object_id);
           if (mesh) this._look.setGlow(mesh, glow, k);
         });
       }
@@ -4548,7 +4651,7 @@ export class Floor3dCard extends LitElement {
     // perform action on door objects
     // console.log("Update Door Start");
 
-    const _obj: any = this._scene.getObjectByName(this._object_ids[i].objects[0].object_id);
+    const _obj: any = this._findObject(this._object_ids[i].objects[0].object_id);
 
     let door: THREE.Mesh;
 
@@ -4565,9 +4668,9 @@ export class Floor3dCard extends LitElement {
         }
         if (entity.door.doortype == 'slide') {
           // if (entity.door.doortype == 'slide') {
-          let pane = this._scene.getObjectByName(entity.door.pane);
+          let pane = this._findObject(entity.door.pane);
           if (!pane) {
-            pane = this._scene.getObjectByName(this._object_ids[i].objects[0].object_id);
+            pane = this._findObject(this._object_ids[i].objects[0].object_id);
           }
           let percentage: number;
           if (typeof entity.door.slide_percentage !== 'undefined') {
@@ -4601,7 +4704,7 @@ export class Floor3dCard extends LitElement {
 
     //For a swing door, rotate the objects along the configured axis and the degrees of opening
     this._object_ids[index].objects.forEach((element) => {
-      let _obj: any = this._scene.getObjectByName(element.object_id);
+      let _obj: any = this._findObject(element.object_id);
 
       //this._centerobjecttopivot(_obj, this._pivot[index]);
       const targetRotation: THREE.Vector3 = new THREE.Vector3(0, 0, 0);
@@ -4656,7 +4759,7 @@ export class Floor3dCard extends LitElement {
     let size: THREE.Vector3 = new THREE.Vector3();
     let center: THREE.Vector3 = new THREE.Vector3();
 
-    //TBD let pane = this._scene.getObjectByName(item.door.pane);
+    //TBD let pane = this._findObject(item.door.pane);
 
     let bbox = new THREE.Box3().setFromObject(pane);
 
@@ -4697,7 +4800,7 @@ export class Floor3dCard extends LitElement {
     }
 
     this._object_ids[index].objects.forEach((element, i) => {
-      let _obj: any = this._scene.getObjectByName(element.object_id);
+      let _obj: any = this._findObject(element.object_id);
       const originalPosition = this._slidingdoorposition[index][i];
 
       let targetPosition: THREE.Vector3 = new THREE.Vector3(
@@ -4725,7 +4828,7 @@ export class Floor3dCard extends LitElement {
   private _updateroomcolor(item: any, index: number): void {
     // Change the color of the room when, for the bound entity, when the state matches the condition
 
-    let _room: any = this._scene.getObjectByName(this._rooms[index]);
+    let _room: any = this._findObject(this._rooms[index]);
 
     const color: string = item.room.color ? item.room.color : '#ffffff';
 
@@ -4804,7 +4907,7 @@ export class Floor3dCard extends LitElement {
 
     let j = 0;
     this._object_ids[index].objects.forEach((element) => {
-      let _object: any = this._scene.getObjectByName(element.object_id);
+      let _object: any = this._findObject(element.object_id);
 
       if (_object) {
         let i: any;
@@ -4843,7 +4946,7 @@ export class Floor3dCard extends LitElement {
     // hide the object when the state is equal to the configured value
     this._object_ids[index].objects.forEach((element) => {
       //object clickable: check layers solution
-      const _object: any = this._scene.getObjectByName(element.object_id);
+      const _object: any = this._findObject(element.object_id);
 
       if (_object) {
         if (this._states[index] == entity.hide.state) {
@@ -4860,7 +4963,7 @@ export class Floor3dCard extends LitElement {
   private _updateshow(entity: Floor3dCardConfig, index: number): void {
     // hide the object when the state is equal to the configured value
     this._object_ids[index].objects.forEach((element) => {
-      const _object: any = this._scene.getObjectByName(element.object_id);
+      const _object: any = this._findObject(element.object_id);
 
       if (_object) {
         if (this._states[index] == entity.show.state) {
@@ -4882,26 +4985,33 @@ export class Floor3dCard extends LitElement {
     //return hasConfigOrEntityChanged(this, _changedProps, false);
   }
 
+  // rotate.ramp: seconds from standstill to full speed (and back). The speed the entity asks for is
+  // the target; the animation loop moves the actual speed towards it. Without ramp (the default) the
+  // speed changes at once, as before.
+  private _rotation_target: number[] = [];
+  private _rotation_ramp: number[] = [];
+
   private _rotatecalc(entity: Floor3dCardConfig, i: number) {
     let j = this._rotation_index.indexOf(i);
 
     //1 if the entity is on, 0 if the entity is off
-    this._rotation_state[j] = this._states[i] == 'on' ? 1 : 0;
+    let target = this._states[i] == 'on' ? 1 : 0;
 
     //If the entity is on and it has the 'percentage' attribute, convert the percentage integer
     //into a decimal and store it as the rotation state
-    if (this._rotation_state[j] != 0 && this._hass.states[entity.entity].attributes['percentage']) {
-      this._rotation_state[j] = this._hass.states[entity.entity].attributes['percentage'] / 100;
+    if (target != 0 && this._hass.states[entity.entity].attributes['percentage']) {
+      target = this._hass.states[entity.entity].attributes['percentage'] / 100;
     }
 
     //If the entity is on and it is reversed, set the rotation state to the negative value of itself
-    if (
-      this._rotation_state[j] != 0 &&
-      this._hass.states[entity.entity].attributes['direction'] &&
-      this._hass.states[entity.entity].attributes['direction'] == 'reverse'
-    ) {
-      this._rotation_state[j] = 0 - this._rotation_state[j];
+    if (target != 0 && this._hass.states[entity.entity].attributes['direction'] && this._hass.states[entity.entity].attributes['direction'] == 'reverse') {
+      target = 0 - target;
     }
+
+    const ramp = entity.rotate && entity.rotate.ramp !== undefined ? parseFloat(entity.rotate.ramp) : 0;
+    this._rotation_ramp[j] = ramp > 0 ? ramp : 0;
+    this._rotation_target[j] = target;
+    if (!this._rotation_ramp[j] || this._rotation_state[j] === undefined) this._rotation_state[j] = target;
 
     this._startOrStopAnimationLoop();
   }
@@ -4909,7 +5019,7 @@ export class Floor3dCard extends LitElement {
   private _needsAnimationLoop() {
     // Check rotations, Tween.getAll() and animated pictures (GIF, video)
     return (
-      this._rotation_state.some((item) => item !== 0) ||
+      this._rotation_state.some((item, j) => item !== 0 || (this._rotation_target[j] !== undefined && item !== this._rotation_target[j])) ||
       TWEEN.getAll().length > 0 ||
       this._imageFrames.some((f) => f && f.animated)
     );
@@ -4923,21 +5033,45 @@ export class Floor3dCard extends LitElement {
       this._clock = new THREE.Clock();
       this._renderer.setAnimationLoop(() => this._animationLoop());
     } else {
+      if (this._to_animate) {
+        // the last frame of a movement gets exact shadows (the loop throttles them while it runs)
+        this._renderer.shadowMap.needsUpdate = true;
+        this._requestRender('anim-end');
+      }
       this._to_animate = false;
       this._clock = null;
       this._renderer.setAnimationLoop(null);
     }
   }
 
+  // While something moves, shadows are redrawn at most this often (ms); a fan turning all day with
+  // shadows on used to re-render every shadow map every frame
+  private static readonly SHADOW_INTERVAL = 300;
+  private _lastShadowTime = 0;
+
   private _animationLoop() {
     const clockDelta = this._clock.getDelta();
     let rotateBy = clockDelta * Math.PI * 2;
+
+    // ramps: the actual speed walks towards the target at 1 / ramp per second; when a ramped fan
+    // comes to rest the loop is checked once more so it can stop
+    let settled = false;
+    this._rotation_state.forEach((state, index) => {
+      const ramp = this._rotation_ramp[index];
+      const target = this._rotation_target[index];
+      if (!ramp || target === undefined || state === target) return;
+      const step = clockDelta / ramp;
+      const next = Math.abs(target - state) <= step ? target : state + Math.sign(target - state) * step;
+      this._rotation_state[index] = next;
+      if (next === target && target === 0) settled = true;
+    });
+    if (settled) window.setTimeout(() => this._startOrStopAnimationLoop(), 0);
 
     this._rotation_state.forEach((state, index) => {
       if (state == 0) return;
 
       this._object_ids[this._rotation_index[index]].objects.forEach((element) => {
-        let _obj = this._scene.getObjectByName(element.object_id);
+        let _obj = this._findObject(element.object_id);
         if (_obj) {
           switch (this._axis_to_rotate[index]) {
             case 'x':
@@ -4961,7 +5095,10 @@ export class Floor3dCard extends LitElement {
       if (f) f.tick(now);
     });
 
-    this._renderer.shadowMap.needsUpdate = true;
+    if (this._renderer.shadowMap.enabled && now - this._lastShadowTime >= Floor3dCard.SHADOW_INTERVAL) {
+      this._renderer.shadowMap.needsUpdate = true;
+      this._lastShadowTime = now;
+    }
     // Faz-0 Engine Backbone: (Stabil.Patch.0.0)
     this._requestRender('anim');
   }
