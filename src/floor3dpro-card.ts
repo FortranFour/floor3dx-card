@@ -39,6 +39,7 @@ import { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { loadCompressedGLTF, applyTextureQuality } from './model-loader';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
 import { applyRenderMode, lightIntensity, exposure } from './render-mode';
+import { mergeStatic, reservedNames } from './merge-static';
 import { Object3D } from 'three';
 import '../elements/button';
 
@@ -99,6 +100,15 @@ function __assetCacheKey(
 }
 
 function __deepCloneObject(source: THREE.Object3D): THREE.Object3D {
+  // Mark each material of the cached model with its own id before cloning: the per-instance clones
+  // (and the look's themed copies of them, which keep userData) can then be told apart from
+  // materials that were really different in the file (merge_static groups by it).
+  source.traverse((node: any) => {
+    if (!node.isMesh || !node.material) return;
+    (Array.isArray(node.material) ? node.material : [node.material]).forEach((m: THREE.Material) => {
+      if (!m.userData.f3dxSourceId) m.userData.f3dxSourceId = m.uuid;
+    });
+  });
   const clone = source.clone(true);
 
   clone.traverse((node: any) => {
@@ -1826,6 +1836,25 @@ export class Floor3dCard extends LitElement {
     return meshes;
   }
 
+  // merge_static: the meshes no configuration entry refers to, merged per level, material and shadow
+  // setting (see merge-static.ts). Not in the editor's preview, which needs every object by name.
+  private _mergedGeometries: THREE.BufferGeometry[] = [];
+  private _mergeStatic(): void {
+    if ((this._config as any).merge_static != 'yes' || this.preview) return;
+    const names = this._modelObjectNames();
+    const resolved = (this._object_ids || []).map((e: any) => (e.objects || []).map((o: any) => o.object_id));
+    const reserved = reservedNames(this._config, names, resolved);
+    const removed = new Set<THREE.Object3D>();
+    const { stats, geometries } = mergeStatic(this._levels, reserved, (mesh) => removed.add(mesh));
+    this._mergedGeometries.push(...geometries);
+    this._raycastinglevels = (this._raycastinglevels || []).map((level) => (level || []).filter((o) => !removed.has(o)));
+    console.log(
+      `floor3d-card: merge_static: ${stats.merged} of ${stats.meshes} meshes merged into ${stats.into}` +
+        (stats.lines ? `, ${stats.lines} edge lines into ${stats.intoLines}` : '') +
+        `; ${stats.reserved} object(s) kept apart for the configuration`,
+    );
+  }
+
   private _applyLook(): void {
     const cfg: any = (this._config as any).look;
     if (!cfg || !this._scene) return;
@@ -2306,6 +2335,8 @@ export class Floor3dCard extends LitElement {
       this._look.dispose();
       this._look = null;
     }
+    this._mergedGeometries.forEach((g) => g.dispose());
+    this._mergedGeometries = [];
     this._scene = new THREE.Scene();
 
     this._camera = new THREE.PerspectiveCamera(45, 1, 0.1, 10000);
@@ -2581,6 +2612,7 @@ export class Floor3dCard extends LitElement {
     }
     this._bindTransparency();
     this._hideSparePanels();
+    this._mergeStatic(); // last: everything above works per mesh
 
     console.log('Object loaded end');
 

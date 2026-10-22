@@ -51,6 +51,18 @@ For the full configuration reference, see the [floor3dpro-card README](docs/floo
 
 What else the upgrade brings: three.js' current GLTF loader (KHR material extensions, meshopt), KTX2 and Draco decoders, and a bundle that builds in under a second. The last 1.x release, 1.9.12, stays available; a `1.x` branch can receive fixes if a model turns out to need the old engine.
 
+## Version 2.1: merged static geometry (`merge_static`)
+
+A Sweet Home 3D export is one mesh per wall, panel, chair leg or picture frame — a house is two to three thousand of them — and the card issued one draw call for each, every frame. Only the objects a configuration refers to need to stay separate. With `merge_static: yes` the rest is merged when the model loads, per level, material and shadow setting, and the look's edge lines of those meshes with them:
+
+```yaml
+merge_static: yes
+```
+
+Measured on a real house (2,944 meshes, 5 lamps with shadows, 806×1322): 3,054 draw calls → 401, and the CPU work of a frame from 26 ms to 8 ms; with a `look` theme 5,313 → 426 and 47 ms → 5 ms. The reference views are pixel-identical to the unmerged ones.
+
+What stays separate: every object named anywhere in the configuration (entities, `object_groups`, `hide_objects`, `transparent`, `look.keep`, `edge_skip`, `daylight` windows — `*` patterns and `<groups>` expanded), hidden objects, translucent materials (three.js sorts those per object), multi-material meshes. Merging runs last, after `wall_seal`, the look, `hide_spare_panels` and the entity setup, so all of those see the model as it was. In the editor's preview nothing is merged, since the object menus need every name. A merged wall or chair no longer answers to a tap (it did nothing before either), and the merged copies take about as much memory again as the model. Off by default; it is in the editor's 3D model section.
+
 ## What this fork changes
 
 ### Compressed models
@@ -453,6 +465,7 @@ On a Home Assistant without `ha-form` the previous editor is shown instead. `day
 | `look.keep` | objects the theme leaves as the model has them: ids / patterns / `<group>` | none |
 | `hide_spare_panels` | `yes`, `no`: hide unbound panels beside bound text / picture panels | `no` |
 | `hide_objects` | objects never drawn: ids / patterns / `<group>` | none |
+| `merge_static` | `yes`, `no`: merge the meshes nothing refers to; see Version 2.1 above | `no` |
 | `transparent` | card-level list of `{objects, transparency}` rules; see above | off |
 | `type3d: transparent` | `transparent.transparency`, `transparent.transparency_off`, `transparent.state`, `transparent.invert` | |
 | `shadow_budget` | number of shadow-casting lights | from the GPU's texture units |

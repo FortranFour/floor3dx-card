@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.0
+
+### Added
+- `merge_static: yes` merges, when the model loads, every mesh no configuration entry refers to into one mesh per level, material and shadow setting, and the look's edge lines of those meshes into one object per level. On a 2,944-mesh house: 3,054 draw calls → 401 and the frame's CPU work 26 → 8 ms; with a look theme 5,313 → 426 and 47 → 5 ms; the reference views are pixel-identical. Objects named anywhere in the configuration (patterns and groups expanded), hidden objects, translucent materials and multi-material meshes stay separate; nothing is merged in the editor's preview. Off by default; editor field in the 3D model section. Harness: `test_merge.py` and merged variants of the reference views.
+- The materials of the cached model carry a source id through the per-instance clones (`userData.f3dxSourceId`), so code can tell the copies of one material apart from materials that differ in the file.
+
 ## 2.0.5
 
 ### Fixed

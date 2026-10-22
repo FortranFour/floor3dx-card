@@ -54,6 +54,7 @@ export const SWITCHES: { [key: string]: 'yes' | 'no' } = {
   sky: 'no',
   antialias: 'yes',
   hide_spare_panels: 'no',
+  merge_static: 'no',
 };
 // The same inside the options block of a type.
 export const BLOCK_SWITCHES: { [block: string]: { [key: string]: 'yes' | 'no' } } = {
@@ -85,6 +86,7 @@ export const SECTIONS: Section[] = [
       [row(text('backgroundColor'), text('style'))],
       [bool('hide_spare_panels')],
       [text('hide_objects')],
+      [bool('merge_static')],
     ],
   },
   {
@@ -570,6 +572,7 @@ const LABELS: { [name: string]: string } = {
   edge_skip: 'No edge lines on',
   keep: 'Keep as in the model',
   hide_spare_panels: 'Hide unused text and picture panels',
+  merge_static: 'Merge the objects no row refers to (fewer draw calls)',
   hide_objects: 'Hide objects',
   transparency_off: 'Transparency otherwise',
   invert: '100 means closed',
@@ -704,6 +707,7 @@ const HELPERS: { [name: string]: string } = {
   edge_skip: 'Comma separated: images, texts, seams, floors, coplanar, or object ids / patterns / <groups>. Default: nothing skipped',
   keep: 'Objects the theme leaves untouched, materials and lines: ids, patterns, <groups>, comma separated',
   hide_spare_panels: 'Flat objects of the same name family and size as a text or picture panel, near it, that no row binds. Default no',
+  merge_static: 'Walls, floors and furniture that nothing binds are drawn as one object per level and material: same picture, much less work per frame. Default no',
   hide_objects: 'Never drawn: object ids, * patterns or <groups>, comma separated',
   glow: 'Emissive glow of a lit lamp object in its light colour. Default 0.9',
   keep_signal: 'Bright saturated colours (Gold, red) stay as they are. Default yes',

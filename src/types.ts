@@ -61,6 +61,7 @@ export interface Floor3dCardConfig {
   look?: any;
   transparent?: any;
   hide_spare_panels?: string;
+  merge_static?: string;
   hide_objects?: any;
   shadow_budget?: number;
   wall_seal?: number;

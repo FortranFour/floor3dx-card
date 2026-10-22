@@ -40,6 +40,11 @@ VIEWS = [
     # 2.0 opt-ins (ignored by a 1.x build, so these views only compare 2.x builds with each other)
     ('lights-physical', {'lights': True, 'shadow': 'yes', 'globalLightPower': 0.77, 'lights_mode': 'physical'}),
     ('managed', {'lights': True, 'shadow': 'yes', 'globalLightPower': 0.77, 'color_management': 'managed'}),
+    # 2.1: merge_static must give the same picture as the unmerged views above
+    ('merged-plain', {'merge_static': 'yes'}),
+    ('merged-lights', {'lights': True, 'shadow': 'yes', 'globalLightPower': 0.77, 'merge_static': 'yes'}),
+    ('merged-look-day', {'look': {'theme': 'day', 'edge_skip': 'seams, floors'}, 'merge_static': 'yes'}),
+    ('merged-look-neon', {'look': {'theme': 'neon', 'edge_skip': 'seams, floors'}, 'lights': True, 'merge_static': 'yes'}),
 ]
 
 JS = r"""async ([model, view, extra]) => {
@@ -62,7 +67,7 @@ for name in todo:
     model = MODELS[name]
     def after(page, model=model, name=name):
         for view, extra in VIEWS:
-            if name == 'garage' and view in ('lights', 'lights-physical', 'managed'):
+            if name == 'garage' and view in ('lights', 'lights-physical', 'managed', 'merged-lights', 'merged-look-neon'):
                 continue
             ok = page.evaluate(JS, [model, view, extra])
             page.wait_for_timeout(500)
