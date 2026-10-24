@@ -15,7 +15,7 @@ WHICH = sys.argv[2] if len(sys.argv) > 2 else 'all'
 # directory rendered with EXTRA compares directly against the baseline); ONLY='plain,lights' limits views
 EXTRA = json.loads(os.environ.get('EXTRA', '{}'))
 ONLY = [v for v in os.environ.get('ONLY', '').split(',') if v]
-os.makedirs(OUT, exist_ok=True)
+if __name__ == '__main__': os.makedirs(OUT, exist_ok=True)
 
 HOUSE = {
     'file': 'house.11.12.24.draco.glb',
@@ -66,24 +66,26 @@ JS = r"""async ([model, view, extra]) => {
 }"""
 
 MODELS = {'house': HOUSE, 'garage': GARAGE}
-todo = [WHICH] if WHICH in MODELS else list(MODELS)
-for name in todo:
-    model = MODELS[name]
-    def after(page, model=model, name=name):
-        for view, extra in VIEWS:
-            if ONLY and view not in ONLY:
-                continue
-            if EXTRA and (view.startswith('merged') or view in ('lights-physical', 'managed')):
-                continue
-            if name == 'garage' and view in ('lights', 'lights-physical', 'managed', 'merged-lights', 'merged-look-neon'):
-                continue
-            # the harness' own `lights` key means "bind the lamps"; the card option travels as lights_mode
-            extra = dict(extra, **{('lights_mode' if k == 'lights' else k): v for k, v in EXTRA.items()})
-            ok = page.evaluate(JS, [model, view, extra])
-            page.wait_for_timeout(500)
-            page.screenshot(path=f'{OUT}/{name}-{view}.png', clip={'x': 0, 'y': 0, 'width': 800, 'height': 560}, timeout=120000)
-            page.evaluate("()=>{window.shot.remove()}")
-            print(name, view, 'ready' if ok else 'NOT READY', flush=True)
-    result, errors = run(query=f'path=/dev/private/&model={model["file"]}&' + os.environ.get('QUERY', ''), after=after, timeout_ms=240000)
-    for e in errors[:5]:
-        print('  error:', e[:200])
+
+if __name__ == '__main__':
+  todo = [WHICH] if WHICH in MODELS else list(MODELS)
+  for name in todo:
+        model = MODELS[name]
+        def after(page, model=model, name=name):
+            for view, extra in VIEWS:
+                if ONLY and view not in ONLY:
+                    continue
+                if EXTRA and (view.startswith('merged') or view in ('lights-physical', 'managed')):
+                    continue
+                if name == 'garage' and view in ('lights', 'lights-physical', 'managed', 'merged-lights', 'merged-look-neon'):
+                    continue
+                # the harness' own `lights` key means "bind the lamps"; the card option travels as lights_mode
+                extra = dict(extra, **{('lights_mode' if k == 'lights' else k): v for k, v in EXTRA.items()})
+                ok = page.evaluate(JS, [model, view, extra])
+                page.wait_for_timeout(500)
+                page.screenshot(path=f'{OUT}/{name}-{view}.png', clip={'x': 0, 'y': 0, 'width': 800, 'height': 560}, timeout=120000)
+                page.evaluate("()=>{window.shot.remove()}")
+                print(name, view, 'ready' if ok else 'NOT READY', flush=True)
+        result, errors = run(query=f'path=/dev/private/&model={model["file"]}&' + os.environ.get('QUERY', ''), after=after, timeout_ms=240000)
+        for e in errors[:5]:
+            print('  error:', e[:200])

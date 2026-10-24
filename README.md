@@ -159,7 +159,7 @@ Upstream intended `yes` but the code compared colour arrays by reference and ass
 
 ```yaml
 look:
-  theme: neon            # neon | blueprint | day | paper | ember | pastel | custom | off
+  theme: neon            # neon | blueprint | day | paper | ember | pastel | custom | off, or a palette name (below)
   accent: '#37e0ff'      # edge colour of the neon theme
   edges: 'yes'           # outline lines along mesh edges
   edge_angle: 60         # draw an edge where faces meet at more than this; 40 is denser, 60 thins window mullions
@@ -199,6 +199,8 @@ A changed `look` takes effect when the card is rebuilt (the editor's reload, or 
 Three more themes, not from those projects: **paper**, an architect's drawing on cream card with ink lines, walls a shade warmer and floors parchment; **ember**, charcoal surfaces with a warm cast and amber lines that glow, for a dark dashboard that is not blue; **pastel**, the model's own colours lightened and softened on a pale stage, for a house whose textures and furniture colours should still read.
 
 <img src="https://github.com/user-attachments/assets/be1569ba-0544-4602-9b26-99053574021c" alt="The same house in the day, paper, ember and pastel themes" width="100%">
+
+**Named palettes** (2.4). Twenty-three more themes, each a palette of the custom theme, by name: `midnight-teal`, `ultraviolet`, `copper-slate`, `rose-gold`, `moss`, `sunset`, `noir`, `crt`, `ocean`, `architect`, `mint-cream`, `arctic` (one hue with a contrasting line); `infrared`, `riso` (duotone: dark surfaces one hue, bright another); `navy-tangerine`, `cyberpunk` (muted surfaces, complementary lines); `sodium`, `gold-leaf` (metals); `x-ray`, `hologram` (inverted: dark objects glow / flat surfaces, lines carry the detail); `ivory-on-black`, `ice` (a pale model on a black stage); `ink-on-paper` (a dark model on cream). `look: {theme: riso}` is `theme: custom` with that palette's colours; a `custom:` block beside it overrides single colours (`custom: {edges: '#ffffff'}`), and the editor shows the palette's colours in its pickers. They were chosen on a real house with its lamps on; `dev/harness/render_themes.py` renders a model under any set of palettes for comparison.
 
 **Your own colours** (`theme: custom`). The same colour function with colours you choose, as `#rrggbb`; the editor shows them as colour pickers once Custom is selected:
 
@@ -473,7 +475,7 @@ On a Home Assistant without `ha-form` the previous editor is shown instead. `day
 | `rotate.ramp` | seconds a fan takes to reach its speed, and to stop | at once |
 | `look` | see above | off |
 | `look.edge_skip` | `images`, `texts`, `seams`, `floors`, `coplanar`, object ids / patterns / `<group>` | nothing skipped |
-| `look.custom` | colours of `theme: custom`; see above | defaults |
+| `look.custom` | colours of `theme: custom`, or overrides of a named palette; see above | defaults |
 | `look.keep` | objects the theme leaves as the model has them: ids / patterns / `<group>` | none |
 | `hide_spare_panels` | `yes`, `no`: hide unbound panels beside bound text / picture panels | `no` |
 | `hide_objects` | objects never drawn: ids / patterns / `<group>` | none |
@@ -488,6 +490,48 @@ On a Home Assistant without `ha-form` the previous editor is shown instead. `day
 | `color_entity` | an entity id, on `light` and `color` entries | `entity` |
 | `colorcondition[].color` | `entity`, `entity_color` in addition to any colour | |
 | `type3d: image` | see above | |
+
+## Floor3DX Rooms Card
+
+`custom:floor3dx-rooms-card`, installed with this card (2.4), is the model as a full-page room controller: the live 3D view of a floor3dx card with the room layer of the [Floor3D Snapshot Card](https://github.com/FortranFour/floor3d-snapshot-card) on top. A tap on a room tints its floor and opens a translucent panel of simple controls over the model, in the colours of the chosen theme; the controls are the snapshot card's (switches, brightness, fan speed, volume, covers, thermostat steps, lock, run, "all off in this room", guest mode). The 3D is a floor3dx card embedded as it is, so its lamps, text frames, pictures, shades, doors and fans all keep working, and a double tap still does what it does in that card.
+
+![Floor3DX Rooms Card: the neon theme on a desktop, the architect theme on a phone](docs/floor3dx-rooms-card.png)
+
+Setting it up takes the snapshot card's four steps, in the visual editor: **Find floor3d cards in my dashboards** and pick one (its configuration is copied into the rooms card under `card:`); **Detect rooms from the model** (the floor objects `room_N_1` of a Sweet Home 3D export, each named from the floor3d entity bound to its floor and filled with the card's entities that stand in it; edit the result); pick a **theme**; set the **display** options. Rooms can also be written by hand:
+
+```yaml
+type: custom:floor3dx-rooms-card
+title: House
+theme: midnight-teal          # any of the 30 below; neon by default
+card:                         # a floor3dx-card / floor3d-card configuration, as it is
+  path: /local/floor3dx/
+  objfile: house.glb
+  entities: [...]
+rooms:
+  - id: kitchen
+    name: Kitchen
+    icon: mdi:countertop-outline
+    floors: [room_3_1]        # the floor objects: tap target, tint and pin
+    entities:
+      - entity: light.kitchen
+      - entity: switch.kettle
+        name: Kettle
+```
+
+| Option | Values | Default |
+|---|---|---|
+| `theme` | `off`, `neon`, `blueprint`, `day`, `paper`, `ember`, `pastel`; one hue: `midnight-teal`, `ultraviolet`, `copper-slate`, `rose-gold`, `moss`, `sunset`, `noir`, `crt`, `ocean`, `architect`, `mint-cream`, `arctic`; duotone: `infrared`, `riso`; contrast lines: `navy-tangerine`, `cyberpunk`; metals: `sodium`, `gold-leaf`; inverted: `x-ray`, `hologram`; pale on black: `ivory-on-black`, `ice`; `ink-on-paper` | `neon` |
+| `rooms[].floors` | floor object names; a room without one is reached from the Rooms menu | |
+| `rooms[].entities[]` | `entity`, `name`, `icon`, `read_only` | |
+| `pins` | `yes`, `no`: a pin per room, following the camera | `yes` |
+| `labels` | `yes`: pins always show the room's name | `no` |
+| `room_colors` | `yes`: every room's floor in its own pastel tint | `no` |
+| `keep_panel` | `yes`: a tap outside the rooms leaves the panel open | `no` |
+| `guest_mode`, `max_volume`, `temperature_range` | as in the snapshot card | `yes`, 0.6 in guest mode, none |
+| `height` | CSS height | the panel view's height, else `60vh` |
+| `accent` | `#rrggbb`, the overlay's accent | the theme's line colour |
+
+The card's own options (`look`, `merge_static`, `daylight`, ...) are taken from `card:`; `look` is replaced by the theme unless the theme is `off`. The rooms' floors are kept out of `merge_static`. A tap on a wall selects the room behind it; a tap outside the model closes the panel. The themes beyond the first seven are palettes of `look.custom` (their colours are in the card editor's swatches), chosen on a real house with its lamps on.
 
 ## Companion card: Floor3D Snapshot Card
 

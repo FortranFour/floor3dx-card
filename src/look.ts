@@ -49,6 +49,7 @@
 // where they are.
 
 import * as THREE from 'three';
+import { paletteOf } from './look-palettes';
 
 export type Theme = 'neon' | 'blueprint' | 'day' | 'paper' | 'ember' | 'pastel' | 'custom' | 'off';
 
@@ -99,7 +100,7 @@ export const STAGE: Record<Exclude<Theme, 'off'>, { night: number[]; day: number
 };
 
 /** Edge line colour per theme. */
-const EDGE: Record<Exclude<Theme, 'off'>, number> = { neon: 0x37e0ff, blueprint: 0xcce6ff, day: 0x142b61, paper: 0x4a3826, ember: 0xff9a3c, pastel: 0x6a6e96, custom: 0xe8f0ff };
+export const EDGE: Record<Exclude<Theme, 'off'>, number> = { neon: 0x37e0ff, blueprint: 0xcce6ff, day: 0x142b61, paper: 0x4a3826, ember: 0xff9a3c, pastel: 0x6a6e96, custom: 0xe8f0ff };
 
 // Fragment function: a material colour -> the themed colour. 0 neon, 1 blueprint, 2 day, 3 paper, 4 ember, 5 pastel. Adapted from
 // NextFloor (viewer/theme.ts); isWall / isFloor pick the surface tints of the neon look, keepSignal
@@ -196,7 +197,7 @@ export class Look {
     this.cfg = cfg || {};
     this.scene = scene;
     this.linear = linear;
-    this.custom = Look.customColours(this.cfg.custom);
+    this.custom = Look.customColours(Look.paletteColours(this.cfg));
     this.wallPrefixes = list(this.cfg.walls, ['wall']);
     this.floorPrefixes = list(this.cfg.floors, ['room', 'floor']);
     const theme = this.theme();
@@ -207,7 +208,16 @@ export class Look {
 
   theme(): Theme {
     const t = String(this.cfg.theme || 'off').toLowerCase();
+    if (paletteOf(t)) return 'custom'; // a named palette: the custom theme with its colours
     return (THEMES as string[]).includes(t) ? (t as Theme) : 'off';
+  }
+
+  /** The colours of `theme: custom`, or of a named palette (`theme: riso`), with any `custom` block on top. */
+  static paletteColours(cfg: LookConfig): CustomTheme | undefined {
+    const p = paletteOf(cfg.theme);
+    if (!p) return cfg.custom;
+    const { key: _k, label: _l, group: _g, ...colours } = p;
+    return { ...colours, ...(cfg.custom || {}) };
   }
 
   get active(): boolean {
@@ -277,8 +287,10 @@ export class Look {
     return of || m;
   }
 
-  setTheme(theme: Theme): void {
-    this.cfg.theme = theme;
+  setTheme(name: Theme | string): void {
+    this.cfg.theme = name as Theme;
+    if (paletteOf(name)) this.custom = Look.customColours(Look.paletteColours(this.cfg));
+    const theme = this.theme();
     if (theme === 'off') return;
     this.themeIndex = THEMES.indexOf(theme);
     this.themed.forEach((t) => (t.uniforms.uTheme.value = this.themeIndex));

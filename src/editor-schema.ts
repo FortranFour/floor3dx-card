@@ -3,6 +3,8 @@
 // giosci1994/floor3d-card (MIT) to the options of floor3dx-card.
 // The defaults written in the help texts are the values the card uses when an option is missing.
 
+import { PALETTES, paletteOf } from './look-palettes';
+
 export type Schema = any;
 
 const text = (name: string, options: any = {}): Schema => ({ name, selector: { text: options } });
@@ -147,6 +149,7 @@ export const SECTIONS: Section[] = [
               ['ember', 'Ember (charcoal, amber lines)'],
               ['pastel', 'Pastel (own colours, softened)'],
               ['custom', 'Custom (your colours)'],
+              ...PALETTES.map((p): [string, string] => [p.key, `${p.label} (${p.group.toLowerCase()})`]),
             ]),
             text('accent'),
             choice('edges', [
@@ -175,7 +178,7 @@ export const SECTIONS: Section[] = [
           ],
         },
       ],
-      ...(config && config.look && String(config.look.theme).toLowerCase() === 'custom' ? ['look_custom'] : []),
+      ...(config && config.look && (String(config.look.theme).toLowerCase() === 'custom' || paletteOf(config.look.theme)) ? ['look_custom'] : []),
     ],
   },
   {
@@ -700,7 +703,7 @@ const LABELS: { [name: string]: string } = {
 };
 
 const HELPERS: { [name: string]: string } = {
-  theme: 'Off keeps the model exactly as before',
+  theme: 'Off keeps the model exactly as before. The names after Custom are palettes of the custom theme; their colours can be adjusted below',
   transparency_off: 'When the entity is not in the state. Default 0 (solid)',
   accent: 'Default #37e0ff',
   edge_angle: 'Lines where faces meet at more than this. Default 40; 60 thins window mullions',

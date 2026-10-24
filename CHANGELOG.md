@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.4.0
+
+### Added
+- **Floor3DX Rooms Card** (`custom:floor3dx-rooms-card`), installed with this card: the live 3D model as a full-page room controller. A floor3dx (or floor3d / floor3dpro) card configuration is embedded as it is, so all its bindings keep working; on top, the rooms of the plan (detected from the `room_N_1` floors, named and filled from the card's entities, as in the Floor3D Snapshot Card), tinted when selected or when something in them is on, a pin per room following the camera, and a translucent panel of the snapshot card's simple controls for the selected room, overlaid on the model in the theme's colours; a bottom sheet on phones. Thirty themes: the seven looks and the twenty-three named palettes. Visual editor with the snapshot card's four steps; room detection runs in the live preview. README section, `dev/harness/test_rooms.py`, `render_rooms.py`.
+- **Twenty-three named palettes for `look.theme`** (`midnight-teal`, `riso`, `x-ray`, `ivory-on-black`, ...; the list is in the README): each is the custom theme with preset colours, so `look: {theme: riso}` renders exactly as the equivalent `custom` block (pixel-identical on the reference views); a `custom:` block beside a palette name overrides single colours. In the editor's theme dropdown; the colour pickers show the palette's colours. Shared with the rooms card (`src/look-palettes.ts`). Unit test `test/unit/look-palettes.test.ts`.
+- `dev/harness/render_themes.py`: renders a model under a JSON of `look.custom` palettes, with a contact sheet.
+
+### Changed
+- `render_views.py` can be imported (its views and models) without rendering.
+
 ## 2.3.2
 
 ### Fixed

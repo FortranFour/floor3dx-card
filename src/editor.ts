@@ -12,6 +12,7 @@
 // the names of the objects of the model and for the current view, and turns on picking objects with
 // a tap and highlighting them (see _onPreview() and the "Editor" part of floor3d-card.ts).
 import { LitElement, html, css, nothing, TemplateResult, CSSResultGroup } from 'lit';
+import { paletteOf } from './look-palettes';
 import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { fireEvent, HomeAssistant, LovelaceCardEditor } from 'custom-card-helpers';
@@ -430,7 +431,10 @@ export class Floor3dxCardEditor extends LitElement implements LovelaceCardEditor
   // [r, g, b]; the YAML keeps #rrggbb).
   private _renderLookCustom(config: any, onChange: (data: any) => void): TemplateResult {
     const custom = (config.look && isObject(config.look.custom) ? config.look.custom : {}) as any;
+    const palette: any = paletteOf(config.look && config.look.theme) || {};
     const defaults: { [k: string]: string } = { dark: '#1c2230', light: '#6c7a96', walls: '#6c7a96', floors: '#6c7a96', edges: '#e8f0ff', stage: '#10141c', stage_day: '#10141c' };
+    Object.keys(defaults).forEach((k) => { if (palette[k]) defaults[k] = palette[k]; });
+    if (palette.light) { defaults.walls = palette.walls || palette.light; defaults.floors = palette.floors || palette.light; defaults.stage_day = palette.stage_day || palette.stage; }
     const toRgb = (hex: any): number[] | undefined => {
       const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim());
       if (!m) return undefined;
@@ -444,7 +448,7 @@ export class Floor3dxCardEditor extends LitElement implements LovelaceCardEditor
       const fallback = key === 'walls' || key === 'floors' ? custom.light : key === 'stage_day' ? custom.stage : undefined;
       data[key] = toRgb(custom[key]) || toRgb(fallback) || toRgb(defaults[key]);
     });
-    data.hue = custom.hue !== undefined && custom.hue !== '' ? Number(custom.hue) : 0.15;
+    data.hue = custom.hue !== undefined && custom.hue !== '' ? Number(custom.hue) : palette.hue !== undefined ? Number(palette.hue) : 0.15;
     const colour = (name: string, label: string, helper?: string): Schema => ({ name, label, helper, selector: { color_rgb: {} } });
     const schema: Schema[] = [
       {

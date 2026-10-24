@@ -42,6 +42,7 @@ import { applyRenderMode, lightIntensity, exposure, colorMode } from './render-m
 import { mergeStatic, reservedNames } from './merge-static';
 import { Object3D } from 'three';
 import '../elements/button';
+import './rooms/index'; // floor3dx-rooms-card, registered beside this card
 
 /* eslint no-console: 0 */
 // Shown in the browser console so it is obvious which file the browser is actually running.
