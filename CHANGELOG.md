@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.4.3
+
+### Changed (rooms card)
+- **The snapshot card's current tiles** (0.12): a switch with the bulb behind it (`dimmer`), brightness, warmth and colour swatches for lights (`controls`, `brightness_slider`, `white_slider`, `color_swatches`), TVs and speakers with volume, mute, channels through a remote and sources (`remote`, `remote_commands`, `sources`), covers with a position slider, top-down/bottom-up shades as one tile that opens one end at a time (`top_entity`), thermostats with power, single or heat/cool setpoints and modes (`guest_thermostat`), `guest_hidden`, a guest mode that can follow a switch (`guest_mode_entity`). Shades no longer read "Closed" while their top rail is open. Fields for the pairings and the options in the editor.
+- **Detection** counts a readout panel (`type3d: text`) of a controllable entity as that entity, so thermostats and TVs bound as readouts are placed; pairs a shade's top rail from the row's `shade.top_entity` / `cover.top_entity` and a switch with the bulb its `color_entity` names; drops a leading "Popup", "Room" or "View" from room names.
+- **No amber tint on rooms with something on** by default; `tint_on: yes` brings it back. The lamps show it themselves.
+- **No dark line where two tinted rooms meet.** Adjacent floors in a Sweet Home 3D export overlap by a few centimetres, and two translucent tints there blended twice into a strip. The tints are drawn through a stencil, so each pixel is tinted once; the embedded card is created with `stencil: yes` (new renderer option, off by default in the card itself).
+- Theme `off` keeps the card's own `look`, if it has one.
+- **More transparent panels**, with `panel_opacity` (0.2 to 0.95, a slider in the editor; default 0.55, 0.6 on a light stage).
+
 ## 2.4.2
 
 ### Fixed (rooms card)

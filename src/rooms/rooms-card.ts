@@ -7,15 +7,15 @@
 import * as THREE from 'three';
 import { THEMES, RoomsTheme, themeOf, rgb } from './themes';
 import { Room, RoomEntity, RoomIndex, suggestRooms, floorCandidates } from './rooms';
-import { tileHtml, isOn, available, esc, domainOf, titleCase, icon, ACTIVE_DOMAINS, OFFABLE, sensitiveCover, entityName } from './tiles';
+import { Tiles, TilesHost, CSS_TILES, isOn, esc, domainOf, titleCase, icon, ACTIVE_DOMAINS, OFFABLE } from './tiles';
 
 export const ROOMS_EDITOR_EVENT = 'floor3dx-rooms-editor';
 export const ROOMS_PREVIEW_EVENT = 'floor3dx-rooms-preview';
 const EMBEDDED_TAG = 'floor3dpro-card'; // renamed to floor3dx-card by the build, like every element name
 
 const STYLE = `
-:host{display:block;position:relative;height:var(--f3r-height,60vh);min-height:240px;--f3r-ink:#eef2f7;--f3r-muted:rgba(238,242,247,.68);--f3r-stage:7,15,31;--f3r-accent:255,140,58;--f3r-on:255,193,7;--f3r-line:rgba(255,255,255,.14);--f3r-panel:rgba(var(--f3r-stage),.74);--f3r-blur:14px;font-family:var(--paper-font-body1_-_font-family,Roboto,sans-serif);color:var(--f3r-ink)}
-:host(.light){--f3r-ink:#1b2430;--f3r-muted:rgba(27,36,48,.66);--f3r-line:rgba(0,0,0,.12);--f3r-panel:rgba(var(--f3r-stage),.78)}
+:host{display:block;position:relative;height:var(--f3r-height,60vh);min-height:240px;--f3r-ink:#eef2f7;--f3r-muted:rgba(238,242,247,.72);--f3r-stage:7,15,31;--f3r-accent:255,140,58;--f3r-on:255,193,7;--f3r-line:rgba(255,255,255,.16);--f3r-alpha:.55;--f3r-panel:rgba(var(--f3r-stage),var(--f3r-alpha));--f3r-blur:14px;font-family:var(--paper-font-body1_-_font-family,Roboto,sans-serif);color:var(--f3r-ink)}
+:host(.light){--f3r-ink:#1b2430;--f3r-muted:rgba(27,36,48,.7);--f3r-line:rgba(0,0,0,.14);--f3r-alpha:.6}
 *{box-sizing:border-box}button,input{font:inherit}button{cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;color:inherit}button:disabled{cursor:default;opacity:.45}button:focus-visible,input:focus-visible{outline:2px solid rgb(var(--f3r-accent));outline-offset:2px}ha-icon{width:22px;height:22px;flex:none;color:inherit;--mdc-icon-size:22px}
 .stage{position:absolute;inset:0;overflow:hidden;background:rgb(var(--f3r-stage))}
 .stage > .model{position:absolute;inset:0}
@@ -47,13 +47,7 @@ const STYLE = `
 .panelhead h3{margin:0 0 2px;font-size:18px;font-weight:500}.panelhead p{margin:0;color:var(--f3r-muted);font-size:12px}.panelhead .grow{flex:1;min-width:0}
 .tiles{display:grid;grid-template-columns:1fr;gap:8px;padding:4px 12px 12px;overflow:auto;flex:1;align-content:start;grid-auto-rows:max-content}
 :host(.narrow) .tiles{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
-.tile{border:1px solid var(--f3r-line);border-radius:14px;overflow:hidden;min-width:0;background:rgba(var(--f3r-stage),.35)}.tile.on{border-color:rgba(var(--f3r-accent),.45);background:rgba(var(--f3r-accent),.1)}
-.row{display:flex;align-items:center;gap:10px;width:100%;min-height:60px;padding:10px 12px;border:0;background:transparent;text-align:left}
-.ticon{display:grid;place-items:center;width:34px;height:34px;flex:none;border-radius:10px;background:rgba(127,127,127,.14);color:var(--f3r-muted)}.tile.on .ticon{color:rgb(var(--f3r-on));background:rgba(var(--f3r-on),.14)}
-.ttext{flex:1;min-width:0}.tname{display:block;font-size:14px;font-weight:500;line-height:1.3;overflow-wrap:anywhere}.tstate{display:block;color:var(--f3r-muted);font-size:12px;margin-top:2px}
-.sw{flex:none;width:28px;height:17px;border-radius:10px;background:rgba(127,127,127,.3);padding:3px}.sw:before{content:"";display:block;width:11px;height:11px;border-radius:50%;background:var(--f3r-ink)}.tile.on .sw{background:rgb(var(--f3r-accent))}.tile.on .sw:before{margin-left:11px;background:#fff}
-.extra{padding:0 12px 10px}.range{display:block;width:100%;height:28px;margin:0;accent-color:rgb(var(--f3r-accent));touch-action:pan-x}.seg{display:flex;gap:5px}.seg button{flex:1;min-height:34px;border:1px solid var(--f3r-line);border-radius:10px;background:transparent;color:var(--f3r-muted);font-size:12px}.seg button[aria-pressed=true]{color:rgb(var(--f3r-accent));border-color:rgba(var(--f3r-accent),.6);background:rgba(var(--f3r-accent),.12)}
-.temp{display:flex;align-items:center;gap:10px;justify-content:space-between}.temp .val{font-size:20px}.step{width:40px;height:38px;border:1px solid var(--f3r-line);border-radius:11px;background:rgba(var(--f3r-accent),.1);color:rgb(var(--f3r-accent));font-size:22px}
+${CSS_TILES}
 .foot{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:0 12px 12px}.quiet{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:4px 12px;border:1px solid var(--f3r-line);border-radius:11px;background:transparent;color:var(--f3r-muted);font-size:12px}.quiet ha-icon{width:16px;height:16px;--mdc-icon-size:16px}
 .empty{padding:14px;color:var(--f3r-muted);font-size:13px;line-height:1.5}
 .toast{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);max-width:calc(100% - 32px);border:1px solid var(--f3r-line);border-radius:14px;background:var(--f3r-panel);-webkit-backdrop-filter:blur(var(--f3r-blur));backdrop-filter:blur(var(--f3r-blur));padding:10px 16px;font-size:13px}
@@ -82,8 +76,10 @@ export class Floor3dxRoomsCard extends HTMLElement {
   private _hover: string | null = null;
   private _listOpen = false;
   private _busy = new Set<string>();
+  private _seq = new Set<string>();
   private _confirm: { entity: string; text: string } | null = null;
   private _confirmTimer: any;
+  private _tiles: Tiles;
   private _toast = '';
   private _toastTimer: any;
   private _queued = false;
@@ -131,6 +127,19 @@ export class Floor3dxRoomsCard extends HTMLElement {
     this._modelHost.addEventListener('pointerleave', () => this._setHover(null));
     this._modelHost.addEventListener('wheel', () => this._movePins(600), { passive: true });
     this._ro = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { this._layout(); this._movePins(0); }) : null;
+    const card = this;
+    const host: TilesHost = {
+      get hass() { return card._hass; },
+      get config() { return card._config || {}; },
+      busy: this._busy, seq: this._seq,
+      get confirm() { return card._confirm; },
+      request: () => this._request(),
+      call: (id, domain, service, data) => this._call(id, domain, service, data),
+      showToast: (t) => this._showToast(t),
+      entityConfig: (id) => this._entityConfig(id),
+      setConfirm: (c) => { this._confirm = c; clearTimeout(this._confirmTimer); if (c) this._confirmTimer = setTimeout(() => { this._confirm = null; this._request(); }, 3500); this._request(); },
+    };
+    this._tiles = new Tiles(host);
   }
 
   setConfig(config: any): void {
@@ -196,6 +205,8 @@ export class Floor3dxRoomsCard extends HTMLElement {
     const lum = (h: string) => { const n = parseInt(h.slice(1), 16); return (0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255; };
     const accent = Math.abs(lum(t.edges) - lum(t.stage)) > 0.3 ? t.edges : t.light ? '#1b2430' : '#eef2f7';
     this.style.setProperty('--f3r-accent', rgb(this._config.accent || accent));
+    const alpha = Number(this._config.panel_opacity);
+    if (Number.isFinite(alpha) && alpha >= 0 && alpha <= 1) this.style.setProperty('--f3r-alpha', String(alpha)); else this.style.removeProperty('--f3r-alpha');
   }
 
   // ---- the embedded floor3dx card ---------------------------------------------------------
@@ -209,12 +220,13 @@ export class Floor3dxRoomsCard extends HTMLElement {
     cfg.click = 'no';
     cfg.selectionMode = 'no';
     cfg.editModeNotifications = 'no';
+    cfg.stencil = 'yes'; // the room tints use the stencil buffer
     if (this._theme.look) {
       cfg.look = JSON.parse(JSON.stringify(this._theme.look));
       // no theme lines on the text and picture panels unless asked; `edge_skip` replaces the list
       const skip = this._config.edge_skip !== undefined && this._config.edge_skip !== '' ? this._config.edge_skip : this._config.panel_lines === true || this._config.panel_lines === 'yes' ? 'seams, floors' : 'seams, floors, texts, images';
       cfg.look.edge_skip = skip;
-    } else if (this._theme.key === 'off') delete cfg.look;
+    } // theme off: the card's own look, if it has one, stays
     // in the editor's preview every floor must be a separate object, so detection finds them all
     if (this._isPreview()) cfg.merge_static = 'no';
     // the rooms' floors must stay separate objects (tints, taps); reservedNames() reads every
@@ -262,7 +274,10 @@ export class Floor3dxRoomsCard extends HTMLElement {
         floor?.traverse((m: any) => {
           if (!m.isMesh || !m.geometry) return;
           m.updateWorldMatrix(true, false);
+          // adjacent floors overlap by a few centimetres in Sweet Home 3D exports; the stencil lets
+          // each pixel take one tint, so the strip where two tinted rooms meet is not drawn twice
           const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
+          mat.stencilWrite = true; mat.stencilRef = 1; mat.stencilFunc = THREE.NotEqualStencilFunc; mat.stencilZPass = THREE.ReplaceStencilOp;
           const mesh = new THREE.Mesh(m.geometry, mat);
           mesh.name = 'f3dx_rooms_tint';
           mesh.matrixAutoUpdate = false;
@@ -283,16 +298,18 @@ export class Floor3dxRoomsCard extends HTMLElement {
     const accent = new THREE.Color(`rgb(${getComputedStyle(this).getPropertyValue('--f3r-accent').trim() || '255,140,58'})`);
     const amber = new THREE.Color(0xffc107);
     const roomColors = this._config.room_colors === true || this._config.room_colors === 'yes';
+    const tintOn = this._config.tint_on === true || this._config.tint_on === 'yes'; // the lamps show it themselves
     let changed = false;
     for (const t of this._tints) {
       const mat = t.mesh.material as THREE.MeshBasicMaterial;
       let visible = false, opacity = 0, color: THREE.Color | null = null;
       if (t.room.id === this._room) { visible = true; opacity = 0.5; color = accent; }
       else if (t.room.id === this._hover) { visible = true; opacity = 0.25; color = accent; }
-      else if (on.has(t.room.id)) { visible = true; opacity = 0.4; color = amber; }
+      else if (tintOn && on.has(t.room.id)) { visible = true; opacity = 0.4; color = amber; }
       else if (roomColors && t.room.color) { visible = true; opacity = 0.35; color = new THREE.Color(t.room.color); }
-      if (t.mesh.visible !== visible || mat.opacity !== opacity || (color && !mat.color.equals(color))) {
-        t.mesh.visible = visible; mat.opacity = opacity; if (color) mat.color.copy(color); changed = true;
+      const order = t.room.id === this._room ? 50 : t.room.id === this._hover ? 51 : 52;
+      if (t.mesh.visible !== visible || mat.opacity !== opacity || (color && !mat.color.equals(color)) || t.mesh.renderOrder !== order) {
+        t.mesh.visible = visible; mat.opacity = opacity; if (color) mat.color.copy(color); t.mesh.renderOrder = order; changed = true;
       }
     }
     if (changed) this._embedded?._requestRender?.('rooms');
@@ -396,7 +413,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
   }
   private _s(id: string): any { return this._hass?.states?.[id]; }
   private _roomOf(id: string | null): Room | undefined { return (this._config.rooms as Room[]).find((r) => r.id === id); }
-  private _roomEntities(): string[] { return (this._config?.rooms || []).flatMap((r: Room) => (r.entities || []).map((e) => e.entity)); }
+  private _roomEntities(): string[] { return (this._config?.rooms || []).flatMap((r: Room) => (r.entities || []).flatMap((e: any) => [e.entity, e.top_entity, e.dimmer, e.remote, this._config.guest_mode_entity].filter(Boolean))); }
   private _activeCount(room: Room): number { return (room.entities || []).filter((e) => ACTIVE_DOMAINS.has(domainOf(e.entity)) && isOn(this._s(e.entity))).length; }
   private _roomName(r: Room): string { return titleCase(r.name || r.id); }
 
@@ -418,21 +435,28 @@ export class Floor3dxRoomsCard extends HTMLElement {
     this._placePins();
   }
   private _panel(room: Room): string {
-    const ents = room.entities || [];
+    const ents = (room.entities || []).filter((e) => !this._tiles.hidden(e));
     const active = this._activeCount(room);
-    const guest = this._config.guest_mode !== false;
-    const ctx = { hass: this._hass, guest, maxVolume: Number(this._config.max_volume ?? (guest ? 0.6 : 1)), temperatureRange: this._config.temperature_range, busy: this._busy, confirm: this._confirm, roomName: room.name || room.id };
     const offable = ents.filter((e) => OFFABLE.includes(domainOf(e.entity)) && !e.read_only);
-    return `<section class="panel" aria-label="${esc(this._roomName(room))}"><div class="panelhead"><div class="roomicon">${icon(room.icon || 'mdi:door-open')}</div><div class="grow"><h3>${esc(this._roomName(room))}</h3><p>${esc(room.description || (active ? `${active} on` : ents.length ? 'Everything is off' : 'Nothing to control here'))}</p></div><button class="close" data-action="close" aria-label="Close">${icon('mdi:close')}</button></div><div class="tiles">${ents.length ? ents.map((e) => tileHtml(e, ctx)).join('') : '<div class="empty">No entities in this room. Add them in the card editor.</div>'}</div>${offable.length ? `<div class="foot"><button class="quiet" data-action="room-off" data-focus="room-off" ${offable.some((e) => isOn(this._s(e.entity))) ? '' : 'disabled'}>${icon('mdi:power')}All off in this room</button></div>` : ''}</section>`;
+    const roomName = room.name || room.id;
+    return `<section class="panel" aria-label="${esc(this._roomName(room))}"><div class="panelhead"><div class="roomicon">${icon(room.icon || 'mdi:door-open')}</div><div class="grow"><h3>${esc(this._roomName(room))}</h3><p>${esc(room.description || (active ? `${active} on` : ents.length ? 'Everything is off' : 'Nothing to control here'))}</p></div><button class="close" data-action="close" aria-label="Close">${icon('mdi:close')}</button></div><div class="tiles">${ents.length ? ents.map((e) => this._tiles.tile(e, roomName)).join('') : '<div class="empty">No entities in this room. Add them in the card editor.</div>'}</div>${offable.length ? `<div class="foot"><button class="quiet" data-action="room-off" data-focus="room-off" ${offable.some((e) => isOn(this._s(e.entity))) ? '' : 'disabled'}>${icon('mdi:power')}All off in this room</button></div>` : ''}</section>`;
   }
 
   // ---- actions ----------------------------------------------------------------------------
-  private _allowed(id: string): boolean { return this._roomEntities().includes(id); }
-  private async _call(id: string, domain: string, service: string, data: any = {}): Promise<void> {
-    if (!this._allowed(id)) return;
+  private _entityConfig(id: string): RoomEntity | null {
+    for (const r of this._config.rooms as Room[]) for (const e of r.entities || []) if (e.entity === id) return e;
+    return null;
+  }
+  /** The entities the card may act on: the rooms' entities and the rails, bulbs and remotes paired with them. */
+  private _allowed(id: string): boolean {
+    for (const r of this._config.rooms as Room[]) for (const e of (r.entities || []) as any[]) if (e.entity === id || e.top_entity === id || e.dimmer === id || e.remote === id) return true;
+    return false;
+  }
+  private async _call(id: string, domain: string, service: string, data: any = {}): Promise<boolean> {
+    if (!this._allowed(id)) return false;
     this._busy.add(id); this._request();
-    try { await this._hass.callService(domain, service, { entity_id: id, ...data }); }
-    catch { this._showToast(`Couldn't change ${entityName({ entity: id }, this._s(id), '')}.`); }
+    try { await this._hass.callService(domain, service, { entity_id: id, ...data }); return true; }
+    catch { this._showToast(`Couldn't change ${this._tiles.name({ entity: id })}.`); return false; }
     finally { this._busy.delete(id); this._request(); }
   }
   private _showToast(text: string): void {
@@ -444,7 +468,6 @@ export class Floor3dxRoomsCard extends HTMLElement {
     const b = (ev.target as HTMLElement).closest('button[data-action]') as HTMLButtonElement | null;
     if (!b || b.disabled) return;
     const { action, entity: id = '', room } = b.dataset as any;
-    const s = this._s(id), d = domainOf(id), g = this._config.guest_mode !== false;
     if (action === 'room') { this._listOpen = false; this._select(room === this._room ? null : room); return; }
     if (action === 'close') { this._select(null); return; }
     if (action === 'list') { this._listOpen = !this._listOpen; this._request(); return; }
@@ -452,35 +475,13 @@ export class Floor3dxRoomsCard extends HTMLElement {
       for (const e of this._roomOf(this._room)?.entities || []) if (OFFABLE.includes(domainOf(e.entity)) && !e.read_only && isOn(this._s(e.entity))) this._call(e.entity, domainOf(e.entity), 'turn_off');
       return;
     }
-    if (!s || !this._allowed(id)) return;
-    if (action === 'toggle') this._call(id, d, isOn(s) ? 'turn_off' : 'turn_on');
-    else if (action === 'fan') { const v = Number(b.dataset.value); v ? this._call(id, 'fan', 'set_percentage', { percentage: v }) : this._call(id, 'fan', 'turn_off'); }
-    else if (action === 'cover') { const svc = b.dataset.service as string; if (g && sensitiveCover(s) && svc !== 'close_cover') return; this._call(id, 'cover', svc); }
-    else if (action === 'temp') {
-      const t = Number(s.attributes.temperature) + Number(b.dataset.value), r = this._config.temperature_range;
-      if (r && (t < r[0] || t > r[1])) return;
-      this._call(id, 'climate', 'set_temperature', { temperature: Math.round(t * 10) / 10 });
-    } else if (action === 'lock' || action === 'unlock' || action === 'run') {
-      if (action === 'unlock' && g) return;
-      if (this._confirm?.entity !== id) {
-        this._confirm = { entity: id, text: action === 'run' ? 'Tap again to run' : `Tap again to ${action}` };
-        clearTimeout(this._confirmTimer); this._confirmTimer = setTimeout(() => { this._confirm = null; this._request(); }, 3500);
-        this._request(); return;
-      }
-      this._confirm = null;
-      if (action === 'run') this._call(id, d, ['button', 'input_button'].includes(d) ? 'press' : 'turn_on');
-      else this._call(id, 'lock', action);
-    }
+    if (!id || !this._allowed(id)) return;
+    this._tiles.click(b);
   }
   private _change(ev: Event): void {
     const i = ev.target as HTMLInputElement;
-    if (!i.matches || !i.matches('input[type=range]')) return;
-    const id = i.dataset.entity as string; if (!this._allowed(id)) return;
-    if (i.dataset.action === 'brightness') this._call(id, 'light', 'turn_on', { brightness_pct: Number(i.value) });
-    if (i.dataset.action === 'volume') {
-      const cap = Math.min(1, Number(this._config.max_volume ?? (this._config.guest_mode !== false ? 0.6 : 1)));
-      this._call(id, 'media_player', 'volume_set', { volume_level: Math.min(cap, Number(i.value)) });
-    }
+    if (!i.dataset || !this._allowed(i.dataset.entity as string)) return;
+    this._tiles.change(i);
   }
 
   // ---- the card editor talks to the preview card ------------------------------------------

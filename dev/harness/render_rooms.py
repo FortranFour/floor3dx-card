@@ -19,7 +19,9 @@ JS = r"""async ([model, theme, width, select]) => {
   const states = {'light.a': {state: 'on', attributes: {brightness: 200, friendly_name: 'Living Room Lamp'}}, 'light.b': {state: 'on', attributes: {brightness: 120, friendly_name: 'Dining Pendant'}},
     'light.c': {state: 'off', attributes: {friendly_name: 'Kitchen Spots'}}, 'light.d': {state: 'on', attributes: {brightness: 255, friendly_name: 'Bedroom Lamp'}}, 'light.e': {state: 'on', attributes: {friendly_name: 'Bath Light'}},
     'switch.tv': {state: 'on', attributes: {friendly_name: 'Living Room TV'}}, 'fan.ceiling': {state: 'on', attributes: {percentage: 67, supported_features: 1, friendly_name: 'Living Room Fan'}},
-    'cover.blinds': {state: 'open', attributes: {friendly_name: 'Living Room Blinds'}}, 'climate.house': {state: 'heat', attributes: {temperature: 70, current_temperature: 68, friendly_name: 'Thermostat'}}};
+    'cover.blinds': {state: 'open', attributes: {friendly_name: 'Living Room Blinds'}}, 'climate.house': {state: 'heat_cool', attributes: {target_temp_low: 66, target_temp_high: 74, current_temperature: 68, hvac_modes: ['heat_cool', 'heat', 'cool', 'off'], hvac_action: 'heating', min_temp: 50, max_temp: 90, supported_features: 2 | 128 | 256, friendly_name: 'Thermostat'}},
+    'cover.left_bottom': {state: 'closed', attributes: {current_position: 0, supported_features: 15, friendly_name: 'Master Left Shade Bottom'}}, 'cover.left_top': {state: 'open', attributes: {current_position: 15, supported_features: 15, friendly_name: 'Master Left Shade Top'}},
+    'light.color': {state: 'on', attributes: {brightness: 180, supported_color_modes: ['color_temp', 'hs'], color_mode: 'hs', hs_color: [220, 55], min_color_temp_kelvin: 2000, max_color_temp_kelvin: 6500, friendly_name: 'Living Room Colour Lamp'}}};
   const hass = {states, language: 'en', themes: {}, config: {}, user: {}, callService() { return Promise.resolve(); }};
   const el = document.createElement('floor3dx-rooms-card'); el.preview = true;
   el.setConfig({card, theme, rooms: [], title: 'House', subtitle: 'tap a room', height: '600px'});
@@ -33,8 +35,8 @@ JS = r"""async ([model, theme, width, select]) => {
   const rooms = (got.find(d => d.rooms) || {rooms: []}).rooms;
   // the living room gets the extra controls
   const living = rooms.find(r => r.entities.some(e => e.entity === 'light.a')) || rooms[0];
-  if (living) living.entities.push({entity: 'switch.tv'}, {entity: 'fan.ceiling'}, {entity: 'cover.blinds'}, {entity: 'climate.house'});
-  el.setConfig({card, theme, rooms, title: 'House', subtitle: 'tap a room', height: '600px', labels: true});
+  if (living) living.entities.push({entity: 'light.color'}, {entity: 'cover.left_bottom', top_entity: 'cover.left_top'}, {entity: 'climate.house'}, {entity: 'fan.ceiling'}, {entity: 'switch.tv'});
+  el.setConfig({card, theme, rooms, title: 'House', subtitle: 'tap a room', height: '600px', labels: true, tint_on: true, pins: false, guest_mode: false});
   const t1 = performance.now(); while (!(el._embedded && el._embedded._modelready && el._tints.length) && performance.now() - t1 < 240000) await new Promise(r => setTimeout(r, 200));
   await new Promise(r => setTimeout(r, 800));
   if (select && living) el._select(living.id);

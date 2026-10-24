@@ -24,7 +24,7 @@ button{font:inherit;cursor:pointer;min-height:36px;padding:6px 12px;border-radiu
 .item{border:1px solid var(--divider-color,rgba(127,127,127,.2));border-radius:10px;padding:8px 10px;margin:8px 0}.item .title{display:flex;align-items:center;gap:8px}.item .title b{flex:1;font-weight:500;overflow-wrap:anywhere}
 .room>summary{padding:10px 12px}.room{margin:8px 0}.room .body{padding:0 12px 12px}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}.chip{display:inline-flex;align-items:center;gap:4px;padding:2px 4px 2px 10px;border-radius:14px;background:var(--secondary-background-color,rgba(127,127,127,.12));font-size:12px}.chip button{min-height:24px;padding:0 6px;border:0}
-.ent{display:grid;grid-template-columns:1fr 1fr auto;gap:6px;align-items:end;margin:6px 0}.ent .tools{display:flex;gap:2px}
+.ent{display:grid;grid-template-columns:1fr 1fr auto;gap:6px;align-items:end;margin:6px 0}.ent .tools{display:flex;gap:2px}.row.pair{margin:0 0 4px 12px}.check.small{margin:0 0 8px 12px;min-height:26px;font-size:12px;color:var(--secondary-text-color)}
 .swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px;margin:8px 0}.sw{display:flex;flex-direction:column;align-items:stretch;gap:0;padding:0;border-radius:10px;overflow:hidden;border:2px solid transparent;background:transparent;color:var(--primary-text-color);min-height:0}.sw[aria-pressed=true]{border-color:var(--primary-color)}.sw .c{height:34px;display:flex;align-items:center;justify-content:center}.sw .c i{display:block;width:60%;height:2px}.sw .l{font-size:11px;padding:4px 2px;text-align:center;line-height:1.2}
 ha-icon{--mdc-icon-size:20px;width:20px;height:20px;color:var(--secondary-text-color)}
 .found{max-height:220px;overflow:auto}
@@ -73,6 +73,8 @@ class Floor3dxRoomsCardEditor extends HTMLElement {
     const objects = this._objects?.all || [];
     root.innerHTML = `<style>${STYLE}</style>
 <datalist id="f3r-entities">${entities.map((id) => `<option value="${esc(id)}">${esc(this._hass.states[id].attributes.friendly_name || '')}</option>`).join('')}</datalist>
+<datalist id="f3r-covers">${entities.filter((id) => id.startsWith('cover.')).map((id) => `<option value="${esc(id)}">${esc(this._hass.states[id].attributes.friendly_name || '')}</option>`).join('')}</datalist>
+<datalist id="f3r-remotes">${entities.filter((id) => id.startsWith('remote.')).map((id) => `<option value="${esc(id)}">${esc(this._hass.states[id].attributes.friendly_name || '')}</option>`).join('')}</datalist>
 <datalist id="f3r-objects">${objects.map((n) => `<option value="${esc(n)}"></option>`).join('')}</datalist>
 ${this._section('model', '1 · Model', c.card?.objfile ? String(c.card.objfile) : 'None', c.card?.objfile ? '' : 'warn', this._modelSection())}
 ${this._section('rooms', '2 · Rooms', `${c.rooms.length} room${c.rooms.length === 1 ? '' : 's'}`, '', this._roomsSection())}
@@ -106,11 +108,22 @@ ${c.rooms.map((r: Room, i: number) => this._roomEditor(r, i)).join('')}`;
 <label>Floor objects (tap target, tint and pin)</label><div class="chips">${(r.floors || []).map((f, j) => `<span class="chip">${esc(f)}<button data-act="floor-remove" data-i="${i}" data-j="${j}" title="Remove">✕</button></span>`).join('') || '<span class="note">None: the room is reachable from the Rooms menu only.</span>'}</div>
 <div class="row"><label>Add floor object<input type="text" list="f3r-objects" placeholder="room_3_1" data-key="rf${i}" id="floor-${i}"></label><button data-act="floor-add" data-i="${i}">Add</button></div>
 <label>Entities</label>
-${ents.map((e, j) => `<div class="ent"><label>Entity<input type="text" list="f3r-entities" data-field="rooms.${i}.entities.${j}.entity" value="${esc(e.entity)}" data-key="re${i}-${j}"></label><label>Label<input type="text" data-field="rooms.${i}.entities.${j}.name" value="${esc(e.name || '')}" placeholder="${esc(this._hass?.states[e.entity]?.attributes?.friendly_name || '')}" data-key="rl${i}-${j}"></label><div class="tools"><button class="icon" data-act="ent-up" data-i="${i}" data-j="${j}" ${j ? '' : 'disabled'} title="Move up">↑</button><button class="icon" data-act="ent-remove" data-i="${i}" data-j="${j}" title="Remove">✕</button></div></div>${this._hass && e.entity && !this._hass.states[e.entity] ? `<p class="note warn">${esc(e.entity)} doesn't exist.</p>` : ''}`).join('')}
+${ents.map((e: any, j) => `<div class="ent"><label>Entity<input type="text" list="f3r-entities" data-field="rooms.${i}.entities.${j}.entity" value="${esc(e.entity)}" data-key="re${i}-${j}"></label><label>Label<input type="text" data-field="rooms.${i}.entities.${j}.name" value="${esc(e.name || '')}" placeholder="${esc(this._hass?.states[e.entity]?.attributes?.friendly_name || '')}" data-key="rl${i}-${j}"></label><div class="tools"><button class="icon" data-act="ent-up" data-i="${i}" data-j="${j}" ${j ? '' : 'disabled'} title="Move up">↑</button><button class="icon" data-act="ent-remove" data-i="${i}" data-j="${j}" title="Remove">✕</button></div></div>${this._pairing(e, i, j)}${this._hass && e.entity && !this._hass.states[e.entity] ? `<p class="note warn">${esc(e.entity)} doesn't exist.</p>` : ''}${this._hass ? [e.dimmer, e.remote, e.top_entity].filter((x: string) => x && !this._hass.states[x]).map((x: string) => `<p class="note warn">${esc(x)} doesn't exist.</p>`).join('') : ''}`).join('')}
 <div class="row"><label>Add entity<input type="text" list="f3r-entities" placeholder="light.kitchen" data-key="ra-${i}" id="ent-${i}"></label><button data-act="ent-add" data-i="${i}">Add</button></div>
 <div class="row"><button class="icon" data-act="room-show" data-i="${i}">Show in preview</button><button class="icon" data-act="room-up" data-i="${i}" ${i ? '' : 'disabled'}>↑ Move up</button><button class="icon" data-act="room-down" data-i="${i}" ${i < n - 1 ? '' : 'disabled'}>↓ Move down</button><button class="icon" data-act="room-remove" data-i="${i}">Delete room</button></div>
 </div></details>`;
   }
+  /** The fields that pair an entity with another: a shade's top rail, the bulb behind a switch, a TV's remote. */
+  private _pairing(e: any, i: number, j: number): string {
+    const id = String(e.entity || ''), f = (key: string, label: string, list: string, ph: string) => `<div class="row pair"><label>${label}<input type="text" list="${list}" data-field="rooms.${i}.entities.${j}.${key}" value="${esc(e[key] || '')}" placeholder="${ph}" data-key="r${key}${i}-${j}"></label></div>`;
+    let html = '';
+    if (/^cover\./.test(id)) html += f('top_entity', 'Top rail: makes this a top-down/bottom-up shade (optional)', 'f3r-covers', 'cover.…_top');
+    if (/^(switch|input_boolean)\./.test(id) || e.dimmer) html += f('dimmer', 'Dimmer: the light behind this switch, for brightness (optional)', 'f3r-entities', 'light.…');
+    if (/^media_player\./.test(id)) html += f('remote', 'TV remote, for channel and Info keys (optional)', 'f3r-remotes', 'remote.…');
+    html += `<label class="check small"><input type="checkbox" data-field="rooms.${i}.entities.${j}.guest_hidden" data-bool ${e.guest_hidden ? 'checked' : ''} data-key="rg${i}-${j}">Hide in guest mode</label>`;
+    return html;
+  }
+
   private _themeSection(): string {
     const cur = this._config.theme || 'neon';
     const groups: string[] = [];
@@ -125,7 +138,11 @@ ${groups.map((g) => `<label>${esc(g)}</label><div class="swatches">${THEMES.filt
 <div class="row"><label>Height (blank: the panel view's height, or 60vh)<input type="text" data-field="height" value="${esc(c.height ?? '')}" placeholder="calc(100vh - 56px)" data-key="dh"></label></div>
 <div class="row"><label class="check"><input type="checkbox" data-field="panel_lines" data-bool ${c.panel_lines ? 'checked' : ''}>Theme lines on text and picture panels</label><label>Edge lines skipped (<code>edge_skip</code>)<input type="text" data-field="edge_skip" value="${esc(c.edge_skip ?? '')}" placeholder="seams, floors, texts, images" data-key="des"></label></div>
 <div class="row"><label class="check"><input type="checkbox" data-field="pins" data-bool data-default-true ${c.pins !== false ? 'checked' : ''}>Room pins on the model</label><label class="check"><input type="checkbox" data-field="labels" data-bool ${c.labels ? 'checked' : ''}>Pins always show the room's name</label><label class="check"><input type="checkbox" data-field="keep_panel" data-bool ${c.keep_panel ? 'checked' : ''}>A tap outside the rooms keeps the panel open</label></div>
+<div class="row"><label>Panel opacity: <span data-unit="">${Math.round(Number(c.panel_opacity ?? 0.55) * 100)}%</span><input type="range" min="0.2" max="0.95" step="0.05" data-field="panel_opacity" data-num data-pct value="${esc(c.panel_opacity ?? 0.55)}" data-key="dpo"></label></div>
+<div class="row"><label class="check"><input type="checkbox" data-field="tint_on" data-bool ${c.tint_on ? 'checked' : ''}>Tint the floor of rooms with something on (the lamps show it themselves)</label></div>
+<div class="row"><label class="check"><input type="checkbox" data-field="brightness_slider" data-bool data-default-true ${c.brightness_slider !== false ? 'checked' : ''}>Brightness slider</label><label class="check"><input type="checkbox" data-field="white_slider" data-bool data-default-true ${c.white_slider !== false ? 'checked' : ''}>Warmth slider</label><label>Colour swatches<select data-field="color_swatches" data-key="dcs"><option value="" ${c.color_swatches === undefined ? 'selected' : ''}>Unless guest mode is on</option><option value="true" ${c.color_swatches === true ? 'selected' : ''}>Always</option><option value="false" ${c.color_swatches === false ? 'selected' : ''}>Never</option></select></label></div>
 <label class="check"><input type="checkbox" data-field="guest_mode" data-bool data-default-true ${c.guest_mode !== false ? 'checked' : ''}>Guest mode: locks can only be locked, garage doors and gates only closed, alarms are read-only, TV volume is capped</label>
+<div class="row"><label>Guest mode follows this switch (optional)<input type="text" list="f3r-entities" data-field="guest_mode_entity" value="${esc(c.guest_mode_entity || '')}" placeholder="input_boolean.guest_mode" data-key="dge"></label><label>Thermostats in guest mode<select data-field="guest_thermostat" data-key="dgt">${[['', 'Setpoint and power'], ['setpoint', 'Setpoint only'], ['view', 'View only'], ['full', 'Everything']].map(([v, t]) => `<option value="${v}" ${(c.guest_thermostat || '') === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label></div>
 <div class="row"><label>Max volume (0–1)<input type="number" min="0" max="1" step="0.05" data-field="max_volume" data-num value="${esc(c.max_volume ?? '')}" placeholder="${c.guest_mode !== false ? '0.6' : '1'}" data-key="dv"></label><label>Thermostat min<input type="number" data-field="temperature_range.0" data-num value="${esc(c.temperature_range?.[0] ?? '')}" data-key="dmin"></label><label>Thermostat max<input type="number" data-field="temperature_range.1" data-num value="${esc(c.temperature_range?.[1] ?? '')}" data-key="dmax"></label></div>
 <p class="note">Double-tap on the model still does what the floor3dx card does (toggle a lamp, open a camera). A single tap selects the room. A dashboard is not a security boundary: give guests a non-admin Home Assistant user.</p>`;
   }
@@ -139,6 +156,7 @@ ${groups.map((g) => `<label>${esc(g)}</label><div class="swatches">${THEMES.filt
       if (d.dataset?.room !== undefined) { const id = this._config.rooms[Number(d.dataset.room)]?.id; if (id) d.open ? this._roomOpen.add(id) : this._roomOpen.delete(id); }
     }, true);
     root.addEventListener('change', (e) => { const t = e.target as HTMLInputElement; if (t.id === 'detect-sensors') { this._detectSensors = t.checked; return; } this._field(t); });
+    root.addEventListener('input', (e) => { const el = e.target as HTMLInputElement; if (el.type !== 'range') return; const u = el.closest('label')?.querySelector('[data-unit]'); if (u) u.textContent = el.dataset.pct !== undefined ? `${Math.round(Number(el.value) * 100)}%` : el.value; });
     root.addEventListener('keydown', (e) => { const t = e.target as HTMLElement; if ((e as KeyboardEvent).key === 'Enter' && t.id?.match(/^(ent-|floor-)/)) { e.preventDefault(); (t.closest('.row')?.querySelector('button') as HTMLButtonElement | null)?.click(); } });
     root.addEventListener('click', (e) => { const b = (e.target as HTMLElement).closest('button[data-act]') as HTMLButtonElement | null; if (b && !b.disabled) this._act(b.dataset.act as string, b.dataset as any); });
   }
@@ -147,6 +165,7 @@ ${groups.map((g) => `<label>${esc(g)}</label><div class="swatches">${THEMES.filt
     let value: any = el.dataset.bool !== undefined ? el.checked : el.value;
     if (el.dataset.num !== undefined) value = value === '' ? undefined : Number(value);
     if (typeof value === 'string') value = value.trim();
+    if (path === 'color_swatches') value = value === 'true' ? true : value === 'false' ? false : undefined;
     const keys = path.split('.'), last = keys.pop() as string;
     let o = this._config;
     keys.forEach((k, n) => { const next = keys[n + 1] ?? last; o[k] ??= /^\d+$/.test(next) ? [] : {}; o = o[k]; });

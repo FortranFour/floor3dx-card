@@ -43,11 +43,12 @@ JS = r"""async ([theme]) => {
   out.placed = rooms.reduce((n, r) => n + r.entities.length, 0);
   out.namedFromButton = rooms.some(r => r.name === 'Living Room');
   // 2. configure the rooms, wait for the tints
-  el.setConfig({card, theme, rooms, title: 'Rooms test', height: '560px'});
+  el.setConfig({card, theme, rooms, title: 'Rooms test', height: '560px', tint_on: true});
   const t1 = performance.now(); while (!(el._embedded && el._embedded._modelready && el._tints.length) && performance.now() - t1 < 240000) await new Promise(r => setTimeout(r, 200));
   await new Promise(r => setTimeout(r, 400));
   out.tints = el._tints.length;
-  out.litTint = el._tints.some(t => t.mesh.visible); // light.a is on: its room is tinted
+  out.litTint = el._tints.some(t => t.mesh.visible); // light.a is on: its room is tinted (tint_on)
+  out.stencil = el._tints.every(t => t.mesh.material.stencilWrite) && !!el._embedded._renderer.getContext().getContextAttributes().stencil;
   out.pins = el.shadowRoot.querySelectorAll('.pin').length;
   out.pinsPlaced = Array.from(el.shadowRoot.querySelectorAll('.pin')).filter(p => !p.hidden && p.style.left).length;
   // 3. a tap on a room: a point of its floor that is visible (its centre may be behind a wall from
@@ -136,7 +137,7 @@ if __name__ == '__main__':
     check('embedded floor3dx card loads the model with the theme', r['embedded'] and r['look'])
     check('detection finds the rooms and places the lamp', r['rooms'] == r['floorsInModel'] and r['rooms'] > 0 and r['placed'] >= 1 and not r['detectError'])
     check('a room is named after the camera / button bound to its floor', r['namedFromButton'])
-    check('tint meshes exist, the lit room is tinted', r['tints'] > 0 and r['litTint'])
+    check('tint meshes exist, the lit room is tinted with tint_on, stencil buffer present', r['tints'] > 0 and r['litTint'] and r['stencil'])
     check('pins placed on the model', r['pins'] == r['rooms'] and r['pinsPlaced'] > 0)
     check('a tap selects the room and opens its panel', r['selected'] == r['target'] and r['panel'] and r['tilesShown'] >= 1 and r['selectedTint'])
     check('a tile toggles its entity', 'light.turn_off' in r['calls'])

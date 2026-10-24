@@ -37,6 +37,7 @@ export function roomIcon(name: string): string {
 export function cleanRoomName(name: string): string {
   return String(name || '')
     .replace(/\bfloor\s*3d\b|\bfloor3d\b|\b3d\b/gi, '')
+    .replace(/^\s*(popup|pop-up|room|view|open)\b[\s·:\-–—|]*/i, '')
     .replace(/[_]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
@@ -150,7 +151,7 @@ export function suggestRooms(scene: THREE.Object3D, cardConfig: any, friendlyNam
   });
   const index = new RoomIndex(scene, rooms);
   for (const ent of entities) {
-    if (ent.type3d === 'camera' || ent.type3d === 'text' || ent.type3d === 'image') continue; // readouts and room buttons, not controls
+    if (ent.type3d === 'camera') continue; // a room's popup button, not a control
     const domain = ent.entity.split('.')[0];
     if (/^[a-z_]+$/.test(domain) && ent.entity.indexOf('[[') < 0) {
       if (!CONTROL_DOMAINS.has(domain) && !(sensors && SENSOR_DOMAINS.has(domain))) continue;
@@ -160,7 +161,16 @@ export function suggestRooms(scene: THREE.Object3D, cardConfig: any, friendlyNam
     const box = new THREE.Box3(); objects.forEach((o) => box.expandByObject(o));
     const c = box.getCenter(new THREE.Vector3());
     const room = index.roomAt(c.x, c.z, 0.025);
-    if (room && !room.entities!.some((e) => e.entity === ent.entity)) room.entities!.push({ entity: ent.entity });
+    if (!room || room.entities!.some((e) => e.entity === ent.entity)) continue;
+    const re: RoomEntity = { entity: ent.entity };
+    const top = (ent.shade && ent.shade.top_entity) || (ent.cover && ent.cover.top_entity);
+    if (typeof top === 'string' && /^cover\./.test(top) && top !== ent.entity) (re as any).top_entity = top;
+    if (typeof ent.color_entity === 'string' && /^light\./.test(ent.color_entity) && !/^light\./.test(ent.entity)) (re as any).dimmer = ent.color_entity;
+    room.entities!.push(re);
   }
+  // a shade's top rail is controlled from the bottom rail's tile
+  const tops = new Set<string>();
+  rooms.forEach((r) => r.entities!.forEach((e: any) => { if (e.top_entity) tops.add(e.top_entity); }));
+  rooms.forEach((r) => { r.entities = r.entities!.filter((e) => !tops.has(e.entity)); });
   return rooms;
 }

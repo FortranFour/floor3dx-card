@@ -2405,6 +2405,9 @@ export class Floor3dCard extends LitElement {
       logarithmicDepthBuffer: true,
       alpha: true,
       powerPreference: 'high-performance',
+      // a stencil buffer for hosts that draw masked overlays on the scene (the rooms card's tints);
+      // off by default, as three.js has it
+      stencil: this._config.stencil === 'yes' || this._config.stencil === true,
     });
     this._maxtextureimage = this._renderer.capabilities.maxTextures;
     console.log('Max Texture Image Units: ' + this._maxtextureimage);

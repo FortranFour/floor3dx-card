@@ -490,17 +490,18 @@ On a Home Assistant without `ha-form` the previous editor is shown instead. `day
 | `lights` | `legacy`, `physical`; see Version 2.0 above | `legacy` |
 | `color_management` | `legacy`, `managed`; see Version 2.0 above | `legacy` |
 | `exposure` | tone-mapping exposure | 0.6 |
+| `stencil` | `yes`: the renderer gets a stencil buffer (for hosts drawing masked overlays, the rooms card) | `no` |
 | `color_entity` | an entity id, on `light` and `color` entries | `entity` |
 | `colorcondition[].color` | `entity`, `entity_color` in addition to any colour | |
 | `type3d: image` | see above | |
 
 ## Floor3DX Rooms Card
 
-`custom:floor3dx-rooms-card`, installed with this card (2.4), is the model as a full-page room controller: the live 3D view of a floor3dx card with the room layer of the [Floor3D Snapshot Card](https://github.com/FortranFour/floor3d-snapshot-card) on top. A tap on a room tints its floor and opens a translucent panel of simple controls over the model, in the colours of the chosen theme; the controls are the snapshot card's (switches, brightness, fan speed, volume, covers, thermostat steps, lock, run, "all off in this room", guest mode). The 3D is a floor3dx card embedded as it is, so its lamps, text frames, pictures, shades, doors and fans all keep working, and a double tap still does what it does in that card.
+`custom:floor3dx-rooms-card`, installed with this card (2.4), is the model as a full-page room controller: the live 3D view of a floor3dx card with the room layer of the [Floor3D Snapshot Card](https://github.com/FortranFour/floor3d-snapshot-card) on top. A tap on a room tints its floor and opens a translucent panel of simple controls over the model, in the colours of the chosen theme; the controls are the snapshot card's (switches with the bulb behind them, brightness, warmth and colour, fan speed, TVs with volume, channels and sources, covers and top-down/bottom-up shades, thermostats with setpoints and modes, lock, run, "all off in this room", guest mode). The 3D is a floor3dx card embedded as it is, so its lamps, text frames, pictures, shades, doors and fans all keep working, and a double tap still does what it does in that card.
 
 ![Floor3DX Rooms Card: the neon theme on a desktop, the architect theme on a phone](docs/floor3dx-rooms-card.png)
 
-Setting it up takes the snapshot card's four steps, in the visual editor: **Find floor3d cards in my dashboards** and pick one (its configuration is copied into the rooms card under `card:`); **Detect rooms from the model** (the floor objects `room_N_1` of a Sweet Home 3D export, each named from the floor3d entity bound to its floor and filled with the card's entities that stand in it; edit the result); pick a **theme**; set the **display** options. Rooms can also be written by hand:
+Setting it up takes the snapshot card's four steps, in the visual editor: **Find floor3d cards in my dashboards** and pick one (its configuration is copied into the rooms card under `card:`); **Detect rooms from the model** (the floor objects `room_N_1` of a Sweet Home 3D export, each named from the floor3d entity bound to its floor and filled with the card's entities that stand in it, a shade's two rails as one tile and a switch paired with the bulb named by its `color_entity`; edit the result); pick a **theme**; set the **display** options. Rooms can also be written by hand:
 
 ```yaml
 type: custom:floor3dx-rooms-card
@@ -525,12 +526,15 @@ rooms:
 |---|---|---|
 | `theme` | `off`, the six looks, or any of the 33 named palettes of `look.theme` (see the look section above) | `neon` |
 | `rooms[].floors` | floor object names; a room without one is reached from the Rooms menu | |
-| `rooms[].entities[]` | `entity`, `name`, `icon`, `read_only` | |
+| `rooms[].entities[]` | `entity`, `name`, `icon`, `read_only`, `guest_hidden`; `top_entity` (a top-down/bottom-up shade's top rail), `dimmer` (the light behind a switch), `remote`, `remote_commands`, `sources`, `controls` (`brightness`, `white`, `color`), as in the snapshot card | |
 | `pins` | `yes`, `no`: a pin per room, following the camera | `yes` |
 | `panel_lines` | `yes`: the theme's lines are drawn on text and picture panels too (2.4.2) | `no` |
 | `edge_skip` | the look's `edge_skip` list, replacing the default | `seams, floors, texts, images` |
 | `labels` | `yes`: pins always show the room's name | `no` |
 | `room_colors` | `yes`: every room's floor in its own pastel tint | `no` |
+| `panel_opacity` | 0.2 to 0.95: how opaque the overlay panels are over the model (slider in the editor) | 0.55 (0.6 on a light stage) |
+| `tint_on` | `yes`: rooms with something on get an amber floor tint (the lamps show it themselves) | `no` |
+| `guest_mode_entity`, `guest_thermostat`, `brightness_slider`, `white_slider`, `color_swatches` | as in the snapshot card | |
 | `keep_panel` | `yes`: a tap outside the rooms leaves the panel open | `no` |
 | `guest_mode`, `max_volume`, `temperature_range` | as in the snapshot card | `yes`, 0.6 in guest mode, none |
 | `height` | CSS height | the panel view's height, else `60vh` |
