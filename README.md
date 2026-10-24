@@ -202,6 +202,9 @@ Three more themes, not from those projects: **paper**, an architect's drawing on
 
 **Named palettes** (2.4). Twenty-three more themes, each a palette of the custom theme, by name: `midnight-teal`, `ultraviolet`, `copper-slate`, `rose-gold`, `moss`, `sunset`, `noir`, `crt`, `ocean`, `architect`, `mint-cream`, `arctic` (one hue with a contrasting line); `infrared`, `riso` (duotone: dark surfaces one hue, bright another); `navy-tangerine`, `cyberpunk` (muted surfaces, complementary lines); `sodium`, `gold-leaf` (metals); `x-ray`, `hologram` (inverted: dark objects glow / flat surfaces, lines carry the detail); `ivory-on-black`, `ice` (a pale model on a black stage); `ink-on-paper` (a dark model on cream). `look: {theme: riso}` is `theme: custom` with that palette's colours; a `custom:` block beside it overrides single colours (`custom: {edges: '#ffffff'}`), and the editor shows the palette's colours in its pickers. They were chosen on a real house with its lamps on; `dev/harness/render_themes.py` renders a model under any set of palettes for comparison.
 
+<img width="1600" height="3221" alt="all-themes" src="https://github.com/user-attachments/assets/3abd1076-6381-4f39-9f98-eb57b4cae298" />
+
+
 **Your own colours** (`theme: custom`). The same colour function with colours you choose, as `#rrggbb`; the editor shows them as colour pickers once Custom is selected:
 
 <img src="https://github.com/user-attachments/assets/d016f5f2-3520-49b5-89de-a61e22494295" alt="The custom theme colours as colour pickers in the editor" width="360">
