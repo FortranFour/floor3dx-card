@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.4.5
+
+### Changed (rooms card)
+- Colour swatches in two rows, red, orange, yellow, green, cyan, then white, pink, purple, blue, in saturated colours (the ring of pastel swatches is gone); a swatch sets the light to that colour at full saturation.
+- The room panel is as tall as its contents, not the card: a room with two switches gets a short panel; one with more tiles than fit scrolls its tiles, within the card's height. (On phones the bottom sheet already did this.)
+- In the card editor the preview fills the preview column on wide screens (`calc(100vh - 235px)`, the dialog's content height) instead of 60vh, so the model is as large as the dialog allows. Below 1000px, where the editor stacks the preview above the form, it stays at 60vh so the form stays reachable. `height` still overrides both.
+
 ## 2.4.4
 
 ### Added

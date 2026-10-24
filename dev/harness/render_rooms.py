@@ -2,6 +2,7 @@
 selected, in a few themes, at desktop and phone widths.
 
     THEMES=neon,riso,ice python3 dev/harness/render_rooms.py <out-dir>
+    SELECT=small selects the room with the fewest entities at the desktop width
 """
 import json, os, sys
 from run import run
@@ -39,15 +40,17 @@ JS = r"""async ([model, theme, width, select]) => {
   el.setConfig({card, theme, rooms, title: 'House', subtitle: 'tap a room', height: '600px', labels: true, tint_on: true, pins: false, guest_mode: false});
   const t1 = performance.now(); while (!(el._embedded && el._embedded._modelready && el._tints.length) && performance.now() - t1 < 240000) await new Promise(r => setTimeout(r, 200));
   await new Promise(r => setTimeout(r, 800));
-  if (select && living) el._select(living.id);
+  // SELECT=small picks the room with the fewest entities instead, to see the panel fit its contents
+  const target = select === 'small' ? rooms.filter(r => r !== living && r.entities.length).sort((a, b) => a.entities.length - b.entities.length)[0] || living : living;
+  if (select && target) el._select(target.id);
   await new Promise(r => setTimeout(r, 300));
   el._embedded._render && el._embedded._render(); el._placePins();
-  window.shot = h; return {rooms: rooms.length, living: living && living.id};
+  window.shot = h; return {rooms: rooms.length, selected: target && target.id, panel: el._ui.querySelector('.panel') && el._ui.querySelector('.panel').getBoundingClientRect().height};
 }"""
 
 def after(page):
     for theme in THEMES:
-        for width, select in ((900, True), (420, True)):
+        for width, select in ((900, os.environ.get('SELECT', 'true')), (420, True)):
             r = page.evaluate(JS, [HOUSE, theme, width, select])
             page.wait_for_timeout(400)
             page.screenshot(path=f'{OUT}/{theme}-{width}.png', clip={'x': 0, 'y': 0, 'width': width, 'height': 600}, timeout=120000)

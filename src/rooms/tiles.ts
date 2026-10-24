@@ -23,9 +23,12 @@ const GUEST_THERMOSTAT = ['full', 'setpoint_power', 'setpoint', 'view'];
 const REMOTE_KEYS: Record<string, Record<string, string>> = { samsungtv: { channel_up: 'KEY_CHUP', channel_down: 'KEY_CHDOWN', info: 'KEY_INFO' }, androidtv_remote: { channel_up: 'CHANNEL_UP', channel_down: 'CHANNEL_DOWN', info: 'INFO' } };
 const MP = { PAUSE: 1, VOLUME_SET: 4, VOLUME_MUTE: 8, PREVIOUS: 16, NEXT: 32, TURN_ON: 128, VOLUME_STEP: 1024, SELECT_SOURCE: 2048, PLAY: 16384 };
 const COLOR_MODES = ['hs', 'xy', 'rgb', 'rgbw', 'rgbww'];
-const WHEEL_WHITE: [string, number, number] = ['White', 0, 0];
-const WHEEL: [string, number, number][] = [['Red', 0, 55], ['Orange', 30, 55], ['Yellow', 52, 55], ['Green', 130, 50], ['Cyan', 185, 50], ['Blue', 220, 55], ['Purple', 270, 50], ['Pink', 325, 50]];
-const hsCss = (h: number, s: number) => (s ? `hsl(${h},62%,77%)` : '#fbfbf8');
+// the colour swatches: two rows, red to cyan, then white, pink, purple, blue; [label, hue, saturation, shown as]
+type Swatch = [string, number, number, string];
+const SWATCHES: Swatch[][] = [
+  [['Red', 0, 100, '#f23b3b'], ['Orange', 30, 100, '#ff941f'], ['Yellow', 50, 100, '#ffdc32'], ['Green', 138, 100, '#35bd60'], ['Cyan', 184, 100, '#25d7e5']],
+  [['White', 0, 0, '#ffffff'], ['Pink', 330, 70, '#fa78ba'], ['Purple', 273, 90, '#9948dc'], ['Blue', 218, 100, '#3478ef']],
+];
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** What the tiles need from the card. */
@@ -50,7 +53,7 @@ export const CSS_TILES = `
 .sw{flex:none;width:28px;height:17px;border-radius:10px;background:rgba(127,127,127,.3);padding:3px}.sw:before{content:"";display:block;width:11px;height:11px;border-radius:50%;background:var(--f3r-ink)}.tile.on .sw{background:rgb(var(--f3r-accent))}.tile.on .sw:before{margin-left:11px;background:#fff}
 .extra{padding:0 12px 10px}.ctl{margin-top:2px}.ctl-l{display:block;font-size:11px;color:var(--f3r-muted);margin:2px 0 -2px}
 .range{display:block;width:100%;height:28px;margin:0;accent-color:rgb(var(--f3r-accent));touch-action:pan-x}.range.warmth{accent-color:#e9a65a}
-.wheel{position:relative;width:136px;height:136px;margin:4px auto 0}.swatch-b{position:absolute;width:32px;height:32px;margin:-16px 0 0 -16px;border-radius:50%;border:1px solid rgba(0,0,0,.2);background:var(--sw);padding:0}.swatch-b[aria-pressed=true]{box-shadow:0 0 0 2px rgb(var(--f3r-stage)),0 0 0 4px rgb(var(--f3r-accent))}
+.wheel{display:flex;flex-direction:column;align-items:center;gap:8px;margin:4px 0 2px}.wheel .row{display:flex;justify-content:center;gap:10px}.swatch-b{width:32px;height:32px;border-radius:50%;border:1px solid rgba(0,0,0,.2);background:var(--sw);padding:0;flex:none}.swatch-b[aria-pressed=true]{box-shadow:0 0 0 2px rgb(var(--f3r-stage)),0 0 0 4px rgb(var(--f3r-accent))}
 .seg{display:flex;gap:5px}.seg button{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:4px;min-height:34px;min-width:0;padding:0 4px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;border:1px solid var(--f3r-line);border-radius:10px;background:transparent;color:var(--f3r-muted);font-size:12px}.seg button[aria-pressed=true]{color:rgb(var(--f3r-accent));border-color:rgba(var(--f3r-accent),.6);background:rgba(var(--f3r-accent),.12)}.seg.wrap{flex-wrap:wrap}.seg button ha-icon{width:19px;height:19px;--mdc-icon-size:19px}
 .seg+.ctl,.ctl+.seg,.seg+.range,.minfo+.vol,.vol+.seg,.seg+.msel,.vol+.msel,.ctl+.ctl{margin-top:8px}
 .vol{display:flex;align-items:center;gap:8px}.vol .range{flex:1;min-width:0}.vol .seg{flex:1}.mbtn{flex:none;display:grid;place-items:center;width:36px;height:34px;border:1px solid var(--f3r-line);border-radius:10px;background:transparent;color:var(--f3r-muted)}.mbtn ha-icon{width:19px;height:19px;--mdc-icon-size:19px}.mbtn[aria-pressed=true]{color:rgb(var(--f3r-accent));border-color:rgba(var(--f3r-accent),.6);background:rgba(var(--f3r-accent),.12)}
@@ -117,8 +120,8 @@ export class Tiles {
       if (want.has('color') && modes.some((m) => COLOR_MODES.includes(m))) {
         const cur = COLOR_MODES.includes(da.color_mode) && Array.isArray(da.hs_color) ? da.hs_color.map(Number) : null;
         const isSel = (h: number, sat: number) => cur && (sat === 0 ? cur[1] < 12 : cur[1] >= 25 && Math.min(Math.abs(cur[0] - h), 360 - Math.abs(cur[0] - h)) < 22);
-        const btn = ([label, h, sat]: [string, number, number], x: number, y: number) => `<button class="swatch-b" data-action="color" data-entity="${esc(dimId)}" data-h="${h}" data-s="${sat}" data-focus="c-${esc(id)}-${label}" style="--sw:${hsCss(h, sat)};left:${x}%;top:${y}%" aria-label="${label}" title="${label}" aria-pressed="${!!isSel(h, sat)}"></button>`;
-        parts.push(['Color', `<div class="wheel" role="group" aria-label="${name} color">${btn(WHEEL_WHITE, 50, 50)}${WHEEL.map((sw, n) => { const ang = ((n * 45 - 90) * Math.PI) / 180; return btn(sw, 50 + 34 * Math.cos(ang), 50 + 34 * Math.sin(ang)); }).join('')}</div>`]);
+        const btn = ([label, h, sat, css]: Swatch) => `<button class="swatch-b" data-action="color" data-entity="${esc(dimId)}" data-h="${h}" data-s="${sat}" data-focus="c-${esc(id)}-${label}" style="--sw:${css}" aria-label="${label}" title="${label}" aria-pressed="${!!isSel(h, sat)}"></button>`;
+        parts.push(['Color', `<div class="wheel" role="group" aria-label="${name} color">${SWATCHES.map((row) => `<div class="row">${row.map(btn).join('')}</div>`).join('')}</div>`]);
       }
       if (parts.length) extra = `<div class="extra">${parts.map(([label, html]) => (parts.length > 1 ? `<div class="ctl"><span class="ctl-l">${label}</span>${html}</div>` : html)).join('')}</div>`;
     }

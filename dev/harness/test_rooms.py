@@ -68,6 +68,10 @@ JS = r"""async ([theme]) => {
   await new Promise(r => setTimeout(r, 200));
   out.selected = el._room; out.target = target.id;
   out.panel = !!el.shadowRoot.querySelector('.panel');
+  // the panel is as tall as its contents (a room with one or two tiles gets a short panel), never taller than the card
+  const pr = el.shadowRoot.querySelector('.panel').getBoundingClientRect(), cr = el.getBoundingClientRect();
+  out.panelFits = pr.height > 100 && pr.height <= cr.height - 74 + 1;
+  out.panelHugs = pr.height < cr.height - 100;
   out.tilesShown = el.shadowRoot.querySelectorAll('.tile').length;
   out.selectedTint = el._tints.some(t => t.room.id === target.id && t.mesh.visible && t.mesh.material.opacity >= 0.5);
   // 4. a control in the panel calls the service
@@ -144,6 +148,7 @@ if __name__ == '__main__':
     check('pins placed on the model', r['pins'] == r['rooms'] and r['pinsPlaced'] > 0)
     check('a tap selects the room and opens its panel', r['selected'] == r['target'] and r['panel'] and r['tilesShown'] >= 1 and r['selectedTint'])
     check('a tile toggles its entity', 'light.turn_off' in r['calls'])
+    check('the panel is sized to its contents, within the card', r['panelFits'] and r['panelHugs'])
     check('theme colours applied', r['stageVar'] and not r['lightClass'])
     check('the editor renders, with 40 theme swatches, the rooms, and the model\'s objects from the preview', r['editorSections'] == 4 and r['editorSwatches'] == 40 and r['editorRooms'] == r['rooms'] and r['editorObjects'] > 0)
     check('scanner resolves the wrapper\'s tokens from the dashboard sources and reports the unresolved one', r['scanFound'] == 1 and r['scanResolved'] and r['scanUnresolved'] == ['nope.missing'] and not r['scanMeta'])

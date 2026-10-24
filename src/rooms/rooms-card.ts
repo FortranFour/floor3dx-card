@@ -11,6 +11,9 @@ import { Tiles, TilesHost, CSS_TILES, isOn, esc, domainOf, titleCase, icon, ACTI
 
 export const ROOMS_EDITOR_EVENT = 'floor3dx-rooms-editor';
 export const ROOMS_PREVIEW_EVENT = 'floor3dx-rooms-preview';
+// the card editor's content is capped at calc(100vh - 209px) on wide screens, the preview adds 8px
+// of padding and hui-card 16px; this fills the preview column instead of leaving the space below empty
+const PREVIEW_HEIGHT = 'calc(100vh - 235px)';
 const EMBEDDED_TAG = 'floor3dpro-card'; // renamed to floor3dx-card by the build, like every element name
 
 const STYLE = `
@@ -39,16 +42,16 @@ const STYLE = `
 .pin[aria-pressed=true] .pn,.pin.hover .pn,:host(.labels) .pin .pn{display:inline}
 .pin[hidden]{display:none}
 .pin .count{position:absolute;top:-6px;right:-6px;min-width:16px;height:16px;border-radius:8px;background:rgb(var(--f3r-on));color:#1b1b1b;font-size:10px;line-height:16px;text-align:center;padding:0 4px;font-weight:600}
-.panel{position:absolute;top:60px;right:14px;bottom:14px;width:min(340px,calc(100% - 28px));display:flex;flex-direction:column;border-radius:18px;background:var(--f3r-panel);-webkit-backdrop-filter:blur(var(--f3r-blur));backdrop-filter:blur(var(--f3r-blur));border:1px solid var(--f3r-line);box-shadow:0 10px 40px rgba(0,0,0,.25);overflow:hidden;animation:f3r-in .18s ease}
+.panel{position:absolute;top:60px;right:14px;max-height:calc(100% - 74px);width:min(340px,calc(100% - 28px));display:flex;flex-direction:column;border-radius:18px;background:var(--f3r-panel);-webkit-backdrop-filter:blur(var(--f3r-blur));backdrop-filter:blur(var(--f3r-blur));border:1px solid var(--f3r-line);box-shadow:0 10px 40px rgba(0,0,0,.25);overflow:hidden;animation:f3r-in .18s ease}
 @keyframes f3r-in{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}}
 :host(.narrow) .panel{top:auto;left:10px;right:10px;bottom:10px;width:auto;max-height:58%;animation-name:f3r-up}
 @keyframes f3r-up{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
-.panelhead{display:flex;gap:12px;align-items:center;padding:14px 14px 10px}.roomicon{display:grid;place-items:center;width:42px;height:42px;border-radius:13px;background:rgba(var(--f3r-accent),.16);color:rgb(var(--f3r-accent))}
+.panelhead{flex:none;display:flex;gap:12px;align-items:center;padding:14px 14px 10px}.roomicon{display:grid;place-items:center;width:42px;height:42px;border-radius:13px;background:rgba(var(--f3r-accent),.16);color:rgb(var(--f3r-accent))}
 .panelhead h3{margin:0 0 2px;font-size:18px;font-weight:500}.panelhead p{margin:0;color:var(--f3r-muted);font-size:12px}.panelhead .grow{flex:1;min-width:0}
-.tiles{display:grid;grid-template-columns:1fr;gap:8px;padding:4px 12px 12px;overflow:auto;flex:1;align-content:start;grid-auto-rows:max-content}
+.tiles{display:grid;grid-template-columns:1fr;gap:8px;padding:4px 12px 12px;overflow:auto;flex:0 1 auto;min-height:0;align-content:start;grid-auto-rows:max-content}
 :host(.narrow) .tiles{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
 ${CSS_TILES}
-.foot{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:0 12px 12px}.quiet{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:4px 12px;border:1px solid var(--f3r-line);border-radius:11px;background:transparent;color:var(--f3r-muted);font-size:12px}.quiet ha-icon{width:16px;height:16px;--mdc-icon-size:16px}
+.foot{flex:none;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:0 12px 12px}.quiet{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:4px 12px;border:1px solid var(--f3r-line);border-radius:11px;background:transparent;color:var(--f3r-muted);font-size:12px}.quiet ha-icon{width:16px;height:16px;--mdc-icon-size:16px}
 .empty{padding:14px;color:var(--f3r-muted);font-size:13px;line-height:1.5}
 .toast{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);max-width:calc(100% - 32px);border:1px solid var(--f3r-line);border-radius:14px;background:var(--f3r-panel);-webkit-backdrop-filter:blur(var(--f3r-blur));backdrop-filter:blur(var(--f3r-blur));padding:10px 16px;font-size:13px}
 .hint{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);padding:6px 12px;border-radius:12px;background:var(--f3r-panel);color:var(--f3r-muted);font-size:12px;pointer-events:none}
@@ -185,8 +188,10 @@ export class Floor3dxRoomsCard extends HTMLElement {
     if (w) this.classList.toggle('narrow', w < 700);
     const h = this._config?.height;
     if (h) this.style.setProperty('--f3r-height', typeof h === 'number' ? h + 'px' : String(h));
-    else this.style.setProperty('--f3r-height', this._inPanel() ? 'calc(100vh - var(--header-height, 56px))' : '60vh');
+    else this.style.setProperty('--f3r-height', this._inPanel() ? 'calc(100vh - var(--header-height, 56px))' : this._isPreview() && this._wideEditor() ? PREVIEW_HEIGHT : '60vh');
   }
+  /** The card editor puts the preview beside the editor from 1000px; below that it sits above it. */
+  private _wideEditor(): boolean { return typeof window !== 'undefined' && window.innerWidth >= 1000; }
   private _inPanel(): boolean {
     let node: any = this;
     for (let i = 0; i < 20 && node; i++) {

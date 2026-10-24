@@ -538,7 +538,7 @@ rooms:
 | `guest_mode_entity`, `guest_thermostat`, `brightness_slider`, `white_slider`, `color_swatches` | as in the snapshot card | |
 | `keep_panel` | `yes`: a tap outside the rooms leaves the panel open | `no` |
 | `guest_mode`, `max_volume`, `temperature_range` | as in the snapshot card | `yes`, 0.6 in guest mode, none |
-| `height` | CSS height | the panel view's height, else `60vh` |
+| `height` | CSS height | the panel view's height; in the card editor the preview column (2.4.5); else `60vh` |
 | `accent` | `#rrggbb`, the overlay's accent | the theme's line colour |
 
 The card's own options (`look`, `merge_static`, `daylight`, ...) are taken from `card:`; `look` is replaced by the theme unless the theme is `off`. The rooms' floors are kept out of `merge_static`. In the card editor's preview `merge_static` is off, so detection sees every floor.
