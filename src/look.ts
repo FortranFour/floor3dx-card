@@ -206,6 +206,11 @@ export class Look {
     if (accent) this.accent.set(accent[0], accent[1], accent[2]);
   }
 
+  /** The name prefixes of floor (and ceiling) objects, `look.floors` or room, floor. */
+  floorPrefixList(): string[] {
+    return this.floorPrefixes.slice();
+  }
+
   theme(): Theme {
     const t = String(this.cfg.theme || 'off').toLowerCase();
     if (paletteOf(t)) return 'custom'; // a named palette: the custom theme with its colours

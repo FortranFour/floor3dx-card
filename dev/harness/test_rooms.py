@@ -103,7 +103,10 @@ JS = r"""async ([theme]) => {
   const h2 = document.createElement('div'); h2.style.cssText = 'position:fixed;left:0;top:0;width:400px;height:300px;opacity:0'; document.body.appendChild(h2); h2.appendChild(el2);
   const t2 = performance.now(); while (!(el2._embedded && el2._embedded._modelready) && performance.now() - t2 < 240000) await new Promise(r => setTimeout(r, 200));
   out.previewMergeOff = el2._embedded._config.merge_static === 'no';
-  out.panelLinesSkipped = /texts/.test(String(el2._embedded._config.look && el2._embedded._config.look.edge_skip));
+  out.panelLinesSkipped = /texts/.test(String(el2._embedded._config.look && el2._embedded._config.look.edge_skip)) && /ceilings/.test(String(el2._embedded._config.look.edge_skip));
+  const skipped = el2._embedded._edgeSkipNames ? el2._embedded._edgeSkipNames() : new Set();
+  const ceilings = names.filter(n => /^room_\d+_2$/.test(n));
+  out.ceilingsSkipped = ceilings.length > 0 && ceilings.every(n => skipped.has(n)) && !skipped.has(room[1] || room[0]);
   const got2 = []; const onPrev2 = (e) => got2.push(e.detail); window.addEventListener('floor3dx-rooms-preview', onPrev2);
   // only el2 should answer: detach el's listener by removing it first
   h.remove();
@@ -144,7 +147,7 @@ if __name__ == '__main__':
     check('theme colours applied', r['stageVar'] and not r['lightClass'])
     check('the editor renders, with 40 theme swatches, the rooms, and the model\'s objects from the preview', r['editorSections'] == 4 and r['editorSwatches'] == 40 and r['editorRooms'] == r['rooms'] and r['editorObjects'] > 0)
     check('scanner resolves the wrapper\'s tokens from the dashboard sources and reports the unresolved one', r['scanFound'] == 1 and r['scanResolved'] and r['scanUnresolved'] == ['nope.missing'] and not r['scanMeta'])
-    check('preview keeps merge_static off and skips lines on text/picture panels', r['previewMergeOff'] and r['panelLinesSkipped'])
+    check('preview keeps merge_static off and skips lines on text/picture panels and ceilings', r['previewMergeOff'] and r['panelLinesSkipped'] and r['ceilingsSkipped'])
     check('detection places a token row by its type3d (light yes, text no)', r['tokenPlaced'] == 1 and r['tokenPlacedIsLight'])
     check('no page errors', not errors)
     raise SystemExit(0 if ok else 1)

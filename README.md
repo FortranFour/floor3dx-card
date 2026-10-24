@@ -182,6 +182,7 @@ look:
 |---|---|
 | `seams` | the joint between two coplanar wall segments is not drawn (a corner between walls still is) |
 | `floors` | the joint between two coplanar floor objects is not drawn (the floor edge along a wall still is) |
+| `ceilings` | no lines on the ceiling objects (`room_N_2` in a Sweet Home 3D export; the floor prefixes with `_2`). A ceiling faces down and is invisible from above, but its outline is still an edge, which shows as a line across every room opening that has no wall (2.4.4) |
 | `coplanar` | both of the above, for every pair of objects whatever their names |
 | `images` | no lines on the objects of `type3d: image` rows |
 | `texts` | no lines on the objects of `type3d: text` rows |
@@ -477,7 +478,7 @@ On a Home Assistant without `ha-form` the previous editor is shown instead. `day
 | `type3d: shade` | `shade.top_entity`, `shade.invert` | |
 | `rotate.ramp` | seconds a fan takes to reach its speed, and to stop | at once |
 | `look` | see above | off |
-| `look.edge_skip` | `images`, `texts`, `seams`, `floors`, `coplanar`, object ids / patterns / `<group>` | nothing skipped |
+| `look.edge_skip` | `images`, `texts`, `seams`, `floors`, `ceilings`, `coplanar`, object ids / patterns / `<group>` | nothing skipped |
 | `look.custom` | colours of `theme: custom`, or overrides of a named palette; see above | defaults |
 | `look.keep` | objects the theme leaves as the model has them: ids / patterns / `<group>` | none |
 | `hide_spare_panels` | `yes`, `no`: hide unbound panels beside bound text / picture panels | `no` |
@@ -529,7 +530,7 @@ rooms:
 | `rooms[].entities[]` | `entity`, `name`, `icon`, `read_only`, `guest_hidden`; `top_entity` (a top-down/bottom-up shade's top rail), `dimmer` (the light behind a switch), `remote`, `remote_commands`, `sources`, `controls` (`brightness`, `white`, `color`), as in the snapshot card | |
 | `pins` | `yes`, `no`: a pin per room, following the camera | `yes` |
 | `panel_lines` | `yes`: the theme's lines are drawn on text and picture panels too (2.4.2) | `no` |
-| `edge_skip` | the look's `edge_skip` list, replacing the default | `seams, floors, texts, images` |
+| `edge_skip` | the look's `edge_skip` list, replacing the default | `seams, floors, ceilings, texts, images` |
 | `labels` | `yes`: pins always show the room's name | `no` |
 | `room_colors` | `yes`: every room's floor in its own pastel tint | `no` |
 | `panel_opacity` | 0.2 to 0.95: how opaque the overlay panels are over the model (slider in the editor) | 0.55 (0.6 on a light stage) |

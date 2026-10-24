@@ -708,7 +708,7 @@ const HELPERS: { [name: string]: string } = {
   accent: 'Default #37e0ff',
   edge_angle: 'Lines where faces meet at more than this. Default 40; 60 thins window mullions',
   edge_opacity: 'Default 0.85',
-  edge_skip: 'Comma separated: images, texts, seams, floors, coplanar, or object ids / patterns / <groups>. Default: nothing skipped',
+  edge_skip: 'Comma separated: images, texts, seams, floors, ceilings, coplanar, or object ids / patterns / <groups>. Default: nothing skipped',
   keep: 'Objects the theme leaves untouched, materials and lines: ids, patterns, <groups>, comma separated',
   hide_spare_panels: 'Flat objects of the same name family and size as a text or picture panel, near it, that no row binds. Default no',
   merge_static: 'Walls, floors and furniture that nothing binds are drawn as one object per level and material: same picture, much less work per frame. Default no',

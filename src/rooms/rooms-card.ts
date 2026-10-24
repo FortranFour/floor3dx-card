@@ -224,7 +224,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
     if (this._theme.look) {
       cfg.look = JSON.parse(JSON.stringify(this._theme.look));
       // no theme lines on the text and picture panels unless asked; `edge_skip` replaces the list
-      const skip = this._config.edge_skip !== undefined && this._config.edge_skip !== '' ? this._config.edge_skip : this._config.panel_lines === true || this._config.panel_lines === 'yes' ? 'seams, floors' : 'seams, floors, texts, images';
+      const skip = this._config.edge_skip !== undefined && this._config.edge_skip !== '' ? this._config.edge_skip : this._config.panel_lines === true || this._config.panel_lines === 'yes' ? 'seams, floors, ceilings' : 'seams, floors, ceilings, texts, images';
       cfg.look.edge_skip = skip;
     } // theme off: the card's own look, if it has one, stays
     // in the editor's preview every floor must be a separate object, so detection finds them all

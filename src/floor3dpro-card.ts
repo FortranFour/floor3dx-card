@@ -2144,10 +2144,18 @@ export class Floor3dCard extends LitElement {
     const out = new Set<string>();
     if (!this._look) return out;
     const names = this._modelObjectNames();
-    const keywords = ['images', 'texts', 'seams', 'floors', 'coplanar'];
+    const keywords = ['images', 'texts', 'seams', 'floors', 'coplanar', 'ceilings'];
     this._look.edgeSkip().forEach((entry) => {
       const key = entry.toLowerCase();
-      if (key === 'images' || key === 'texts') {
+      if (key === 'ceilings') {
+        // Sweet Home 3D exports a room as room_N_1 (floor) and room_N_2 (ceiling); the ceiling faces
+        // down and is invisible from above, but its outline is still an edge, drawn across every room
+        // that has no wall on one side (the line across an opening). Floor prefixes from the look.
+        const prefixes = this._look.floorPrefixList().map((p) => p.toLowerCase());
+        this._scene.traverse((o: any) => {
+          if (o.isMesh && o.name && /_2$/.test(o.name) && prefixes.some((p) => o.name.toLowerCase().startsWith(p))) out.add(o.name);
+        });
+      } else if (key === 'images' || key === 'texts') {
         const type = key === 'images' ? 'image' : 'text';
         (this._config.entities || []).forEach((entity: any, i) => {
           if (entity.type3d !== type) return;

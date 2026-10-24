@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.4.4
+
+### Added
+- `look.edge_skip: ceilings`: no edge lines on the ceiling objects (`room_N_2` in a Sweet Home 3D export: the look's floor prefixes with `_2`). A ceiling faces down and is invisible from above, but the look still drew its outline, which showed as a line across every room opening without a wall (the living/dining opening). The rooms card's default `edge_skip` includes it.
+
 ## 2.4.3
 
 ### Changed (rooms card)
