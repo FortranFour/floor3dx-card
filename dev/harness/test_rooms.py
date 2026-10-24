@@ -114,6 +114,6 @@ if __name__ == '__main__':
     check('a tap selects the room and opens its panel', r['selected'] == r['target'] and r['panel'] and r['tilesShown'] >= 1 and r['selectedTint'])
     check('a tile toggles its entity', 'light.turn_off' in r['calls'])
     check('theme colours applied', r['stageVar'] and not r['lightClass'])
-    check('the editor renders, with 30 theme swatches, the rooms, and the model\'s objects from the preview', r['editorSections'] == 4 and r['editorSwatches'] == 30 and r['editorRooms'] == r['rooms'] and r['editorObjects'] > 0)
+    check('the editor renders, with 40 theme swatches, the rooms, and the model\'s objects from the preview', r['editorSections'] == 4 and r['editorSwatches'] == 40 and r['editorRooms'] == r['rooms'] and r['editorObjects'] > 0)
     check('no page errors', not errors)
     raise SystemExit(0 if ok else 1)

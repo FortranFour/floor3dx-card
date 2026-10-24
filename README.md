@@ -200,7 +200,7 @@ Three more themes, not from those projects: **paper**, an architect's drawing on
 
 <img src="https://github.com/user-attachments/assets/be1569ba-0544-4602-9b26-99053574021c" alt="The same house in the day, paper, ember and pastel themes" width="100%">
 
-**Named palettes** (2.4). Twenty-three more themes, each a palette of the custom theme, by name: `midnight-teal`, `ultraviolet`, `copper-slate`, `rose-gold`, `moss`, `sunset`, `noir`, `crt`, `ocean`, `architect`, `mint-cream`, `arctic` (one hue with a contrasting line); `infrared`, `riso` (duotone: dark surfaces one hue, bright another); `navy-tangerine`, `cyberpunk` (muted surfaces, complementary lines); `sodium`, `gold-leaf` (metals); `x-ray`, `hologram` (inverted: dark objects glow / flat surfaces, lines carry the detail); `ivory-on-black`, `ice` (a pale model on a black stage); `ink-on-paper` (a dark model on cream). `look: {theme: riso}` is `theme: custom` with that palette's colours; a `custom:` block beside it overrides single colours (`custom: {edges: '#ffffff'}`), and the editor shows the palette's colours in its pickers. They were chosen on a real house with its lamps on; `dev/harness/render_themes.py` renders a model under any set of palettes for comparison.
+**Named palettes** (2.4). Thirty-three more themes, each a palette of the custom theme, by name: `midnight-teal`, `ultraviolet`, `copper-slate`, `rose-gold`, `moss`, `sunset`, `noir`, `crt`, `ocean`, `architect`, `mint-cream`, `arctic` (one hue with a contrasting line); `infrared`, `riso` (duotone: dark surfaces one hue, bright another); `navy-tangerine`, `cyberpunk` (muted surfaces, complementary lines); `sodium`, `gold-leaf` (metals); `x-ray`, `hologram` (inverted: dark objects glow / flat surfaces, lines carry the detail); `ivory-on-black`, `ice` (a pale model on a black stage); `ink-on-paper` (a dark model on cream); `true-colour` (grey with `hue: 0.6`, the model's own colours showing through); and nine three-tone palettes with walls, floors and furniture each in their own hue (2.4.1): `harbour`, `autumn`, `coral-reef`, `berry`, `forest-floor`, `steel-brass`, `mondrian`, `lagoon-sand`, `candy`. `look: {theme: riso}` is `theme: custom` with that palette's colours; a `custom:` block beside it overrides single colours (`custom: {edges: '#ffffff'}`), and the editor shows the palette's colours in its pickers. They were chosen on a real house with its lamps on; `dev/harness/render_themes.py` renders a model under any set of palettes for comparison.
 
 <img width="1600" height="3221" alt="all-themes" src="https://github.com/user-attachments/assets/3abd1076-6381-4f39-9f98-eb57b4cae298" />
 
@@ -505,7 +505,7 @@ Setting it up takes the snapshot card's four steps, in the visual editor: **Find
 ```yaml
 type: custom:floor3dx-rooms-card
 title: House
-theme: midnight-teal          # any of the 30 below; neon by default
+theme: midnight-teal          # any look or named palette; neon by default
 card:                         # a floor3dx-card / floor3d-card configuration, as it is
   path: /local/floor3dx/
   objfile: house.glb
@@ -523,7 +523,7 @@ rooms:
 
 | Option | Values | Default |
 |---|---|---|
-| `theme` | `off`, `neon`, `blueprint`, `day`, `paper`, `ember`, `pastel`; one hue: `midnight-teal`, `ultraviolet`, `copper-slate`, `rose-gold`, `moss`, `sunset`, `noir`, `crt`, `ocean`, `architect`, `mint-cream`, `arctic`; duotone: `infrared`, `riso`; contrast lines: `navy-tangerine`, `cyberpunk`; metals: `sodium`, `gold-leaf`; inverted: `x-ray`, `hologram`; pale on black: `ivory-on-black`, `ice`; `ink-on-paper` | `neon` |
+| `theme` | `off`, the six looks, or any of the 33 named palettes of `look.theme` (see the look section above) | `neon` |
 | `rooms[].floors` | floor object names; a room without one is reached from the Rooms menu | |
 | `rooms[].entities[]` | `entity`, `name`, `icon`, `read_only` | |
 | `pins` | `yes`, `no`: a pin per room, following the camera | `yes` |

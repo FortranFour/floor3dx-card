@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.4.1
+
+### Added
+- Ten more named palettes for `look.theme`, so every palette in the README's picture has a name: `true-colour` (grey with the model's own colours showing through) and the nine three-tone palettes, walls, floors and furniture each in their own hue: `harbour`, `autumn`, `coral-reef`, `berry`, `forest-floor`, `steel-brass`, `mondrian`, `lagoon-sand`, `candy`. 33 palettes; the rooms card offers 40 themes.
+
 ## 2.4.0
 
 ### Added
