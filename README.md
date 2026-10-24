@@ -527,6 +527,8 @@ rooms:
 | `rooms[].floors` | floor object names; a room without one is reached from the Rooms menu | |
 | `rooms[].entities[]` | `entity`, `name`, `icon`, `read_only` | |
 | `pins` | `yes`, `no`: a pin per room, following the camera | `yes` |
+| `panel_lines` | `yes`: the theme's lines are drawn on text and picture panels too (2.4.2) | `no` |
+| `edge_skip` | the look's `edge_skip` list, replacing the default | `seams, floors, texts, images` |
 | `labels` | `yes`: pins always show the room's name | `no` |
 | `room_colors` | `yes`: every room's floor in its own pastel tint | `no` |
 | `keep_panel` | `yes`: a tap outside the rooms leaves the panel open | `no` |
@@ -534,7 +536,9 @@ rooms:
 | `height` | CSS height | the panel view's height, else `60vh` |
 | `accent` | `#rrggbb`, the overlay's accent | the theme's line colour |
 
-The card's own options (`look`, `merge_static`, `daylight`, ...) are taken from `card:`; `look` is replaced by the theme unless the theme is `off`. The rooms' floors are kept out of `merge_static`. A tap on a wall selects the room behind it; a tap outside the model closes the panel. The themes beyond the first seven are palettes of `look.custom` (their colours are in the card editor's swatches), chosen on a real house with its lamps on.
+The card's own options (`look`, `merge_static`, `daylight`, ...) are taken from `card:`; `look` is replaced by the theme unless the theme is `off`. The rooms' floors are kept out of `merge_static`. In the card editor's preview `merge_static` is off, so detection sees every floor.
+
+Dashboards that keep entity bindings in one place and refer to them with `[[entity:role]]` tokens (the `dashboard-entity-reference` convention: source cards with `card_reference_id` naming entities through `entity_reference_id`, `entity_reference_fields` or `entity_reference_extra`) are handled by the scanner (2.4.2): a floor3d card found inside such a wrapper is offered with its tokens resolved from the wrapper's dashboard, and any role the sources do not define is listed. A rooms card placed inside the same wrapper may keep the tokens instead; the wrapper resolves them when the card is rendered. A tap on a wall selects the room behind it; a tap outside the model closes the panel. The themes beyond the first seven are palettes of `look.custom` (their colours are in the card editor's swatches), chosen on a real house with its lamps on.
 
 ## Companion card: Floor3D Snapshot Card
 

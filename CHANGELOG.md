@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.4.2
+
+### Fixed (rooms card)
+- **Detection found no entities** when the floor3d card came from a dashboard that binds entities through `[[entity:role]]` reference tokens (`dashboard-entity-reference` wrappers): the scanner copied the tokens, which the embedded card cannot resolve (text panels read NaN, lamps stayed dark) and detection skipped every row. The scanner now resolves the tokens from the sources of the wrapper's dashboard (`entity_reference_id`, `entity_reference_fields`, `entity_reference_extra` in cards with a `card_reference_id`), strips the reference metadata, and lists any role it could not resolve; the editor also warns when the configuration in use still carries tokens. Detection judges a row whose `entity` is not a plain id by its `type3d` (`light`, `door`, `cover`, `shade`, `rotate`, `gesture`, `color`, `hide`, `transparent` are controls), so a rooms card kept inside such a wrapper gets its rooms filled too. `src/rooms/references.ts`, unit test `references.test.ts`.
+- **Only the rooms with a bound entity were found** when the card uses `merge_static`: the other floors were merged away before detection ran. The editor's preview now keeps `merge_static` off; the saved card still reserves the rooms' floors.
+- The found-cards list labelled two identical cards both "In use"; the one chosen is now the one marked.
+
+### Added (rooms card)
+- No theme lines on text and picture panels by default (`edge_skip: seams, floors, texts, images`); `panel_lines: yes` draws them, `edge_skip` replaces the list. Both in the editor's Display section.
+
 ## 2.4.1
 
 ### Added

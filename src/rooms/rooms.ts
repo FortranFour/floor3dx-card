@@ -23,6 +23,8 @@ export const FLOOR_RE = /^room_(\d+)_1$/;
 export const ROOM_PALETTE = ['#F2C46D', '#9CC5A1', '#8FB8DE', '#E8A598', '#4FC99A', '#B9A6D9', '#8ED1CF', '#F0B8C8', '#C9D88A', '#B8C2CC', '#F4A97A', '#A9C7E8'];
 const CONTROL_DOMAINS = new Set(['light', 'switch', 'fan', 'cover', 'climate', 'media_player', 'lock', 'input_boolean', 'scene', 'script', 'remote', 'vacuum', 'water_heater', 'humidifier', 'valve']);
 const SENSOR_DOMAINS = new Set(['sensor', 'binary_sensor']);
+/** Row types that bind a controllable device, for rows whose `entity` is not a plain entity id. */
+const CONTROL_TYPES = new Set(['light', 'door', 'cover', 'shade', 'rotate', 'gesture', 'color', 'hide', 'transparent']);
 const ROOM_ICONS: [RegExp, string][] = [
   [/kitchen/i, 'mdi:countertop-outline'], [/dining/i, 'mdi:silverware-fork-knife'], [/family|den/i, 'mdi:sofa-single-outline'], [/living|lounge/i, 'mdi:sofa-outline'],
   [/master.*bed|primary.*bed/i, 'mdi:bed-king-outline'], [/bed|guest/i, 'mdi:bed-queen-outline'], [/bath|shower|wc|toilet/i, 'mdi:shower'], [/laundry|utility/i, 'mdi:washing-machine'],
@@ -148,9 +150,11 @@ export function suggestRooms(scene: THREE.Object3D, cardConfig: any, friendlyNam
   });
   const index = new RoomIndex(scene, rooms);
   for (const ent of entities) {
-    const domain = ent.entity.split('.')[0];
-    if (!CONTROL_DOMAINS.has(domain) && !(sensors && SENSOR_DOMAINS.has(domain))) continue;
     if (ent.type3d === 'camera' || ent.type3d === 'text' || ent.type3d === 'image') continue; // readouts and room buttons, not controls
+    const domain = ent.entity.split('.')[0];
+    if (/^[a-z_]+$/.test(domain) && ent.entity.indexOf('[[') < 0) {
+      if (!CONTROL_DOMAINS.has(domain) && !(sensors && SENSOR_DOMAINS.has(domain))) continue;
+    } else if (!CONTROL_TYPES.has(ent.type3d)) continue; // not an entity id (a reference token): judge by the row's type
     const objects = resolve(scene, ent.object_id, groups, names);
     if (!objects.length) continue;
     const box = new THREE.Box3(); objects.forEach((o) => box.expandByObject(o));

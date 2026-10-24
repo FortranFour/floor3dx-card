@@ -209,8 +209,14 @@ export class Floor3dxRoomsCard extends HTMLElement {
     cfg.click = 'no';
     cfg.selectionMode = 'no';
     cfg.editModeNotifications = 'no';
-    if (this._theme.look) cfg.look = JSON.parse(JSON.stringify(this._theme.look));
-    else if (this._theme.key === 'off') delete cfg.look;
+    if (this._theme.look) {
+      cfg.look = JSON.parse(JSON.stringify(this._theme.look));
+      // no theme lines on the text and picture panels unless asked; `edge_skip` replaces the list
+      const skip = this._config.edge_skip !== undefined && this._config.edge_skip !== '' ? this._config.edge_skip : this._config.panel_lines === true || this._config.panel_lines === 'yes' ? 'seams, floors' : 'seams, floors, texts, images';
+      cfg.look.edge_skip = skip;
+    } else if (this._theme.key === 'off') delete cfg.look;
+    // in the editor's preview every floor must be a separate object, so detection finds them all
+    if (this._isPreview()) cfg.merge_static = 'no';
     // the rooms' floors must stay separate objects (tints, taps); reservedNames() reads every
     // string in the configuration, so listing them here keeps merge_static off them
     cfg.f3dx_rooms_floors = (this._config.rooms || []).flatMap((r: Room) => r.floors || []);

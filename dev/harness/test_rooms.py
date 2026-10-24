@@ -76,15 +76,42 @@ JS = r"""async ([theme]) => {
   out.calls = calls.map(c => c[0] + '.' + c[1]);
   // 5. the panel's colours come from the theme
   const cs = getComputedStyle(el); out.stageVar = cs.getPropertyValue('--f3r-stage').trim(); out.lightClass = el.classList.contains('light');
-  // 6. the editor: renders its four sections and the theme swatches, and gets the preview's objects
-  const ed = document.createElement('floor3dx-rooms-card-editor'); ed.hass = hass; ed.setConfig({card, theme, rooms});
+  // 6. the editor: renders its four sections and the theme swatches, and gets the preview's objects;
+  //    its scanner finds a floor3d card wrapped in an entity-reference wrapper and resolves the tokens
+  const dashboards = {null: {views: [
+    {title: 'Controls', cards: [{type: 'entities', card_reference_id: 'lights', entities: [{entity: 'light.a', entity_reference_id: 'lights.kitchen'}], entity_reference_extra: {'fans.hall': 'fan.hall'}}]},
+    {title: 'Test 3D', cards: [{type: 'custom:dashboard-entity-reference', card: Object.assign({}, card, {type: 'custom:floor3dx-card',
+      entities: [{entity: '[[entity:lights.kitchen]]', type3d: 'light', object_id: room[0], light: {lumens: 500}}, {entity: '[[entity:fans.hall]]', type3d: 'rotate', object_id: names[5]}, {entity: '[[entity:nope.missing]]', type3d: 'text', object_id: names[6]}]})}]},
+  ]}};
+  const edHass = Object.assign({}, hass, {callWS: (m) => Promise.resolve(m.type === 'lovelace/dashboards/list' ? [] : m.type === 'lovelace/config' ? dashboards[m.url_path] : null)});
+  const ed = document.createElement('floor3dx-rooms-card-editor'); ed.hass = edHass; ed.setConfig({card, theme, rooms});
   const eh = document.createElement('div'); eh.style.cssText = 'position:fixed;left:0;top:0;width:400px;z-index:100;opacity:0'; document.body.appendChild(eh); eh.appendChild(ed);
   await new Promise(r => setTimeout(r, 300));
   out.editorSections = ed.shadowRoot.querySelectorAll('details[data-section]').length;
   out.editorSwatches = ed.shadowRoot.querySelectorAll('.sw').length;
   out.editorRooms = ed.shadowRoot.querySelectorAll('details.room').length;
   out.editorObjects = ed.shadowRoot.querySelectorAll('#f3r-objects option').length;
+  await ed._scan();
+  const f = (ed._found || [])[0] || {};
+  out.scanFound = (ed._found || []).length; out.scanResolved = f.card && f.card.entities && f.card.entities[0].entity === 'light.a' && f.card.entities[1].entity === 'fan.hall';
+  out.scanUnresolved = f.unresolved; out.scanMeta = f.card && ('card_reference_id' in f.card || JSON.stringify(f.card).includes('entity_reference'));
   eh.remove();
+  // 7. detection on a card whose rows still carry tokens: the row's type3d decides
+  const tokenCard = Object.assign({}, card, {entities: [{entity: '[[entity:lights.kitchen]]', type3d: 'light', object_id: room[0], light: {lumens: 500}}, {entity: '[[entity:x.sensor]]', type3d: 'text', object_id: room[0]}]});
+  const el2 = document.createElement('floor3dx-rooms-card'); el2.preview = true; el2.setConfig({card: tokenCard, theme, rooms: []}); el2.hass = hass;
+  const h2 = document.createElement('div'); h2.style.cssText = 'position:fixed;left:0;top:0;width:400px;height:300px;opacity:0'; document.body.appendChild(h2); h2.appendChild(el2);
+  const t2 = performance.now(); while (!(el2._embedded && el2._embedded._modelready) && performance.now() - t2 < 240000) await new Promise(r => setTimeout(r, 200));
+  out.previewMergeOff = el2._embedded._config.merge_static === 'no';
+  out.panelLinesSkipped = /texts/.test(String(el2._embedded._config.look && el2._embedded._config.look.edge_skip));
+  const got2 = []; const onPrev2 = (e) => got2.push(e.detail); window.addEventListener('floor3dx-rooms-preview', onPrev2);
+  // only el2 should answer: detach el's listener by removing it first
+  h.remove();
+  window.dispatchEvent(new CustomEvent('floor3dx-rooms-editor', {detail: {request: 'detect'}}));
+  await new Promise(r => setTimeout(r, 300)); window.removeEventListener('floor3dx-rooms-preview', onPrev2);
+  const a2 = got2.find(d => d.rooms) || {rooms: []};
+  out.tokenPlaced = a2.rooms.reduce((n, r) => n + r.entities.length, 0);
+  out.tokenPlacedIsLight = a2.rooms.some(r => r.entities.some(e => e.entity === '[[entity:lights.kitchen]]'));
+  h2.remove(); document.body.appendChild(h);
   el._embedded._render && el._embedded._render();
   window.shot = h; return out;
 }"""
@@ -115,5 +142,8 @@ if __name__ == '__main__':
     check('a tile toggles its entity', 'light.turn_off' in r['calls'])
     check('theme colours applied', r['stageVar'] and not r['lightClass'])
     check('the editor renders, with 40 theme swatches, the rooms, and the model\'s objects from the preview', r['editorSections'] == 4 and r['editorSwatches'] == 40 and r['editorRooms'] == r['rooms'] and r['editorObjects'] > 0)
+    check('scanner resolves the wrapper\'s tokens from the dashboard sources and reports the unresolved one', r['scanFound'] == 1 and r['scanResolved'] and r['scanUnresolved'] == ['nope.missing'] and not r['scanMeta'])
+    check('preview keeps merge_static off and skips lines on text/picture panels', r['previewMergeOff'] and r['panelLinesSkipped'])
+    check('detection places a token row by its type3d (light yes, text no)', r['tokenPlaced'] == 1 and r['tokenPlacedIsLight'])
     check('no page errors', not errors)
     raise SystemExit(0 if ok else 1)

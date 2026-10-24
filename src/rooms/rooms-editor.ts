@@ -5,6 +5,7 @@ import { THEMES } from './themes';
 import { Room, slug } from './rooms';
 import { esc } from './tiles';
 import { ROOMS_EDITOR_EVENT, ROOMS_PREVIEW_EVENT } from './rooms-card';
+import { referenceSources, resolveTokens, tokenRoles, dashboardKey, WRAPPER_TYPE } from './references';
 
 const clone = (v: any) => JSON.parse(JSON.stringify(v ?? null));
 const ENTITY_DOMAINS = /^(light|switch|fan|cover|climate|media_player|lock|input_boolean|scene|script|sensor|binary_sensor|remote|button|input_button|vacuum|humidifier|valve|water_heater|alarm_control_panel)\./;
@@ -35,6 +36,7 @@ class Floor3dxRoomsCardEditor extends HTMLElement {
   private _open: Record<string, boolean> = { model: true, rooms: true, theme: false, display: false };
   private _roomOpen = new Set<string>();
   private _found: any[] | null = null;
+  private _used: number | undefined;
   private _scanning = false;
   private _busy: string | null = null;
   private _msg: Record<string, [string, string]> = {};
@@ -85,7 +87,8 @@ ${this._section('display', '4 · Display', '', '', this._displaySection())}`;
     const c = this._config, found = this._found;
     return `<p class="note">The rooms card shows the live 3D model of an existing floor3dx-card (or floor3d-card / floor3dpro-card), with all of that card's lights, text frames, pictures, doors and shades. Pick the card; its configuration is copied in here and the two cards stay independent afterwards.</p>
 <div class="row"><button data-act="scan" ${this._scanning ? 'disabled' : ''}>${this._scanning ? 'Searching dashboards…' : 'Find floor3d cards in my dashboards'}</button></div>
-${found ? (found.length ? `<div class="found">${found.map((f, i) => `<div class="item"><div class="title"><b>${esc(f.label)}</b><button data-act="use-found" data-i="${i}">${c.card && JSON.stringify(c.card) === JSON.stringify(f.card) ? 'In use' : 'Use'}</button></div><div class="note">${esc(f.url)} · ${(f.card.entities || []).length} entities${f.card.look?.theme ? ` · ${esc(f.card.look.theme)} look` : ''}</div></div>`).join('')}</div>` : '<p class="note warn">No floor3d cards found in dashboards you can read. Paste a card configuration under <code>card:</code> in the YAML editor.</p>') : ''}
+${found ? (found.length ? `<div class="found">${found.map((f, i) => `<div class="item"><div class="title"><b>${esc(f.label)}</b><button data-act="use-found" data-i="${i}">${this._used === i || (this._used === undefined && c.card && JSON.stringify(c.card) === JSON.stringify(f.card)) ? 'In use' : 'Use'}</button></div><div class="note">${esc(f.url)} · ${(f.card.entities || []).length} entities${f.card.look?.theme ? ` · ${esc(f.card.look.theme)} look` : ''}</div>${f.unresolved?.length ? `<p class="note warn">${f.unresolved.length} entity reference${f.unresolved.length === 1 ? '' : 's'} could not be resolved from the dashboard's sources (${esc(f.unresolved.slice(0, 4).join(', '))}${f.unresolved.length > 4 ? ', …' : ''}); those rows will not work unless this rooms card is itself inside the same wrapper.</p>` : ''}</div>`).join('')}</div>` : '<p class="note warn">No floor3d cards found in dashboards you can read. Paste a card configuration under <code>card:</code> in the YAML editor.</p>') : ''}
+${c.card && tokenRoles(c.card).length ? `<p class="note warn">The model configuration contains ${tokenRoles(c.card).length} unresolved entity reference token${tokenRoles(c.card).length === 1 ? '' : 's'} (<code>[[entity:…]]</code>). Use “Find floor3d cards” and “Use” again to copy a resolved configuration.</p>` : ''}
 ${c.card?.objfile ? `<p class="note">Model: <code>${esc((c.card.path || '') + c.card.objfile)}</code> · ${(c.card.entities || []).length} entity rows. Changes to the original card are not copied; use “Use” again to refresh.</p>` : ''}`;
   }
   private _roomsSection(): string {
@@ -120,6 +123,7 @@ ${groups.map((g) => `<label>${esc(g)}</label><div class="swatches">${THEMES.filt
     const c = this._config;
     return `<div class="row"><label>Title<input type="text" data-field="title" value="${esc(c.title || '')}" data-key="dt"></label><label>Subtitle<input type="text" data-field="subtitle" value="${esc(c.subtitle || '')}" data-key="ds"></label></div>
 <div class="row"><label>Height (blank: the panel view's height, or 60vh)<input type="text" data-field="height" value="${esc(c.height ?? '')}" placeholder="calc(100vh - 56px)" data-key="dh"></label></div>
+<div class="row"><label class="check"><input type="checkbox" data-field="panel_lines" data-bool ${c.panel_lines ? 'checked' : ''}>Theme lines on text and picture panels</label><label>Edge lines skipped (<code>edge_skip</code>)<input type="text" data-field="edge_skip" value="${esc(c.edge_skip ?? '')}" placeholder="seams, floors, texts, images" data-key="des"></label></div>
 <div class="row"><label class="check"><input type="checkbox" data-field="pins" data-bool data-default-true ${c.pins !== false ? 'checked' : ''}>Room pins on the model</label><label class="check"><input type="checkbox" data-field="labels" data-bool ${c.labels ? 'checked' : ''}>Pins always show the room's name</label><label class="check"><input type="checkbox" data-field="keep_panel" data-bool ${c.keep_panel ? 'checked' : ''}>A tap outside the rooms keeps the panel open</label></div>
 <label class="check"><input type="checkbox" data-field="guest_mode" data-bool data-default-true ${c.guest_mode !== false ? 'checked' : ''}>Guest mode: locks can only be locked, garage doors and gates only closed, alarms are read-only, TV volume is capped</label>
 <div class="row"><label>Max volume (0–1)<input type="number" min="0" max="1" step="0.05" data-field="max_volume" data-num value="${esc(c.max_volume ?? '')}" placeholder="${c.guest_mode !== false ? '0.6' : '1'}" data-key="dv"></label><label>Thermostat min<input type="number" data-field="temperature_range.0" data-num value="${esc(c.temperature_range?.[0] ?? '')}" data-key="dmin"></label><label>Thermostat max<input type="number" data-field="temperature_range.1" data-num value="${esc(c.temperature_range?.[1] ?? '')}" data-key="dmax"></label></div>
@@ -161,6 +165,7 @@ ${groups.map((g) => `<label>${esc(g)}</label><div class="swatches">${THEMES.filt
     if (act === 'use-found') {
       const f = this._found![i];
       c.card = clone(f.card);
+      this._used = i;
       if (!c.theme && f.card.look?.theme && THEMES.some((t) => t.key === String(f.card.look.theme).toLowerCase())) c.theme = String(f.card.look.theme).toLowerCase();
       this._objects = null;
       this._emit();
@@ -196,21 +201,35 @@ ${groups.map((g) => `<label>${esc(g)}</label><div class="swatches">${THEMES.filt
     try {
       const boards: any[] = await this._hass.callWS({ type: 'lovelace/dashboards/list' }).catch(() => []);
       const targets = [{ url_path: null, title: 'Overview' }, ...boards];
+      // every dashboard first: a wrapper's tokens may resolve from another dashboard's sources
+      const configs = new Map<string, { title: string; cfg: any }>();
       for (const b of targets) {
-        let cfg: any;
-        try { cfg = await this._hass.callWS({ type: 'lovelace/config', url_path: b.url_path, force: false }); } catch { continue; }
-        const walk = (node: any, view: string): void => {
+        try { configs.set(dashboardKey(b.url_path), { title: b.title || b.url_path || 'Dashboard', cfg: await this._hass.callWS({ type: 'lovelace/config', url_path: b.url_path, force: false }) }); } catch { /* not readable */ }
+      }
+      const sources = new Map<string, Map<string, string>>();
+      const sourcesOf = (key: string): Map<string, string> => {
+        if (!sources.has(key)) sources.set(key, referenceSources(configs.get(key)?.cfg || {}));
+        return sources.get(key)!;
+      };
+      for (const [key, { title, cfg }] of configs) {
+        const walk = (node: any, view: string, scope: string): void => {
           if (!node || typeof node !== 'object') return;
-          if (Array.isArray(node)) { node.forEach((n) => walk(n, view)); return; }
+          if (Array.isArray(node)) { node.forEach((n) => walk(n, view, scope)); return; }
           if (typeof node.type === 'string' && /floor3d/i.test(node.type) && !/rooms-card/i.test(node.type) && typeof node.objfile === 'string') {
             const url = `${node.path || ''}${node.objfile}`;
-            const card = clone(node);
-            delete card.type; delete card.style; delete card.card_mod; delete card.view_layout; delete card.layout_options; delete card.grid_options;
-            found.push({ url, card, label: `${b.title || b.url_path || 'Dashboard'} › ${view || 'view'} · ${node.type.replace('custom:', '')}` });
+            let card = clone(node);
+            delete card.type; delete card.style; delete card.card_mod; delete card.view_layout; delete card.layout_options; delete card.grid_options; delete card.visibility;
+            // tokens of an entity-reference wrapper resolve from the sources of the wrapper's dashboard
+            let unresolved: string[] = [];
+            if (tokenRoles(card).length) ({ value: card, unresolved } = resolveTokens(card, sourcesOf(scope)));
+            found.push({ url, card, unresolved, label: `${title} › ${view || 'view'} · ${node.type.replace('custom:', '')}` });
+            return;
           }
-          for (const [k, v] of Object.entries(node)) walk(v, k === 'views' ? view : node.title && node.cards ? node.title : view);
+          // inside a wrapper, `card:` belongs to the wrapper's dashboard (default: the main one)
+          const inner = node.type === WRAPPER_TYPE ? dashboardKey(node.dashboard) : scope;
+          for (const [k, v] of Object.entries(node)) walk(v, k === 'views' ? view : node.title && node.cards ? node.title : view, k === 'card' ? inner : scope);
         };
-        (cfg.views || []).forEach((v: any) => walk(v, v.title || v.path));
+        (cfg.views || []).forEach((v: any) => walk(v, v.title || v.path, key));
       }
     } finally { this._scanning = false; }
     this._found = found;
