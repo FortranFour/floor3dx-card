@@ -28,10 +28,14 @@ const STYLE = `
 :host(.light){--f3r-ink:#1b2430;--f3r-muted:rgba(27,36,48,.7);--f3r-line:rgba(0,0,0,.14);--f3r-alpha:.6}
 *{box-sizing:border-box}button,input{font:inherit}button{cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;color:inherit}button:disabled{cursor:default;opacity:.45}button:focus-visible,input:focus-visible{outline:2px solid rgb(var(--f3r-accent));outline-offset:2px}ha-icon{width:22px;height:22px;flex:none;color:inherit;--mdc-icon-size:22px}
 .stage{position:absolute;inset:0;overflow:hidden;background:rgb(var(--f3r-stage))}
-.stage > .models{position:absolute;inset:0;display:flex;flex-direction:row}
+.stage > .models{position:absolute;inset:0;display:flex;flex-direction:row;gap:var(--f3r-gap,14px)}
 .stage > .models.column{flex-direction:column}
 .stage > .models > .model{position:relative;flex:1 1 0;min-width:0;min-height:0}
 .stage > .models > .model[hidden]{display:none}
+.stage > .models.many > .model + .model:not([hidden])::before{content:"";position:absolute;left:calc(var(--f3r-gap,14px) / -2);top:8%;bottom:8%;border-left:1px solid var(--f3r-line);pointer-events:none}
+.stage > .models.many.column > .model + .model:not([hidden])::before{left:8%;right:8%;top:calc(var(--f3r-gap,14px) / -2);bottom:auto;border-left:0;border-top:1px solid var(--f3r-line)}
+.stage > .models > .model > .caption{position:absolute;z-index:2;left:12px;bottom:10px;padding:3px 9px;border-radius:9px;background:var(--f3r-panel);color:var(--f3r-muted);font-size:12px;pointer-events:none;display:none}
+.stage > .models.many > .model > .caption{display:block}
 .stage > .models > .model ::part(card),.stage > .models > .model floor3dpro-card{display:block;width:100%;height:100%}
 .ui{position:absolute;inset:0;pointer-events:none}
 .ui > *{pointer-events:auto}
@@ -247,6 +251,10 @@ export class Floor3dxRoomsCard extends HTMLElement {
     const layout = this._config?.layout;
     const column = layout === 'column' || (layout !== 'row' && rect.width && rect.height && rect.height > rect.width);
     this._modelsHost.classList.toggle('column', !!column);
+    const shownCount = this._slots.filter((s) => this._active === ALL || s.id === this._active).length;
+    this._modelsHost.classList.toggle('many', shownCount > 1 && this._config?.model_labels !== false && this._config?.model_labels !== 'no');
+    const gap = Number(this._config?.models_gap);
+    if (Number.isFinite(gap) && gap >= 0) this._modelsHost.style.setProperty('--f3r-gap', gap + 'px'); else this._modelsHost.style.removeProperty('--f3r-gap');
     this._slots.forEach((s) => {
       const shown = this._active === ALL || s.id === this._active;
       if (s.host.hidden !== !shown) s.host.hidden = !shown;
@@ -315,11 +323,12 @@ export class Floor3dxRoomsCard extends HTMLElement {
       const cfg = this._embeddedConfig(def, defs[0].id);
       const key = cfg ? JSON.stringify(cfg) : '';
       const old = this._slots.find((s) => s.id === def.id);
-      if (old && old.key === key) { old.name = def.name; old.width = def.width; old.card = def.card; next.push(old); continue; }
+      if (old && old.key === key) { old.name = def.name; old.width = def.width; old.card = def.card; const cap = old.host.querySelector(':scope > .caption'); if (cap) cap.textContent = def.name; next.push(old); continue; }
       if (old) this._dropSlot(old);
       const host = document.createElement('div');
       host.className = 'model';
       host.dataset.model = def.id;
+      const caption = document.createElement('div'); caption.className = 'caption'; caption.textContent = def.name; host.appendChild(caption);
       const slot: Slot = { id: def.id, name: def.name, width: def.width, card: def.card, key, host, el: null, index: null, tints: [], home: null, poll: null };
       this._listen(slot);
       if (cfg) {

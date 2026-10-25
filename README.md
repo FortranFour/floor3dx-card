@@ -530,6 +530,8 @@ rooms:
 | `models` | several models in one card (2.5): a list of `{id, name, width, card}`, each `card` a floor3d card configuration; replaces `card:`. `width` is the share of the width when all are shown | |
 | `layout` | `row`, `column`: how the models are arranged when all are shown (2.5) | by the card's shape: side by side when wider than tall |
 | `models_menu` | `no`: no House / Garage / Both switcher on the card (2.5) | `yes` |
+| `models_gap` | px between the models when all are shown (2.5) | `14` |
+| `model_labels` | `no`: no divider line and no name caption in each view when all are shown (2.5) | `yes` |
 | `rooms[].model` | the `id` of the model the room is on (2.5) | the first model |
 | `object_tap` | what a single tap on an object bound to a `light` or `gesture` row does (2.5): `action` runs it (toggle the lamp) and leaves the room alone; `panel` opens the room's panel with that entity's tile highlighted; `room` selects the room, double-tap for the action | `action` |
 | `color_control` | `swatches`, `slider` (a hue slider, white beside it unless the light has a Warmth slider), `both` (2.5); per entity, `controls: [brightness, white, slider]` | `swatches` |
@@ -590,7 +592,7 @@ rooms:
     entities: [{ entity: light.garage }, { entity: cover.garage_door }, { entity: sensor.garage_temp }]
 ```
 
-In the editor, **Add another model** adds an entry and the found cards get a **Use for …** button; **Detect rooms** runs on every model. A model keeps its own `camera_position`: when all are shown each gets a narrower view, so a camera set for the full width may need to sit further back (or use Reset view).
+When all are shown, a gap (`models_gap`), a hairline and a small caption with each model's name separate the views (`model_labels: no` for none). In the editor, **Add another model** adds an entry, **Found cards go to** picks which model a found card is used for; **Detect rooms** runs on every model. A model keeps its own `camera_position`: when all are shown each gets a narrower view, so a camera set for the full width may need to sit further back (or use Reset view).
 
 **From outside the card** (2.5): `#model=garage&room=bay` in the dashboard URL, or `window.dispatchEvent(new CustomEvent('floor3dx-rooms-select', {detail: {model: 'garage', room: 'bay'}}))`, shows a model or opens a room — for a dashboard's own selector, or a notification's link. Names work as well as ids.
 
