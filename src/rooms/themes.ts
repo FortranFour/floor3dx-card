@@ -1,4 +1,4 @@
-// The rooms card's themes: the seven built-in looks and twenty-one preset palettes, each with the
+// The rooms card's themes: the seven built-in looks and the preset palettes, each with the
 // two colours the overlay needs (the stage it sits on, the edge colour it contrasts with). The
 // presets are the card's named palettes (look-palettes.ts), so the picture is the floor3dx look at those colours.
 import { STAGE, EDGE } from '../look';
@@ -12,6 +12,8 @@ export interface RoomsTheme {
   stage: string; // background (#rrggbb)
   edges: string; // line / accent colour (#rrggbb)
   light: boolean; // light stage: the overlay uses dark text on a pale panel
+  accent?: string; // the overlay's accent when not the edge colour (#rrggbb)
+  panel?: string; // the panel colour when not the stage (#rrggbb)
 }
 
 const hex = (rgb: number[]) => '#' + rgb.map((v) => v.toString(16).padStart(2, '0')).join('');
@@ -39,6 +41,8 @@ const palette = (p: LookPalette): RoomsTheme => ({
   stage: p.stage,
   edges: p.edges,
   light: luma(p.stage) > 0.5,
+  accent: p.accent,
+  panel: p.panel,
 });
 
 export const THEMES: RoomsTheme[] = [

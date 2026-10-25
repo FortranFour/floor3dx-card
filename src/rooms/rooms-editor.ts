@@ -1,11 +1,13 @@
 // Visual editor for floor3dx-rooms-card. The same four steps as floor3d-snapshot-card's editor:
-// pick a floor3d card from your dashboards, detect the rooms, choose a theme, display options.
-// Rooms are detected by the live preview card (it has the model loaded), over a window event.
+// pick a floor3d card from your dashboards (or several: a house and a garage), detect the rooms,
+// choose a theme, display options. Rooms are detected by the live preview card (it has the models
+// loaded), over a window event.
 import { THEMES } from './themes';
 import { Room, slug } from './rooms';
 import { esc } from './tiles';
 import { ROOMS_EDITOR_EVENT, ROOMS_PREVIEW_EVENT } from './rooms-card';
-import { referenceSources, resolveTokens, tokenRoles, dashboardKey, WRAPPER_TYPE } from './references';
+import { tokenRoles } from './references';
+import { scanDashboards, FoundCard } from './scan';
 
 const clone = (v: any) => JSON.parse(JSON.stringify(v ?? null));
 const ENTITY_DOMAINS = /^(light|switch|fan|cover|climate|media_player|lock|input_boolean|scene|script|sensor|binary_sensor|remote|button|input_button|vacuum|humidifier|valve|water_heater|alarm_control_panel)\./;
@@ -21,28 +23,35 @@ input[type=text],input[type=number],select{width:100%;box-sizing:border-box;min-
 .check{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--primary-text-color);min-height:32px}
 button{font:inherit;cursor:pointer;min-height:36px;padding:6px 12px;border-radius:8px;border:1px solid var(--divider-color,rgba(127,127,127,.35));background:transparent;color:var(--primary-color)}button.primary{background:var(--primary-color);border-color:var(--primary-color);color:var(--text-primary-color,#fff)}button.icon{min-height:30px;padding:2px 8px;color:var(--secondary-text-color)}button:disabled{opacity:.5;cursor:default}
 .note{font-size:12px;color:var(--secondary-text-color);line-height:1.5;margin:6px 0}.note.warn{color:var(--warning-color,#e69500)}.note.err{color:var(--error-color,#db4437)}
-.item{border:1px solid var(--divider-color,rgba(127,127,127,.2));border-radius:10px;padding:8px 10px;margin:8px 0}.item .title{display:flex;align-items:center;gap:8px}.item .title b{flex:1;font-weight:500;overflow-wrap:anywhere}
+.item{border:1px solid var(--divider-color,rgba(127,127,127,.2));border-radius:10px;padding:8px 10px;margin:8px 0}.item .title{display:flex;align-items:center;gap:8px}.item .title b{flex:1;font-weight:500;overflow-wrap:anywhere}.item.target{border-color:var(--primary-color)}
 .room>summary{padding:10px 12px}.room{margin:8px 0}.room .body{padding:0 12px 12px}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}.chip{display:inline-flex;align-items:center;gap:4px;padding:2px 4px 2px 10px;border-radius:14px;background:var(--secondary-background-color,rgba(127,127,127,.12));font-size:12px}.chip button{min-height:24px;padding:0 6px;border:0}
 .ent{display:grid;grid-template-columns:1fr 1fr auto;gap:6px;align-items:end;margin:6px 0}.ent .tools{display:flex;gap:2px}.row.pair{margin:0 0 4px 12px}.check.small{margin:0 0 8px 12px;min-height:26px;font-size:12px;color:var(--secondary-text-color)}
 .swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px;margin:8px 0}.sw{display:flex;flex-direction:column;align-items:stretch;gap:0;padding:0;border-radius:10px;overflow:hidden;border:2px solid transparent;background:transparent;color:var(--primary-text-color);min-height:0}.sw[aria-pressed=true]{border-color:var(--primary-color)}.sw .c{height:34px;display:flex;align-items:center;justify-content:center}.sw .c i{display:block;width:60%;height:2px}.sw .l{font-size:11px;padding:4px 2px;text-align:center;line-height:1.2}
 ha-icon{--mdc-icon-size:20px;width:20px;height:20px;color:var(--secondary-text-color)}
 .found{max-height:220px;overflow:auto}
+.group{margin:14px 0 4px;font-size:12px;font-weight:500;color:var(--secondary-text-color);text-transform:uppercase;letter-spacing:.4px}
 `;
+
+/** The editor's view of the models: `models:` or the single `card:` as a one-item list. */
+interface ModelItem { id: string; name: string; width?: number; card: any }
 
 class Floor3dxRoomsCardEditor extends HTMLElement {
   private _config: any;
   private _hass: any;
   private _open: Record<string, boolean> = { model: true, rooms: true, theme: false, display: false };
   private _roomOpen = new Set<string>();
-  private _found: any[] | null = null;
-  private _used: number | undefined;
+  private _found: FoundCard[] | null = null;
+  private _used = new Map<number, number>(); // model index → found index
+  private _target = 0; // the model a found card is used for
   private _scanning = false;
+  private _keep = false; // keep [[entity:…]] references when copying
   private _busy: string | null = null;
   private _msg: Record<string, [string, string]> = {};
-  private _objects: { floors: string[]; all: string[] } | null = null;
+  private _objects = new Map<string, { floors: string[]; all: string[] }>(); // by model id
   private _detectSensors = false;
   private _detectTimer: any;
+  private _detectLeft: string[] = [];
   private _onPreview = (e: Event) => this._fromPreview((e as CustomEvent).detail);
 
   constructor() {
@@ -55,7 +64,12 @@ class Floor3dxRoomsCardEditor extends HTMLElement {
     window.dispatchEvent(new CustomEvent(ROOMS_EDITOR_EVENT, { detail: { request: 'objects' } }));
   }
   disconnectedCallback(): void { window.removeEventListener(ROOMS_PREVIEW_EVENT, this._onPreview); clearTimeout(this._detectTimer); }
-  setConfig(config: any): void { this._config = clone(config) || {}; this._config.rooms ||= []; this._render(); }
+  setConfig(config: any): void {
+    this._config = clone(config) || {};
+    this._config.rooms ||= [];
+    if (!this._found && this._models().some((m) => m.card && tokenRoles(m.card).length)) this._keep = true;
+    this._render();
+  }
   set hass(hass: any) { const first = !this._hass; this._hass = hass; if (first) this._render(); }
 
   private _emit(): void {
@@ -64,19 +78,43 @@ class Floor3dxRoomsCardEditor extends HTMLElement {
     this._render();
   }
 
+  // ---- models --------------------------------------------------------------------------------
+  private _models(): ModelItem[] {
+    const c = this._config;
+    if (Array.isArray(c.models) && c.models.length) {
+      const taken = new Set<string>();
+      return c.models.map((m: any, i: number) => { const name = m?.name || `Model ${i + 1}`; const id = slug(m?.id || name, taken); taken.add(id); return { id, name, width: m?.width, card: m?.card }; });
+    }
+    return [{ id: 'model', name: c.title || 'Model', card: c.card }];
+  }
+  /** Writes the models back: one model stays `card:`, several become `models:`; rooms follow. */
+  private _setModels(list: ModelItem[]): void {
+    const c = this._config, rooms: Room[] = c.rooms;
+    if (list.length <= 1) {
+      c.card = list[0]?.card; if (!c.card) delete c.card;
+      delete c.models;
+      rooms.forEach((r) => delete r.model);
+    } else {
+      c.models = list.map((m) => { const o: any = { id: m.id, name: m.name }; if (Number(m.width) > 0) o.width = Number(m.width); o.card = m.card; return o; });
+      delete c.card;
+      rooms.forEach((r) => { if (!r.model || !list.some((m) => m.id === r.model)) r.model = list[0].id; });
+    }
+  }
+
   // ---- rendering ---------------------------------------------------------------------------
   private _render(): void {
     if (!this._config) return;
     const root = this.shadowRoot!, focus = (root.activeElement as HTMLElement | null)?.dataset?.key;
-    const c = this._config;
+    const c = this._config, models = this._models();
     const entities = this._hass ? Object.keys(this._hass.states).filter((id) => ENTITY_DOMAINS.test(id)).sort() : [];
-    const objects = this._objects?.all || [];
+    const objects = Array.from(new Set(Array.from(this._objects.values()).flatMap((o) => o.all)));
+    const modelBadge = models.length > 1 ? `${models.length} models` : models[0].card?.objfile ? String(models[0].card.objfile) : 'None';
     root.innerHTML = `<style>${STYLE}</style>
 <datalist id="f3r-entities">${entities.map((id) => `<option value="${esc(id)}">${esc(this._hass.states[id].attributes.friendly_name || '')}</option>`).join('')}</datalist>
 <datalist id="f3r-covers">${entities.filter((id) => id.startsWith('cover.')).map((id) => `<option value="${esc(id)}">${esc(this._hass.states[id].attributes.friendly_name || '')}</option>`).join('')}</datalist>
 <datalist id="f3r-remotes">${entities.filter((id) => id.startsWith('remote.')).map((id) => `<option value="${esc(id)}">${esc(this._hass.states[id].attributes.friendly_name || '')}</option>`).join('')}</datalist>
 <datalist id="f3r-objects">${objects.map((n) => `<option value="${esc(n)}"></option>`).join('')}</datalist>
-${this._section('model', '1 · Model', c.card?.objfile ? String(c.card.objfile) : 'None', c.card?.objfile ? '' : 'warn', this._modelSection())}
+${this._section('model', models.length > 1 ? '1 · Models' : '1 · Model', modelBadge, models.some((m) => !m.card?.objfile) ? 'warn' : '', this._modelSection())}
 ${this._section('rooms', '2 · Rooms', `${c.rooms.length} room${c.rooms.length === 1 ? '' : 's'}`, '', this._roomsSection())}
 ${this._section('theme', '3 · Theme', THEMES.find((t) => t.key === (c.theme || 'neon'))?.label || String(c.theme), '', this._themeSection())}
 ${this._section('display', '4 · Display', '', '', this._displaySection())}`;
@@ -86,29 +124,37 @@ ${this._section('display', '4 · Display', '', '', this._displaySection())}`;
     return `<details data-section="${id}" ${this._open[id] ? 'open' : ''}><summary>${title}<span class="badge ${badgeClass}">${esc(badge)}</span></summary><div class="body">${body}</div></details>`;
   }
   private _modelSection(): string {
-    const c = this._config, found = this._found;
-    return `<p class="note">The rooms card shows the live 3D model of an existing floor3dx-card (or floor3d-card / floor3dpro-card), with all of that card's lights, text frames, pictures, doors and shades. Pick the card; its configuration is copied in here and the two cards stay independent afterwards.</p>
-<div class="row"><button data-act="scan" ${this._scanning ? 'disabled' : ''}>${this._scanning ? 'Searching dashboards…' : 'Find floor3d cards in my dashboards'}</button></div>
-${found ? (found.length ? `<div class="found">${found.map((f, i) => `<div class="item"><div class="title"><b>${esc(f.label)}</b><button data-act="use-found" data-i="${i}">${this._used === i || (this._used === undefined && c.card && JSON.stringify(c.card) === JSON.stringify(f.card)) ? 'In use' : 'Use'}</button></div><div class="note">${esc(f.url)} · ${(f.card.entities || []).length} entities${f.card.look?.theme ? ` · ${esc(f.card.look.theme)} look` : ''}</div>${f.unresolved?.length ? `<p class="note warn">${f.unresolved.length} entity reference${f.unresolved.length === 1 ? '' : 's'} could not be resolved from the dashboard's sources (${esc(f.unresolved.slice(0, 4).join(', '))}${f.unresolved.length > 4 ? ', …' : ''}); those rows will not work unless this rooms card is itself inside the same wrapper.</p>` : ''}</div>`).join('')}</div>` : '<p class="note warn">No floor3d cards found in dashboards you can read. Paste a card configuration under <code>card:</code> in the YAML editor.</p>') : ''}
-${c.card && tokenRoles(c.card).length ? `<p class="note warn">The model configuration contains ${tokenRoles(c.card).length} unresolved entity reference token${tokenRoles(c.card).length === 1 ? '' : 's'} (<code>[[entity:…]]</code>). Use “Find floor3d cards” and “Use” again to copy a resolved configuration.</p>` : ''}
-${c.card?.objfile ? `<p class="note">Model: <code>${esc((c.card.path || '') + c.card.objfile)}</code> · ${(c.card.entities || []).length} entity rows. Changes to the original card are not copied; use “Use” again to refresh.</p>` : ''}`;
+    const models = this._models(), found = this._found, many = models.length > 1;
+    const target = models[Math.min(this._target, models.length - 1)];
+    const modelItem = (m: ModelItem, i: number) => `<div class="item ${many && i === this._target ? 'target' : ''}">
+${many ? `<div class="row"><label>Name<input type="text" data-model-field="name" data-i="${i}" value="${esc(m.name)}" data-key="mn${i}"></label><label>Width share (blank: equal)<input type="number" min="1" max="99" data-model-field="width" data-i="${i}" value="${esc(m.width ?? '')}" placeholder="50" data-key="mw${i}"></label></div>` : ''}
+<div class="row">${m.card?.objfile ? `<span class="note" style="flex:1">Model: <code>${esc((m.card.path || '') + m.card.objfile)}</code> · ${(m.card.entities || []).length} entity rows${tokenRoles(m.card).length ? ` · ${tokenRoles(m.card).length} reference token${tokenRoles(m.card).length === 1 ? '' : 's'}` : ''}</span>` : `<span class="note warn" style="flex:1">No card yet: find one below and press Use.</span>`}${many ? `<button class="icon" data-act="model-target" data-i="${i}">${i === this._target ? 'Receives “Use”' : 'Use a card for this one'}</button><button class="icon" data-act="model-remove" data-i="${i}">Remove</button>` : ''}</div></div>`;
+    return `<p class="note">The rooms card shows the live 3D model of an existing floor3dx-card (or floor3d-card / floor3dpro-card), with all of that card's lights, text frames, pictures, doors and shades. Pick the card; its configuration is copied in here and the two cards stay independent afterwards. A second model (a garage) gets its own view and a switcher on the card.</p>
+${models.map(modelItem).join('')}
+<div class="row"><button data-act="scan" ${this._scanning ? 'disabled' : ''}>${this._scanning ? 'Searching dashboards…' : 'Find floor3d cards in my dashboards'}</button><button data-act="model-add">Add another model</button></div>
+<label class="check"><input type="checkbox" id="keep-refs" ${this._keep ? 'checked' : ''}>Keep <code>&nbsp;[[entity:…]]&nbsp;</code> references (this rooms card will sit inside a dashboard-entity-reference wrapper)</label>
+${found ? (found.length ? `<div class="found">${found.map((f, i) => { const inUse = this._used.get(this._target) === i || (this._used.get(this._target) === undefined && target?.card && JSON.stringify(target.card) === JSON.stringify(this._keep ? f.raw : f.card)); return `<div class="item"><div class="title"><b>${esc(f.label)}</b><button data-act="use-found" data-i="${i}">${inUse ? 'In use' : many ? `Use for ${esc(target?.name || '')}` : 'Use'}</button></div><div class="note">${esc(f.url)} · ${(f.card.entities || []).length} entities${f.card.look?.theme ? ` · ${esc(f.card.look.theme)} look` : ''}${tokenRoles(f.raw).length ? ` · ${tokenRoles(f.raw).length} references` : ''}</div>${f.unresolved?.length && !this._keep ? `<p class="note warn">${f.unresolved.length} entity reference${f.unresolved.length === 1 ? '' : 's'} could not be resolved from the dashboard's sources (${esc(f.unresolved.slice(0, 4).join(', '))}${f.unresolved.length > 4 ? ', …' : ''}); those rows will not work unless this rooms card is itself inside the same wrapper.</p>` : ''}</div>`; }).join('')}</div>` : '<p class="note warn">No floor3d cards found in dashboards you can read. Paste a card configuration under <code>card:</code> in the YAML editor.</p>') : ''}
+${models.some((m) => m.card && tokenRoles(m.card).length) ? (this._keep ? `<p class="note">The configuration keeps its <code>[[entity:…]]</code> references: place this rooms card inside a <code>custom:dashboard-entity-reference</code> wrapper, which resolves them when the card is shown. Outside a wrapper the lamps stay dark and detection places rows by their type.</p>` : `<p class="note warn">The model configuration contains unresolved entity reference tokens (<code>[[entity:…]]</code>). Use “Find floor3d cards” and “Use” again to copy a resolved configuration, or tick “Keep references” if the card sits inside a wrapper.</p>`) : ''}
+${models.some((m) => m.card?.objfile) ? '<p class="note">Changes to the original card are not copied; use “Use” again to refresh.</p>' : ''}`;
   }
   private _roomsSection(): string {
-    const c = this._config;
-    return `<div class="row"><button class="primary" data-act="detect" ${!c.card?.objfile || this._busy ? 'disabled' : ''}>${this._busy === 'detect' ? 'Analysing the model…' : c.rooms.length ? 'Detect rooms again' : 'Detect rooms from the model'}</button><button data-act="room-add">Add room</button></div>
+    const c = this._config, models = this._models(), many = models.length > 1;
+    const ready = models.some((m) => m.card?.objfile);
+    const group = (m: ModelItem) => c.rooms.map((r: Room, i: number) => [r, i] as [Room, number]).filter(([r]) => (r.model || models[0].id) === m.id);
+    return `<div class="row"><button class="primary" data-act="detect" ${!ready || this._busy ? 'disabled' : ''}>${this._busy === 'detect' ? 'Analysing the model…' : c.rooms.length ? 'Detect rooms again' : 'Detect rooms from the model'}</button><button data-act="room-add">Add room</button></div>
 <label class="check"><input type="checkbox" id="detect-sensors" ${this._detectSensors ? 'checked' : ''}>Also add sensors (temperatures, doors, windows…) when detecting</label>
 <p class="note">Detection finds the floor objects named <code>room_N_1</code> (Sweet Home 3D exports), names each room from the floor3d entity bound to its floor, and puts the card's entities in the room they stand in. Rooms you have edited keep their edits; review below. Tap a room in the preview to check it.</p>
 ${this._msg.rooms ? `<p class="note ${this._msg.rooms[0]}">${esc(this._msg.rooms[1])}</p>` : ''}
-${c.rooms.map((r: Room, i: number) => this._roomEditor(r, i)).join('')}`;
+${many ? models.map((m) => `<div class="group">${esc(m.name)}</div>${group(m).map(([r, i]) => this._roomEditor(r, i)).join('') || '<p class="note">No rooms on this model yet.</p>'}`).join('') : c.rooms.map((r: Room, i: number) => this._roomEditor(r, i)).join('')}`;
   }
   private _roomEditor(r: Room, i: number): string {
-    const n = this._config.rooms.length, ents = r.entities || [];
+    const n = this._config.rooms.length, ents = r.entities || [], models = this._models();
     return `<details class="room item" data-room="${i}" ${this._roomOpen.has(r.id) ? 'open' : ''}><summary><ha-icon icon="${esc(r.icon || 'mdi:door-open')}"></ha-icon>${esc(r.name || r.id)}<span class="badge">${ents.length} entit${ents.length === 1 ? 'y' : 'ies'}</span></summary><div class="body">
-<div class="row"><label>Name<input type="text" data-field="rooms.${i}.name" value="${esc(r.name || '')}" data-key="rn${i}"></label><label>Icon<input type="text" data-field="rooms.${i}.icon" value="${esc(r.icon || '')}" placeholder="mdi:sofa-outline" data-key="ri${i}"></label></div>
+<div class="row"><label>Name<input type="text" data-field="rooms.${i}.name" value="${esc(r.name || '')}" data-key="rn${i}"></label><label>Icon<input type="text" data-field="rooms.${i}.icon" value="${esc(r.icon || '')}" placeholder="mdi:sofa-outline" data-key="ri${i}"></label>${models.length > 1 ? `<label>Model<select data-field="rooms.${i}.model" data-key="rm${i}">${models.map((m) => `<option value="${esc(m.id)}" ${(r.model || models[0].id) === m.id ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}</select></label>` : ''}</div>
 <label>Floor objects (tap target, tint and pin)</label><div class="chips">${(r.floors || []).map((f, j) => `<span class="chip">${esc(f)}<button data-act="floor-remove" data-i="${i}" data-j="${j}" title="Remove">✕</button></span>`).join('') || '<span class="note">None: the room is reachable from the Rooms menu only.</span>'}</div>
 <div class="row"><label>Add floor object<input type="text" list="f3r-objects" placeholder="room_3_1" data-key="rf${i}" id="floor-${i}"></label><button data-act="floor-add" data-i="${i}">Add</button></div>
 <label>Entities</label>
-${ents.map((e: any, j) => `<div class="ent"><label>Entity<input type="text" list="f3r-entities" data-field="rooms.${i}.entities.${j}.entity" value="${esc(e.entity)}" data-key="re${i}-${j}"></label><label>Label<input type="text" data-field="rooms.${i}.entities.${j}.name" value="${esc(e.name || '')}" placeholder="${esc(this._hass?.states[e.entity]?.attributes?.friendly_name || '')}" data-key="rl${i}-${j}"></label><div class="tools"><button class="icon" data-act="ent-up" data-i="${i}" data-j="${j}" ${j ? '' : 'disabled'} title="Move up">↑</button><button class="icon" data-act="ent-remove" data-i="${i}" data-j="${j}" title="Remove">✕</button></div></div>${this._pairing(e, i, j)}${this._hass && e.entity && !this._hass.states[e.entity] ? `<p class="note warn">${esc(e.entity)} doesn't exist.</p>` : ''}${this._hass ? [e.dimmer, e.remote, e.top_entity].filter((x: string) => x && !this._hass.states[x]).map((x: string) => `<p class="note warn">${esc(x)} doesn't exist.</p>`).join('') : ''}`).join('')}
+${ents.map((e: any, j) => `<div class="ent"><label>Entity<input type="text" list="f3r-entities" data-field="rooms.${i}.entities.${j}.entity" value="${esc(e.entity)}" data-key="re${i}-${j}"></label><label>Label<input type="text" data-field="rooms.${i}.entities.${j}.name" value="${esc(e.name || '')}" placeholder="${esc(this._hass?.states[e.entity]?.attributes?.friendly_name || '')}" data-key="rl${i}-${j}"></label><div class="tools"><button class="icon" data-act="ent-up" data-i="${i}" data-j="${j}" ${j ? '' : 'disabled'} title="Move up">↑</button><button class="icon" data-act="ent-remove" data-i="${i}" data-j="${j}" title="Remove">✕</button></div></div>${this._pairing(e, i, j)}${this._hass && e.entity && !/\[\[/.test(e.entity) && !this._hass.states[e.entity] ? `<p class="note warn">${esc(e.entity)} doesn't exist.</p>` : ''}${this._hass ? [e.dimmer, e.remote, e.top_entity].filter((x: string) => x && !/\[\[/.test(x) && !this._hass.states[x]).map((x: string) => `<p class="note warn">${esc(x)} doesn't exist.</p>`).join('') : ''}`).join('')}
 <div class="row"><label>Add entity<input type="text" list="f3r-entities" placeholder="light.kitchen" data-key="ra-${i}" id="ent-${i}"></label><button data-act="ent-add" data-i="${i}">Add</button></div>
 <div class="row"><button class="icon" data-act="room-show" data-i="${i}">Show in preview</button><button class="icon" data-act="room-up" data-i="${i}" ${i ? '' : 'disabled'}>↑ Move up</button><button class="icon" data-act="room-down" data-i="${i}" ${i < n - 1 ? '' : 'disabled'}>↓ Move down</button><button class="icon" data-act="room-remove" data-i="${i}">Delete room</button></div>
 </div></details>`;
@@ -133,18 +179,21 @@ ${groups.map((g) => `<label>${esc(g)}</label><div class="swatches">${THEMES.filt
 <div class="row"><label class="check"><input type="checkbox" data-field="room_colors" data-bool ${this._config.room_colors ? 'checked' : ''}>Tint every room's floor in its own pastel colour</label></div>`;
   }
   private _displaySection(): string {
-    const c = this._config;
+    const c = this._config, many = this._models().length > 1;
+    const sel = (field: string, label: string, opts: [string, string][], cur: string, key: string) => `<label>${label}<select data-field="${field}" data-key="${key}">${opts.map(([v, t]) => `<option value="${v}" ${cur === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>`;
     return `<div class="row"><label>Title<input type="text" data-field="title" value="${esc(c.title || '')}" data-key="dt"></label><label>Subtitle<input type="text" data-field="subtitle" value="${esc(c.subtitle || '')}" data-key="ds"></label></div>
 <div class="row"><label>Height (blank: the panel view's height, or 60vh)<input type="text" data-field="height" value="${esc(c.height ?? '')}" placeholder="calc(100vh - 56px)" data-key="dh"></label></div>
+<div class="row">${sel('object_tap', 'A tap on an object bound to a light or a gesture', [['', 'Runs its action (toggle the lamp); the room stays as it is'], ['panel', 'Opens the room panel with that tile highlighted'], ['room', 'Selects the room; double-tap for the action']], c.object_tap || '', 'dot')}</div>
+${many ? `<div class="row">${sel('layout', 'When every model is shown', [['', 'Side by side on a wide card, stacked on a tall one'], ['row', 'Side by side'], ['column', 'Stacked']], c.layout || '', 'dl')}<label class="check"><input type="checkbox" data-field="models_menu" data-bool data-default-true ${c.models_menu !== false ? 'checked' : ''}>Model switcher on the card</label></div>` : ''}
 <div class="row"><label class="check"><input type="checkbox" data-field="panel_lines" data-bool ${c.panel_lines ? 'checked' : ''}>Theme lines on text and picture panels</label><label>Edge lines skipped (<code>edge_skip</code>)<input type="text" data-field="edge_skip" value="${esc(c.edge_skip ?? '')}" placeholder="seams, floors, ceilings, texts, images" data-key="des"></label></div>
 <div class="row"><label class="check"><input type="checkbox" data-field="pins" data-bool data-default-true ${c.pins !== false ? 'checked' : ''}>Room pins on the model</label><label class="check"><input type="checkbox" data-field="labels" data-bool ${c.labels ? 'checked' : ''}>Pins always show the room's name</label><label class="check"><input type="checkbox" data-field="keep_panel" data-bool ${c.keep_panel ? 'checked' : ''}>A tap outside the rooms keeps the panel open</label></div>
 <div class="row"><label>Panel opacity: <span data-unit="">${Math.round(Number(c.panel_opacity ?? 0.55) * 100)}%</span><input type="range" min="0.2" max="0.95" step="0.05" data-field="panel_opacity" data-num data-pct value="${esc(c.panel_opacity ?? 0.55)}" data-key="dpo"></label></div>
-<div class="row"><label class="check"><input type="checkbox" data-field="tint_on" data-bool ${c.tint_on ? 'checked' : ''}>Tint the floor of rooms with something on (the lamps show it themselves)</label></div>
-<div class="row"><label class="check"><input type="checkbox" data-field="brightness_slider" data-bool data-default-true ${c.brightness_slider !== false ? 'checked' : ''}>Brightness slider</label><label class="check"><input type="checkbox" data-field="white_slider" data-bool data-default-true ${c.white_slider !== false ? 'checked' : ''}>Warmth slider</label><label>Colour swatches<select data-field="color_swatches" data-key="dcs"><option value="" ${c.color_swatches === undefined ? 'selected' : ''}>Unless guest mode is on</option><option value="true" ${c.color_swatches === true ? 'selected' : ''}>Always</option><option value="false" ${c.color_swatches === false ? 'selected' : ''}>Never</option></select></label></div>
+<div class="row"><label class="check"><input type="checkbox" data-field="tint_on" data-bool ${c.tint_on ? 'checked' : ''}>Tint the floor of rooms with something on (the lamps show it themselves)</label><label class="check"><input type="checkbox" data-field="sensor_tiles" data-bool ${c.sensor_tiles ? 'checked' : ''}>Sensors as tiles (instead of a line of readings under the room's name)</label></div>
+<div class="row"><label class="check"><input type="checkbox" data-field="brightness_slider" data-bool data-default-true ${c.brightness_slider !== false ? 'checked' : ''}>Brightness slider</label><label class="check"><input type="checkbox" data-field="white_slider" data-bool data-default-true ${c.white_slider !== false ? 'checked' : ''}>Warmth slider</label><label>Colour swatches<select data-field="color_swatches" data-key="dcs"><option value="" ${c.color_swatches === undefined ? 'selected' : ''}>Unless guest mode is on</option><option value="true" ${c.color_swatches === true ? 'selected' : ''}>Always</option><option value="false" ${c.color_swatches === false ? 'selected' : ''}>Never</option></select></label>${sel('color_control', 'Colour control', [['', 'Swatches'], ['slider', 'Hue slider'], ['both', 'Slider with the swatches as presets']], c.color_control || '', 'dcc')}</div>
 <label class="check"><input type="checkbox" data-field="guest_mode" data-bool data-default-true ${c.guest_mode !== false ? 'checked' : ''}>Guest mode: locks can only be locked, garage doors and gates only closed, alarms are read-only, TV volume is capped</label>
 <div class="row"><label>Guest mode follows this switch (optional)<input type="text" list="f3r-entities" data-field="guest_mode_entity" value="${esc(c.guest_mode_entity || '')}" placeholder="input_boolean.guest_mode" data-key="dge"></label><label>Thermostats in guest mode<select data-field="guest_thermostat" data-key="dgt">${[['', 'Setpoint and power'], ['setpoint', 'Setpoint only'], ['view', 'View only'], ['full', 'Everything']].map(([v, t]) => `<option value="${v}" ${(c.guest_thermostat || '') === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label></div>
 <div class="row"><label>Max volume (0–1)<input type="number" min="0" max="1" step="0.05" data-field="max_volume" data-num value="${esc(c.max_volume ?? '')}" placeholder="${c.guest_mode !== false ? '0.6' : '1'}" data-key="dv"></label><label>Thermostat min<input type="number" data-field="temperature_range.0" data-num value="${esc(c.temperature_range?.[0] ?? '')}" data-key="dmin"></label><label>Thermostat max<input type="number" data-field="temperature_range.1" data-num value="${esc(c.temperature_range?.[1] ?? '')}" data-key="dmax"></label></div>
-<p class="note">Double-tap on the model still does what the floor3dx card does (toggle a lamp, open a camera). A single tap selects the room. A dashboard is not a security boundary: give guests a non-admin Home Assistant user.</p>`;
+<p class="note">A single tap on a floor, a wall or a piece of furniture selects the room. A tap on a lamp (an object bound to a light or a gesture) does what is set above. Other dashboards can open a model or a room with <code>#model=garage&amp;room=bay</code> in the URL. A dashboard is not a security boundary: give guests a non-admin Home Assistant user.</p>`;
   }
 
   // ---- events ------------------------------------------------------------------------------
@@ -155,10 +204,23 @@ ${groups.map((g) => `<label>${esc(g)}</label><div class="swatches">${THEMES.filt
       if (d.dataset?.section) this._open[d.dataset.section] = d.open;
       if (d.dataset?.room !== undefined) { const id = this._config.rooms[Number(d.dataset.room)]?.id; if (id) d.open ? this._roomOpen.add(id) : this._roomOpen.delete(id); }
     }, true);
-    root.addEventListener('change', (e) => { const t = e.target as HTMLInputElement; if (t.id === 'detect-sensors') { this._detectSensors = t.checked; return; } this._field(t); });
+    root.addEventListener('change', (e) => {
+      const t = e.target as HTMLInputElement;
+      if (t.id === 'detect-sensors') { this._detectSensors = t.checked; return; }
+      if (t.id === 'keep-refs') { this._keep = t.checked; this._render(); return; }
+      if (t.dataset?.modelField) { this._modelField(t); return; }
+      this._field(t);
+    });
     root.addEventListener('input', (e) => { const el = e.target as HTMLInputElement; if (el.type !== 'range') return; const u = el.closest('label')?.querySelector('[data-unit]'); if (u) u.textContent = el.dataset.pct !== undefined ? `${Math.round(Number(el.value) * 100)}%` : el.value; });
     root.addEventListener('keydown', (e) => { const t = e.target as HTMLElement; if ((e as KeyboardEvent).key === 'Enter' && t.id?.match(/^(ent-|floor-)/)) { e.preventDefault(); (t.closest('.row')?.querySelector('button') as HTMLButtonElement | null)?.click(); } });
     root.addEventListener('click', (e) => { const b = (e.target as HTMLElement).closest('button[data-act]') as HTMLButtonElement | null; if (b && !b.disabled) this._act(b.dataset.act as string, b.dataset as any); });
+  }
+  private _modelField(el: HTMLInputElement): void {
+    const list = this._models(), i = Number(el.dataset.i), m = list[i]; if (!m) return;
+    if (el.dataset.modelField === 'name') { const name = el.value.trim() || `Model ${i + 1}`; const oldId = m.id; m.name = name; m.id = slug(name, new Set(list.filter((x) => x !== m).map((x) => x.id))); this._config.rooms.forEach((r: Room) => { if (r.model === oldId) r.model = m.id; }); if (this._used.has(i)) { /* keep */ } }
+    if (el.dataset.modelField === 'width') m.width = el.value === '' ? undefined : Number(el.value);
+    this._setModels(list);
+    this._emit();
   }
   private _field(el: HTMLInputElement): void {
     const path = el.dataset?.field; if (!path) return;
@@ -182,19 +244,36 @@ ${groups.map((g) => `<label>${esc(g)}</label><div class="swatches">${THEMES.filt
     const c = this._config, i = Number(d.i), j = Number(d.j), rooms: Room[] = c.rooms;
     if (act === 'scan') { this._scan(); return; }
     if (act === 'use-found') {
-      const f = this._found![i];
-      c.card = clone(f.card);
-      this._used = i;
-      if (!c.theme && f.card.look?.theme && THEMES.some((t) => t.key === String(f.card.look.theme).toLowerCase())) c.theme = String(f.card.look.theme).toLowerCase();
-      this._objects = null;
+      const f = this._found![i], list = this._models(), t = Math.min(this._target, list.length - 1), m = list[t];
+      m.card = clone(this._keep ? f.raw : f.card);
+      if (list.length > 1 && f.model && /^Model \d+$/.test(m.name)) { m.name = f.model; m.id = slug(m.name, new Set(list.filter((x) => x !== m).map((x) => x.id))); }
+      this._used.set(t, i);
+      this._setModels(list);
+      if (!c.theme && f.card.look?.theme && THEMES.some((th) => th.key === String(f.card.look.theme).toLowerCase())) c.theme = String(f.card.look.theme).toLowerCase();
+      this._objects.delete(m.id);
       this._emit();
       // the preview card reloads the model; ask for its objects when it is ready
       clearTimeout(this._detectTimer);
       this._detectTimer = setTimeout(() => window.dispatchEvent(new CustomEvent(ROOMS_EDITOR_EVENT, { detail: { request: 'objects' } })), 4000);
       return;
     }
+    if (act === 'model-add') {
+      const list = this._models(); const n = list.length + 1;
+      list.push({ id: slug(`model-${n}`, new Set(list.map((m) => m.id))), name: `Model ${n}`, card: undefined });
+      this._target = list.length - 1;
+      this._setModels(list); this._emit();
+      if (!this._found) this._scan();
+      return;
+    }
+    if (act === 'model-target') { this._target = i; this._render(); return; }
+    if (act === 'model-remove') {
+      const list = this._models(); const [gone] = list.splice(i, 1);
+      c.rooms = rooms.filter((r) => (r.model || gone.id) !== gone.id || list.length === 0);
+      this._used.delete(i); this._target = 0;
+      this._setModels(list); this._emit(); return;
+    }
     if (act === 'theme') { c.theme = d.theme; if (c.theme === 'neon') delete c.theme; this._emit(); return; }
-    if (act === 'room-add') { const id = slug('room', new Set(rooms.map((r) => r.id))); rooms.push({ id, name: 'New room', floors: [], entities: [] }); this._roomOpen.add(id); this._emit(); return; }
+    if (act === 'room-add') { const id = slug('room', new Set(rooms.map((r) => r.id))); const room: Room = { id, name: 'New room', floors: [], entities: [] }; const list = this._models(); if (list.length > 1) room.model = list[Math.min(this._target, list.length - 1)].id; rooms.push(room); this._roomOpen.add(id); this._emit(); return; }
     if (act === 'room-remove') { rooms.splice(i, 1); this._emit(); return; }
     if (act === 'room-up' && i) { [rooms[i - 1], rooms[i]] = [rooms[i], rooms[i - 1]]; this._emit(); return; }
     if (act === 'room-down' && i < rooms.length - 1) { [rooms[i + 1], rooms[i]] = [rooms[i], rooms[i + 1]]; this._emit(); return; }
@@ -216,72 +295,50 @@ ${groups.map((g) => `<label>${esc(g)}</label><div class="swatches">${THEMES.filt
   // ---- the dashboards' floor3d cards ------------------------------------------------------
   private async _scan(): Promise<void> {
     this._scanning = true; this._render();
-    const found: any[] = [];
-    try {
-      const boards: any[] = await this._hass.callWS({ type: 'lovelace/dashboards/list' }).catch(() => []);
-      const targets = [{ url_path: null, title: 'Overview' }, ...boards];
-      // every dashboard first: a wrapper's tokens may resolve from another dashboard's sources
-      const configs = new Map<string, { title: string; cfg: any }>();
-      for (const b of targets) {
-        try { configs.set(dashboardKey(b.url_path), { title: b.title || b.url_path || 'Dashboard', cfg: await this._hass.callWS({ type: 'lovelace/config', url_path: b.url_path, force: false }) }); } catch { /* not readable */ }
-      }
-      const sources = new Map<string, Map<string, string>>();
-      const sourcesOf = (key: string): Map<string, string> => {
-        if (!sources.has(key)) sources.set(key, referenceSources(configs.get(key)?.cfg || {}));
-        return sources.get(key)!;
-      };
-      for (const [key, { title, cfg }] of configs) {
-        const walk = (node: any, view: string, scope: string): void => {
-          if (!node || typeof node !== 'object') return;
-          if (Array.isArray(node)) { node.forEach((n) => walk(n, view, scope)); return; }
-          if (typeof node.type === 'string' && /floor3d/i.test(node.type) && !/rooms-card/i.test(node.type) && typeof node.objfile === 'string') {
-            const url = `${node.path || ''}${node.objfile}`;
-            let card = clone(node);
-            delete card.type; delete card.style; delete card.card_mod; delete card.view_layout; delete card.layout_options; delete card.grid_options; delete card.visibility;
-            // tokens of an entity-reference wrapper resolve from the sources of the wrapper's dashboard
-            let unresolved: string[] = [];
-            if (tokenRoles(card).length) ({ value: card, unresolved } = resolveTokens(card, sourcesOf(scope)));
-            found.push({ url, card, unresolved, label: `${title} › ${view || 'view'} · ${node.type.replace('custom:', '')}` });
-            return;
-          }
-          // inside a wrapper, `card:` belongs to the wrapper's dashboard (default: the main one)
-          const inner = node.type === WRAPPER_TYPE ? dashboardKey(node.dashboard) : scope;
-          for (const [k, v] of Object.entries(node)) walk(v, k === 'views' ? view : node.title && node.cards ? node.title : view, k === 'card' ? inner : scope);
-        };
-        (cfg.views || []).forEach((v: any) => walk(v, v.title || v.path, key));
-      }
-    } finally { this._scanning = false; }
-    this._found = found;
+    try { this._found = await scanDashboards(this._hass, new Set(['floor3d'])); }
+    catch { this._found = []; }
+    finally { this._scanning = false; }
     this._render();
   }
 
   // ---- detection, by the preview card -----------------------------------------------------
   private _detect(): void {
     this._busy = 'detect'; this._msg = {}; this._render();
-    window.dispatchEvent(new CustomEvent(ROOMS_EDITOR_EVENT, { detail: { request: 'detect', sensors: this._detectSensors } }));
+    const models = this._models().filter((m) => m.card?.objfile);
+    this._detectLeft = models.map((m) => m.id);
+    models.forEach((m, n) => setTimeout(() => window.dispatchEvent(new CustomEvent(ROOMS_EDITOR_EVENT, { detail: { request: 'detect', sensors: this._detectSensors, model: m.id } })), n * 150));
     clearTimeout(this._detectTimer);
     this._detectTimer = setTimeout(() => { if (this._busy === 'detect') { this._busy = null; this._msg = { rooms: ['err', 'No answer from the preview: is the model still loading? Try again in a moment.'] }; this._render(); } }, 15000);
   }
   private _fromPreview(detail: any): void {
     if (!detail) return;
-    if (detail.objects) { this._objects = detail.objects; if (this._busy !== 'detect') this._render(); }
+    if (detail.objects) { this._objects.set(detail.model || 'model', detail.objects); if (this._busy !== 'detect') this._render(); }
     if (this._busy !== 'detect') return;
     if (detail.error) { this._busy = null; this._msg = { rooms: ['err', detail.error] }; this._render(); return; }
     if (!detail.rooms) return;
-    clearTimeout(this._detectTimer);
-    this._busy = null;
+    const models = this._models(), many = models.length > 1;
+    const modelId: string = detail.model && models.some((m) => m.id === detail.model) ? detail.model : models[0].id;
     const proposed: Room[] = detail.rooms;
-    if (!proposed.length) { this._msg = { rooms: ['warn', 'No room_N_1 floor objects found. Add rooms by hand and pick their floor objects.'] }; this._render(); return; }
-    const existing = new Map<string, Room>(this._config.rooms.map((r: Room) => [JSON.stringify(r.floors || []), r]));
-    const taken = new Set<string>();
-    this._config.rooms = proposed.map((p) => {
+    const mine = (r: Room) => (r.model || models[0].id) === modelId;
+    const existing = new Map<string, Room>(this._config.rooms.filter(mine).map((r: Room) => [JSON.stringify(r.floors || []), r]));
+    const taken = new Set<string>(this._config.rooms.filter((r: Room) => !mine(r)).map((r: Room) => r.id));
+    const merged = proposed.map((p) => {
       const keep = existing.get(JSON.stringify(p.floors || []));
       const room: Room = keep ? { ...keep, entities: keep.entities?.length ? keep.entities : p.entities } : p;
       room.id = slug(room.id || room.name || 'room', taken); taken.add(room.id);
+      if (many) room.model = modelId; else delete room.model;
       return room;
-    }).concat(this._config.rooms.filter((r: Room) => !(r.floors || []).length));
+    }).concat(this._config.rooms.filter((r: Room) => mine(r) && !(r.floors || []).length));
+    // this model's rooms are replaced in place; the other models' rooms stay where they are
+    const others = this._config.rooms.filter((r: Room) => !mine(r));
+    this._config.rooms = many ? [...others.filter((r: Room) => models.findIndex((m) => m.id === r.model) < models.findIndex((m) => m.id === modelId)), ...merged, ...others.filter((r: Room) => models.findIndex((m) => m.id === r.model) > models.findIndex((m) => m.id === modelId))] : merged;
+    this._detectLeft = this._detectLeft.filter((id) => id !== modelId);
+    if (!proposed.length) this._msg = { rooms: ['warn', `No room_N_1 floor objects found${many ? ` on ${models.find((m) => m.id === modelId)?.name}` : ''}. Add rooms by hand and pick their floor objects.`] };
+    if (this._detectLeft.length) { this._render(); return; }
+    clearTimeout(this._detectTimer);
+    this._busy = null;
     const ents = this._config.rooms.reduce((n: number, r: Room) => n + (r.entities?.length || 0), 0);
-    this._msg = { rooms: ['', `Found ${proposed.length} rooms and placed ${ents} of the card's entities in them.`] };
+    if (this._config.rooms.length) this._msg = { rooms: ['', `Found ${this._config.rooms.filter((r: Room) => (r.floors || []).length).length} rooms and placed ${ents} of the card's entities in them.`] };
     this._open.rooms = true;
     this._emit();
   }

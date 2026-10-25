@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { PALETTES, paletteOf } from '../../src/look-palettes';
 import { Look } from '../../src/look';
 
-test('33 palettes with complete colours and unique keys', () => {
-  assert.equal(PALETTES.length, 33);
-  assert.equal(new Set(PALETTES.map((p) => p.key)).size, 33);
+test('34 palettes with complete colours and unique keys', () => {
+  assert.equal(PALETTES.length, 34);
+  assert.equal(new Set(PALETTES.map((p) => p.key)).size, 34);
   for (const p of PALETTES) for (const k of ['dark', 'light', 'walls', 'floors', 'edges', 'stage']) assert.match(String((p as any)[k]), /^#[0-9a-f]{6}$/, `${p.key}.${k}`);
 });
 

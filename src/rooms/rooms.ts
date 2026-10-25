@@ -17,6 +17,7 @@ export interface Room {
   color?: string;
   floors?: string[]; // object names
   entities?: RoomEntity[];
+  model?: string; // the model (of `models:`) the room is on; the first when absent
 }
 
 export const FLOOR_RE = /^room_(\d+)_1$/;

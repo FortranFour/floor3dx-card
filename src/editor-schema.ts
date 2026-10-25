@@ -82,6 +82,7 @@ export const SECTIONS: Section[] = [
     title: '3D model',
     icon: 'mdi:cube-outline',
     content: () => [
+      'find_rooms',
       [text('name'), bool('header')],
       [text('path'), row(text('objfile'), text('mtlfile')), text('objectlist')],
       [row(text('draco_path'), text('basis_path'))],

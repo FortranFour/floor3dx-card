@@ -22,12 +22,15 @@ import {
   mdiCursorDefaultClickOutline,
   mdiDelete,
   mdiDragHorizontalVariant,
+  mdiMagnify,
   mdiPencil,
   mdiPlus,
   mdiRefresh,
 } from '@mdi/js';
 import { cleanConfig, matchObjects, normalizeConfig, objectPattern } from './config';
 import { CARD_VERSION, EDITOR_EVENT, PREVIEW_EVENT } from './const';
+import { scanDashboards, FoundCard } from './rooms/scan';
+import { tokenRoles } from './rooms/references';
 import {
   ARRAY_VECTORS,
   BLOCK_SWITCHES,
@@ -160,6 +163,8 @@ export class Floor3dxCardEditor extends LitElement implements LovelaceCardEditor
   @state() private _modelObjects: string[] = [];
   @state() private _listObjects: string[] = [];
   @state() private _picking?: PickTarget;
+  @state() private _foundRooms?: FoundCard[];
+  @state() private _scanningRooms = false;
   private _held?: string;
   private _internal?: any;
   private _classic?: any;
@@ -499,6 +504,8 @@ export class Floor3dxCardEditor extends LitElement implements LovelaceCardEditor
           return this._renderDaylight(data, onChange);
         case 'look_custom':
           return this._renderLookCustom(data, onChange);
+        case 'find_rooms':
+          return this._renderFindRooms();
         case 'use_current_view':
           return html`
             <ha-button appearance="plain" size="s" @click=${() => this._useCurrentView()}>
@@ -521,6 +528,49 @@ export class Floor3dxCardEditor extends LitElement implements LovelaceCardEditor
           return html`<div class="heading">${item}</div>`;
       }
     });
+  }
+
+  // A rooms card on one of the dashboards carries a complete floor3d card configuration under
+  // `card:` (or one per model): the way back from a rooms card to a regular card.
+  private _renderFindRooms(): TemplateResult {
+    const found = this._foundRooms;
+    return html`
+      <div class="find-rooms">
+        <ha-button appearance="plain" size="s" .disabled=${this._scanningRooms} @click=${() => this._scanRooms()}>
+          <ha-svg-icon slot="start" .path=${mdiMagnify}></ha-svg-icon>${this._scanningRooms ? 'Searching dashboards…' : 'Find rooms cards in my dashboards'}
+        </ha-button>
+        ${found
+          ? found.length
+            ? found.map(
+                (f) => html`
+                  <div class="found">
+                    <div class="found-title">${f.label}</div>
+                    <div class="found-note">${f.url} · ${(f.card.entities || []).length} entities${tokenRoles(f.raw).length ? ` · ${tokenRoles(f.raw).length} references` : ''}</div>
+                    <div class="found-actions">
+                      <ha-button size="s" @click=${() => this._useFound(f.card)}>Use</ha-button>
+                      ${tokenRoles(f.raw).length ? html`<ha-button size="s" appearance="plain" @click=${() => this._useFound(f.raw)}>Use with references</ha-button>` : nothing}
+                    </div>
+                  </div>
+                `,
+              )
+            : html`<div class="hint">No rooms cards found in dashboards you can read.</div>`
+          : nothing}
+      </div>
+    `;
+  }
+  private async _scanRooms(): Promise<void> {
+    this._scanningRooms = true;
+    try { this._foundRooms = await scanDashboards(this.hass, new Set(['rooms'])); }
+    catch { this._foundRooms = []; }
+    finally { this._scanningRooms = false; }
+  }
+  private _useFound(card: any): void {
+    const next = { type: this._config?.type, ...JSON.parse(JSON.stringify(card)) };
+    this._foundRooms = undefined;
+    this._expanded = ['model'];
+    this._update(next);
+    this._loadObjectList();
+    this._toPreview({ request: 'reload' });
   }
 
   // The daylight block: a button to add or remove it, then its fields and nested colour blocks.
@@ -877,6 +927,11 @@ export class Floor3dxCardEditor extends LitElement implements LovelaceCardEditor
       :host {
         display: block;
       }
+      .find-rooms { margin: 0 0 8px; }
+      .found { border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.3)); border-radius: 10px; padding: 8px 10px; margin: 6px 0; }
+      .found-title { font-weight: 500; overflow-wrap: anywhere; }
+      .found-note { font-size: 12px; color: var(--secondary-text-color); margin: 2px 0 6px; }
+      .found-actions { display: flex; gap: 6px; flex-wrap: wrap; }
       .version {
         display: flex;
         align-items: center;

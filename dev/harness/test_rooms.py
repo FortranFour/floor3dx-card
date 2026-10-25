@@ -69,7 +69,7 @@ JS = r"""async ([theme]) => {
   out.selected = el._room; out.target = target.id;
   out.panel = !!el.shadowRoot.querySelector('.panel');
   // the panel is as tall as its contents (a room with one or two tiles gets a short panel), never taller than the card
-  const pr = el.shadowRoot.querySelector('.panel').getBoundingClientRect(), cr = el.getBoundingClientRect();
+  const pr = (el.shadowRoot.querySelector('.panel') || el).getBoundingClientRect(), cr = el.getBoundingClientRect();
   out.panelFits = pr.height > 100 && pr.height <= cr.height - 74 + 1;
   out.panelHugs = pr.height < cr.height - 100;
   out.tilesShown = el.shadowRoot.querySelectorAll('.tile').length;
@@ -150,7 +150,7 @@ if __name__ == '__main__':
     check('a tile toggles its entity', 'light.turn_off' in r['calls'])
     check('the panel is sized to its contents, within the card', r['panelFits'] and r['panelHugs'])
     check('theme colours applied', r['stageVar'] and not r['lightClass'])
-    check('the editor renders, with 40 theme swatches, the rooms, and the model\'s objects from the preview', r['editorSections'] == 4 and r['editorSwatches'] == 40 and r['editorRooms'] == r['rooms'] and r['editorObjects'] > 0)
+    check('the editor renders, with 41 theme swatches, the rooms, and the model\'s objects from the preview', r['editorSections'] == 4 and r['editorSwatches'] == 41 and r['editorRooms'] == r['rooms'] and r['editorObjects'] > 0)
     check('scanner resolves the wrapper\'s tokens from the dashboard sources and reports the unresolved one', r['scanFound'] == 1 and r['scanResolved'] and r['scanUnresolved'] == ['nope.missing'] and not r['scanMeta'])
     check('preview keeps merge_static off and skips lines on text/picture panels and ceilings', r['previewMergeOff'] and r['panelLinesSkipped'] and r['ceilingsSkipped'])
     check('detection places a token row by its type3d (light yes, text no)', r['tokenPlaced'] == 1 and r['tokenPlacedIsLight'])

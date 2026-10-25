@@ -1,8 +1,12 @@
-// Named palettes of `look: theme: custom`: the 33 presets, usable as `look.theme` names in the card
+// Named palettes of `look: theme: custom`: the 34 presets, usable as `look.theme` names in the card
 // and as swatches in the rooms card. Each is a complete CustomTheme; `group` and `label` are for pickers.
 import type { CustomTheme } from './look';
 
-export interface LookPalette extends CustomTheme { key: string; label: string; group: string; stage: string; edges: string }
+export interface LookPalette extends CustomTheme {
+  key: string; label: string; group: string; stage: string; edges: string;
+  accent?: string; // the rooms card's overlay accent, when not the edge colour
+  panel?: string; // the rooms card's panel colour, when not the stage
+}
 
 export const PALETTES: LookPalette[] = [
   { key: 'midnight-teal', label: 'Midnight teal', group: 'One hue', ...{ dark: '#0b1f24', light: '#2f6f7a', walls: '#3a8a94', floors: '#1f4a52', edges: '#7fe9d8', stage: '#061418', hue: 0.1 } },
@@ -28,6 +32,8 @@ export const PALETTES: LookPalette[] = [
   { key: 'ivory-on-black', label: 'Ivory on black', group: 'Pale on black', ...{ dark: '#6e6a60', light: '#f0ebe0', walls: '#f4f0e6', floors: '#d8d2c4', edges: '#ffffff', stage: '#000000', hue: 0.1 } },
   { key: 'ice', label: 'Ice', group: 'Pale on black', ...{ dark: '#4a6a80', light: '#dff3ff', walls: '#eaf7ff', floors: '#bcdcea', edges: '#ffffff', stage: '#02070c', hue: 0 } },
   { key: 'ink-on-paper', label: 'Ink on paper', group: 'Light stage', ...{ dark: '#1a1a1a', light: '#3a3a3a', walls: '#454545', floors: '#2a2a2a', edges: '#f5f0e6', stage: '#efe9dc', hue: 0 } },
+  // Home Assistant's stock light dashboard: the page grey, white cards, the pale blue of its summary capsules on the floors, slate lines, the icon blue as the overlay's accent (2.5)
+  { key: 'dashboard', label: 'Dashboard', group: 'Light stage', accent: '#4994ec', panel: '#f2f9fb', ...{ dark: '#aab9c6', light: '#f5fafc', walls: '#ffffff', floors: '#e3f0f9', edges: '#5c7a94', stage: '#f3f3f3', hue: 0.05 } },
   { key: 'true-colour', label: 'True colour', group: 'One hue', ...{ dark: '#1a1c24', light: '#6a6f80', walls: '#7c8294', floors: '#4e5462', edges: '#dfe6ff', stage: '#0f1116', hue: 0.6 } },
   // three tones: walls, floors and furniture each in their own hue
   { key: 'harbour', label: 'Harbour', group: 'Three tones', ...{ dark: '#141a22', walls: '#3b7a8c', floors: '#5a4a7a', light: '#c98a3c', edges: '#e8f0ff', stage: '#0b1016', hue: 0.1 } },

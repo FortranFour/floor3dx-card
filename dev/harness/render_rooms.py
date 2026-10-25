@@ -10,9 +10,10 @@ from render_views import HOUSE
 
 OUT = sys.argv[1] if len(sys.argv) > 1 else 'dev/out/rooms-house'
 os.makedirs(OUT, exist_ok=True)
+EXTRA = json.loads(os.environ.get('EXTRA', '{}'))  # options added to the card, e.g. '{"color_control": "slider"}'
 THEMES = [t for t in os.environ.get('THEMES', 'neon,riso,ice,architect').split(',') if t]
 
-JS = r"""async ([model, theme, width, select]) => {
+JS = r"""async ([model, theme, width, select, extra]) => {
   const base = window.card;
   const card = Object.assign({}, base._config, {objfile: model.file, entities: model.lights, object_groups: [], shadow: 'yes', globalLightPower: 0.77});
   delete card.style; delete card.type;
@@ -37,7 +38,7 @@ JS = r"""async ([model, theme, width, select]) => {
   // the living room gets the extra controls
   const living = rooms.find(r => r.entities.some(e => e.entity === 'light.a')) || rooms[0];
   if (living) living.entities.push({entity: 'light.color'}, {entity: 'cover.left_bottom', top_entity: 'cover.left_top'}, {entity: 'climate.house'}, {entity: 'fan.ceiling'}, {entity: 'switch.tv'});
-  el.setConfig({card, theme, rooms, title: 'House', subtitle: 'tap a room', height: '600px', labels: true, tint_on: true, pins: false, guest_mode: false});
+  el.setConfig(Object.assign({card, theme, rooms, title: 'House', subtitle: 'tap a room', height: '600px', labels: true, tint_on: true, pins: false, guest_mode: false}, extra || {}));
   const t1 = performance.now(); while (!(el._embedded && el._embedded._modelready && el._tints.length) && performance.now() - t1 < 240000) await new Promise(r => setTimeout(r, 200));
   await new Promise(r => setTimeout(r, 800));
   // SELECT=small picks the room with the fewest entities instead, to see the panel fit its contents
@@ -51,7 +52,7 @@ JS = r"""async ([model, theme, width, select]) => {
 def after(page):
     for theme in THEMES:
         for width, select in ((900, os.environ.get('SELECT', 'true')), (420, True)):
-            r = page.evaluate(JS, [HOUSE, theme, width, select])
+            r = page.evaluate(JS, [HOUSE, theme, width, select, EXTRA])
             page.wait_for_timeout(400)
             page.screenshot(path=f'{OUT}/{theme}-{width}.png', clip={'x': 0, 'y': 0, 'width': width, 'height': 600}, timeout=120000)
             page.evaluate('() => { window.shot.remove(); }')

@@ -201,7 +201,7 @@ Three more themes, not from those projects: **paper**, an architect's drawing on
 
 <img src="https://github.com/user-attachments/assets/be1569ba-0544-4602-9b26-99053574021c" alt="The same house in the day, paper, ember and pastel themes" width="100%">
 
-**Named palettes** (2.4). Thirty-three more themes, each a palette of the custom theme, by name: `midnight-teal`, `ultraviolet`, `copper-slate`, `rose-gold`, `moss`, `sunset`, `noir`, `crt`, `ocean`, `architect`, `mint-cream`, `arctic` (one hue with a contrasting line); `infrared`, `riso` (duotone: dark surfaces one hue, bright another); `navy-tangerine`, `cyberpunk` (muted surfaces, complementary lines); `sodium`, `gold-leaf` (metals); `x-ray`, `hologram` (inverted: dark objects glow / flat surfaces, lines carry the detail); `ivory-on-black`, `ice` (a pale model on a black stage); `ink-on-paper` (a dark model on cream); `true-colour` (grey with `hue: 0.6`, the model's own colours showing through); and nine three-tone palettes with walls, floors and furniture each in their own hue (2.4.1): `harbour`, `autumn`, `coral-reef`, `berry`, `forest-floor`, `steel-brass`, `mondrian`, `lagoon-sand`, `candy`. `look: {theme: riso}` is `theme: custom` with that palette's colours; a `custom:` block beside it overrides single colours (`custom: {edges: '#ffffff'}`), and the editor shows the palette's colours in its pickers. They were chosen on a real house with its lamps on; `dev/harness/render_themes.py` renders a model under any set of palettes for comparison.
+**Named palettes** (2.4). Thirty-three more themes, each a palette of the custom theme, by name: `midnight-teal`, `ultraviolet`, `copper-slate`, `rose-gold`, `moss`, `sunset`, `noir`, `crt`, `ocean`, `architect`, `mint-cream`, `arctic` (one hue with a contrasting line); `infrared`, `riso` (duotone: dark surfaces one hue, bright another); `navy-tangerine`, `cyberpunk` (muted surfaces, complementary lines); `sodium`, `gold-leaf` (metals); `x-ray`, `hologram` (inverted: dark objects glow / flat surfaces, lines carry the detail); `ivory-on-black`, `ice` (a pale model on a black stage); `ink-on-paper` (a dark model on cream); `true-colour` (grey with `hue: 0.6`, the model's own colours showing through); and nine three-tone palettes with walls, floors and furniture each in their own hue (2.4.1): `harbour`, `autumn`, `coral-reef`, `berry`, `forest-floor`, `steel-brass`, `mondrian`, `lagoon-sand`, `candy`; and `dashboard` (2.5): Home Assistant's stock light dashboard — the page grey as the stage, white walls, the pale blue of its summary capsules on the floors, slate lines, and in the rooms card the icon blue as the accent and capsule-blue panels. `look: {theme: riso}` is `theme: custom` with that palette's colours; a `custom:` block beside it overrides single colours (`custom: {edges: '#ffffff'}`), and the editor shows the palette's colours in its pickers. They were chosen on a real house with its lamps on; `dev/harness/render_themes.py` renders a model under any set of palettes for comparison.
 
 <img width="1600" height="3221" alt="all-themes" src="https://github.com/user-attachments/assets/3abd1076-6381-4f39-9f98-eb57b4cae298" />
 
@@ -454,6 +454,7 @@ The card editor is built on Home Assistant's own form components (`ha-form`, ent
 - Lists of entities, object groups and views, dragged to reorder, each opening its own page with only the options of its type. An entity line warns when the entity does not exist or its object is not in the model.
 - Object menus list the groups and every object of the model, with a search; the **pick** button turns the preview into a picker, a tap on an object fills the field (for a group, taps add and remove objects). The objects of the item being edited are outlined in the preview.
 - **Use the current view** copies the preview camera into the initial view.
+- **Find rooms cards in my dashboards** (2.5) lists the rooms cards of your dashboards, one entry per model; **Use** makes that model's `card:` block this card's configuration, the way back from a rooms card to a regular card (with references kept, if it has them).
 - Object ids may contain `*`: `Lamp_*` stands for every object whose name matches, in entities and groups alike.
 - The editor writes a short form: no switches at their default, numbers unquoted, group objects as plain ids. The card accepts `true`/`false` as well as `'yes'`/`'no'`, and plain ids in groups.
 
@@ -525,7 +526,14 @@ rooms:
 
 | Option | Values | Default |
 |---|---|---|
-| `theme` | `off`, the six looks, or any of the 33 named palettes of `look.theme` (see the look section above) | `neon` |
+| `theme` | `off`, the six looks, or any of the 34 named palettes of `look.theme` (see the look section above) | `neon` |
+| `models` | several models in one card (2.5): a list of `{id, name, width, card}`, each `card` a floor3d card configuration; replaces `card:`. `width` is the share of the width when all are shown | |
+| `layout` | `row`, `column`: how the models are arranged when all are shown (2.5) | by the card's shape: side by side when wider than tall |
+| `models_menu` | `no`: no House / Garage / Both switcher on the card (2.5) | `yes` |
+| `rooms[].model` | the `id` of the model the room is on (2.5) | the first model |
+| `object_tap` | what a single tap on an object bound to a `light` or `gesture` row does (2.5): `action` runs it (toggle the lamp) and leaves the room alone; `panel` opens the room's panel with that entity's tile highlighted; `room` selects the room, double-tap for the action | `action` |
+| `color_control` | `swatches`, `slider` (a hue slider, white beside it unless the light has a Warmth slider), `both` (2.5); per entity, `controls: [brightness, white, slider]` | `swatches` |
+| `sensor_tiles` | `yes`: sensors and binary sensors as tiles; otherwise they are a line of readouts under the room's name (2.5) | `no` |
 | `rooms[].floors` | floor object names; a room without one is reached from the Rooms menu | |
 | `rooms[].entities[]` | `entity`, `name`, `icon`, `read_only`, `guest_hidden`; `top_entity` (a top-down/bottom-up shade's top rail), `dimmer` (the light behind a switch), `remote`, `remote_commands`, `sources`, `controls` (`brightness`, `white`, `color`), as in the snapshot card | |
 | `pins` | `yes`, `no`: a pin per room, following the camera | `yes` |
@@ -543,7 +551,48 @@ rooms:
 
 The card's own options (`look`, `merge_static`, `daylight`, ...) are taken from `card:`; `look` is replaced by the theme unless the theme is `off`. The rooms' floors are kept out of `merge_static`. In the card editor's preview `merge_static` is off, so detection sees every floor.
 
-Dashboards that keep entity bindings in one place and refer to them with `[[entity:role]]` tokens (the `dashboard-entity-reference` convention: source cards with `card_reference_id` naming entities through `entity_reference_id`, `entity_reference_fields` or `entity_reference_extra`) are handled by the scanner (2.4.2): a floor3d card found inside such a wrapper is offered with its tokens resolved from the wrapper's dashboard, and any role the sources do not define is listed. A rooms card placed inside the same wrapper may keep the tokens instead; the wrapper resolves them when the card is rendered. A tap on a wall selects the room behind it; a tap outside the model closes the panel. The themes beyond the first seven are palettes of `look.custom` (their colours are in the card editor's swatches), chosen on a real house with its lamps on.
+Dashboards that keep entity bindings in one place and refer to them with `[[entity:role]]` tokens (the `dashboard-entity-reference` convention: source cards with `card_reference_id` naming entities through `entity_reference_id`, `entity_reference_fields` or `entity_reference_extra`) are handled by the scanner (2.4.2): a floor3d card found inside such a wrapper is offered with its tokens resolved from the wrapper's dashboard, and any role the sources do not define is listed. A rooms card placed inside the same wrapper may keep the tokens instead; the wrapper resolves them when the card is rendered: tick **Keep `[[entity:…]]` references** in the editor before pressing **Use** (2.5), and the `card:` block and the detected rooms are written with their tokens, so one source block feeds the regular card and the rooms card alike. A tap on a wall selects the room behind it; a tap outside the model closes the panel. The themes beyond the first seven are palettes of `look.custom` (their colours are in the card editor's swatches), chosen on a real house with its lamps on.
+
+**Taps** (2.5). A tap on a floor, a wall or a piece of furniture selects the room. A tap on an object bound to a `light` or `gesture` row of the embedded card (a lampshade) runs that row's action — the lamp toggles, the room stays as it was — so a single tap and the card's double tap no longer collide (the double tap on such an object is swallowed). `object_tap: panel` opens the room's panel with that entity's tile highlighted instead; `object_tap: room` keeps the 2.4 behaviour. A room's floor is always the room, whatever is bound to it.
+
+**Colour** (2.5). Lights with colour get the nine swatches (two rows: red, orange, yellow, green, cyan; white, pink, purple, blue), or with `color_control: slider` a hue slider whose thumb takes the light's current hue (`hs_color: [hue, 100]` when released; a white swatch beside it unless the light has a Warmth slider), or `both`.
+
+**Readouts** (2.5). Sensors and binary sensors in a room (the "also add sensors" option of detection, or added by hand) are shown as one line under the room's name — `21.4°C · 48% · Window open` — rather than as tiles; a door, window, leak or smoke sensor that is on is highlighted. `sensor_tiles: yes` makes them tiles again.
+
+**Reset view** (2.5). The camera button next to *Rooms* flies the camera back to the configured view; when the embedded card has saved views (`zoom_areas`) the button opens a list of them with Reset on top.
+
+### Several models in one card (2.5)
+
+A house and a garage can share one rooms card: `models:` instead of `card:`, one entry per model, each with its own floor3d card configuration and its own rooms. Each model is rendered in its own view (its own camera, rotated on its own; they cannot collide), and a switcher at the top shows **House · Garage · Both** — one model filling the card, or all of them side by side (stacked when the card is taller than wide; `layout: row | column` forces one). Only the shown models render; the others stay loaded. One theme, one panel; the *Rooms* menu is grouped by model, and selecting a room of a hidden model shows that model.
+
+![Two models in one rooms card: the house and the garage side by side](docs/floor3dx-rooms-card-models.png)
+
+```yaml
+type: custom:floor3dx-rooms-card
+theme: architect
+models:
+  - id: house
+    name: House
+    width: 62
+    card: { objfile: house.glb, entities: [...] }
+  - id: garage
+    name: Garage
+    width: 38
+    card: { objfile: garage.glb, entities: [...] }
+rooms:
+  - id: kitchen
+    model: house
+    floors: [room_3_1]
+  - id: bay
+    model: garage
+    name: Garage
+    floors: [room_1_1]
+    entities: [{ entity: light.garage }, { entity: cover.garage_door }, { entity: sensor.garage_temp }]
+```
+
+In the editor, **Add another model** adds an entry and the found cards get a **Use for …** button; **Detect rooms** runs on every model. A model keeps its own `camera_position`: when all are shown each gets a narrower view, so a camera set for the full width may need to sit further back (or use Reset view).
+
+**From outside the card** (2.5): `#model=garage&room=bay` in the dashboard URL, or `window.dispatchEvent(new CustomEvent('floor3dx-rooms-select', {detail: {model: 'garage', room: 'bay'}}))`, shows a model or opens a room — for a dashboard's own selector, or a notification's link. Names work as well as ids.
 
 ## Companion card: Floor3D Snapshot Card
 

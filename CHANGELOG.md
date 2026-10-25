@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.5.0
+
+### Added (rooms card)
+- **Several models in one card**: `models:` (a list of `{id, name, width, card}`) instead of `card:`; each model in its own view with its own camera, a **House · Garage · Both** switcher at the top (`models_menu: no` hides it), all models side by side or stacked (`layout: row | column`, else by the card's shape; `width` shares), only the shown models rendering. Rooms carry `model:`; the *Rooms* menu is grouped by model; selecting a room of a hidden model shows it. In the editor: **Add another model**, **Use for …**, detection on every model, rooms grouped by model with a model field.
+- **`object_tap`**: a single tap on an object bound to a `light` or `gesture` row runs that row's action (the lamp toggles, the room stays as it was) — `action`, the default — or opens the room's panel with that entity's tile highlighted (`panel`), or selects the room as in 2.4 (`room`). The double tap on such an object is swallowed, so it no longer opened the panel on its first tap and toggled on its second. A room's floor is always the room.
+- **`color_control`**: `slider` puts a hue slider in a colour light's tile (the thumb takes the light's hue; `hs_color: [hue, 100]` when released; a white swatch beside it unless the light has a Warmth slider), `both` adds the swatches under it as presets; per entity with `controls: [..., slider]`. Default: the swatches.
+- **Readouts in the panel header**: sensors and binary sensors of a room are one line under its name (`21.4°C · 48% · Window open`, open doors / windows / leaks highlighted) instead of tiles; `sensor_tiles: yes` keeps them as tiles.
+- **Reset view**: a camera button next to *Rooms* flies the camera back to the configured view; with saved views (`zoom_areas`) it opens their list.
+- **From outside the card**: `#model=garage&room=bay` in the URL, or a `floor3dx-rooms-select` window event with `{model, room}`, shows a model or opens a room.
+- **Keep references**: a checkbox in the editor's scanner writes the `card:` block (and the detected rooms) with their `[[entity:…]]` tokens, for a rooms card that sits inside a `dashboard-entity-reference` wrapper and should follow the same source block as the regular card.
+
+- **`dashboard` palette**: Home Assistant's stock light dashboard (page grey, white walls, capsule-blue floors, slate lines; the rooms card's overlay takes the icon blue as accent and capsule-blue panels). A palette may now carry `accent` and `panel` for the rooms card. 34 palettes, 41 rooms themes.
+
+### Added (card editor)
+- **Find rooms cards in my dashboards** in the 3D model section: lists the rooms cards (one entry per model) and takes a model's `card:` block as this card's configuration, resolved or with its references kept. The dashboard scanner is shared by both editors (`src/rooms/scan.ts`, unit test `scan.test.ts`).
+
+### Harness
+- `dev/harness/test_rooms2.py` (17 checks for the above), `render_models.py` (the house and the garage in one card), `run.py` takes `VW`/`VH`.
+
 ## 2.4.5
 
 ### Changed (rooms card)

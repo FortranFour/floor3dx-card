@@ -9,7 +9,7 @@ if (!(window as any).customCards.some((c: any) => c.type === 'floor3dx-rooms-car
     type: 'floor3dx-rooms-card',
     name: 'Floor3DX Rooms',
     preview: false,
-    description: 'Your floor3dx model as a full-page room controller: tap a room for its controls, overlaid on the live 3D view, in one of 40 themes',
+    description: 'Your floor3dx model (or several: house and garage) as a full-page room controller: tap a room for its controls, overlaid on the live 3D view, in one of 41 themes',
     documentationURL: 'https://github.com/FortranFour/floor3dx-card#floor3dx-rooms-card',
   });
 }

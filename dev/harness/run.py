@@ -30,7 +30,7 @@ def run(query='', after=None, dpr=1, timeout_ms=120000):
     """Open the harness page, wait for the first card's model, run `after(page)`, return results."""
     with sync_playwright() as p:
         browser = p.chromium.launch(args=['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'])
-        page = browser.new_context(viewport={'width': 900, 'height': 600}, device_scale_factor=dpr).new_page()
+        page = browser.new_context(viewport={'width': int(os.environ.get('VW', 900)), 'height': int(os.environ.get('VH', 600))}, device_scale_factor=dpr).new_page()
         errors = []
         page.on('pageerror', lambda e: errors.append(str(e)))
         page.on('console', lambda m: errors.append(m.text) if m.type == 'error' else None)

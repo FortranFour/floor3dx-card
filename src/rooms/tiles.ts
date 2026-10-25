@@ -34,7 +34,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** What the tiles need from the card. */
 export interface TilesHost {
   hass: any;
-  config: any; // guest_mode, guest_mode_entity, max_volume, temperature_range, guest_thermostat, brightness_slider, white_slider, color_swatches
+  config: any; // guest_mode, guest_mode_entity, max_volume, temperature_range, guest_thermostat, brightness_slider, white_slider, color_swatches, color_control
   busy: Set<string>;
   seq: Set<string>; // entities held by a multi-step action (a shade changing ends)
   confirm: { entity: string; text: string } | null;
@@ -53,6 +53,8 @@ export const CSS_TILES = `
 .sw{flex:none;width:28px;height:17px;border-radius:10px;background:rgba(127,127,127,.3);padding:3px}.sw:before{content:"";display:block;width:11px;height:11px;border-radius:50%;background:var(--f3r-ink)}.tile.on .sw{background:rgb(var(--f3r-accent))}.tile.on .sw:before{margin-left:11px;background:#fff}
 .extra{padding:0 12px 10px}.ctl{margin-top:2px}.ctl-l{display:block;font-size:11px;color:var(--f3r-muted);margin:2px 0 -2px}
 .range{display:block;width:100%;height:28px;margin:0;accent-color:rgb(var(--f3r-accent));touch-action:pan-x}.range.warmth{accent-color:#e9a65a}
+.range.hue{-webkit-appearance:none;appearance:none;height:28px;background:transparent;--hue:0}.range.hue::-webkit-slider-runnable-track{height:14px;border-radius:7px;background:linear-gradient(to right,hsl(0,100%,50%),hsl(60,100%,50%),hsl(120,100%,50%),hsl(180,100%,50%),hsl(240,100%,50%),hsl(300,100%,50%),hsl(360,100%,50%))}.range.hue::-moz-range-track{height:14px;border-radius:7px;background:linear-gradient(to right,hsl(0,100%,50%),hsl(60,100%,50%),hsl(120,100%,50%),hsl(180,100%,50%),hsl(240,100%,50%),hsl(300,100%,50%),hsl(360,100%,50%))}.range.hue::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:22px;height:22px;margin-top:-4px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.25);background:hsl(var(--hue),100%,50%)}.range.hue::-moz-range-thumb{width:18px;height:18px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.25);background:hsl(var(--hue),100%,50%)}
+.huerow{display:flex;align-items:center;gap:8px}.huerow .range{flex:1;min-width:0}.huerow .swatch-b{width:26px;height:26px}
 .wheel{display:flex;flex-direction:column;align-items:center;gap:8px;margin:4px 0 2px}.wheel .row{display:flex;justify-content:center;gap:10px}.swatch-b{width:32px;height:32px;border-radius:50%;border:1px solid rgba(0,0,0,.2);background:var(--sw);padding:0;flex:none}.swatch-b[aria-pressed=true]{box-shadow:0 0 0 2px rgb(var(--f3r-stage)),0 0 0 4px rgb(var(--f3r-accent))}
 .seg{display:flex;gap:5px}.seg button{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:4px;min-height:34px;min-width:0;padding:0 4px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;border:1px solid var(--f3r-line);border-radius:10px;background:transparent;color:var(--f3r-muted);font-size:12px}.seg button[aria-pressed=true]{color:rgb(var(--f3r-accent));border-color:rgba(var(--f3r-accent),.6);background:rgba(var(--f3r-accent),.12)}.seg.wrap{flex-wrap:wrap}.seg button ha-icon{width:19px;height:19px;--mdc-icon-size:19px}
 .seg+.ctl,.ctl+.seg,.seg+.range,.minfo+.vol,.vol+.seg,.seg+.msel,.vol+.msel,.ctl+.ctl{margin-top:8px}
@@ -105,7 +107,7 @@ export class Tiles {
     let extra = '';
     if (on && dimReady) {
       const c = H.config, modes: string[] = da.supported_color_modes || [];
-      const want = Array.isArray(e.controls) ? new Set<string>(e.controls) : new Set<string>([
+      const want = Array.isArray(e.controls) ? new Set<string>(e.controls.map((x: string) => (x === 'slider' || x === 'swatches' ? 'color' : x))) : new Set<string>([
         ...(c.brightness_slider !== false ? ['brightness'] : []),
         ...(c.white_slider !== false ? ['white'] : []),
         ...((c.color_swatches ?? !g) ? ['color'] : []),
@@ -121,7 +123,13 @@ export class Tiles {
         const cur = COLOR_MODES.includes(da.color_mode) && Array.isArray(da.hs_color) ? da.hs_color.map(Number) : null;
         const isSel = (h: number, sat: number) => cur && (sat === 0 ? cur[1] < 12 : cur[1] >= 25 && Math.min(Math.abs(cur[0] - h), 360 - Math.abs(cur[0] - h)) < 22);
         const btn = ([label, h, sat, css]: Swatch) => `<button class="swatch-b" data-action="color" data-entity="${esc(dimId)}" data-h="${h}" data-s="${sat}" data-focus="c-${esc(id)}-${label}" style="--sw:${css}" aria-label="${label}" title="${label}" aria-pressed="${!!isSel(h, sat)}"></button>`;
-        parts.push(['Color', `<div class="wheel" role="group" aria-label="${name} color">${SWATCHES.map((row) => `<div class="row">${row.map(btn).join('')}</div>`).join('')}</div>`]);
+        const swatches = `<div class="wheel" role="group" aria-label="${name} color">${SWATCHES.map((row) => `<div class="row">${row.map(btn).join('')}</div>`).join('')}</div>`;
+        // a hue slider instead of (or above) the swatches: the thumb takes the current hue; white
+        // stays a swatch beside it unless the Warmth slider covers it
+        const hue = cur && cur[1] >= 12 ? Math.round(cur[0]) : 0;
+        const slider = `<div class="huerow"><input class="range hue" type="range" min="0" max="359" value="${hue}" style="--hue:${hue}" data-action="hue" data-entity="${esc(dimId)}" data-focus="h-${esc(id)}" aria-label="${name} colour hue">${modes.includes('color_temp') ? '' : btn(SWATCHES[1][0])}</div>`;
+        const control = Array.isArray(e.controls) ? (e.controls.includes('slider') ? (e.controls.includes('swatches') ? 'both' : 'slider') : 'swatches') : (c.color_control === 'slider' || c.color_control === 'both' ? c.color_control : 'swatches');
+        parts.push(['Color', control === 'swatches' ? swatches : control === 'slider' ? slider : slider + swatches]);
       }
       if (parts.length) extra = `<div class="extra">${parts.map(([label, html]) => (parts.length > 1 ? `<div class="ctl"><span class="ctl-l">${label}</span>${html}</div>` : html)).join('')}</div>`;
     }
@@ -366,6 +374,7 @@ export class Tiles {
     if (action === 'shade-pos') this.shade(id, i.dataset.rail as string, Number(i.value));
     if (action === 'brightness') H.call(id, 'light', 'turn_on', { brightness_pct: Number(i.value) });
     if (action === 'kelvin') H.call(id, 'light', 'turn_on', { color_temp_kelvin: Number(i.value) });
+    if (action === 'hue') H.call(id, 'light', 'turn_on', { hs_color: [Number(i.value), 100] });
     if (action === 'volume') H.call(id, 'media_player', 'volume_set', { volume_level: Math.min(this.volCap(), Number(i.value)) });
   }
 }
