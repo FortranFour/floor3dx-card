@@ -2,6 +2,9 @@
 
 ## 2.5.1
 
+### Added
+- `extras/dashboard-references/`: the three optional frontend resources behind the `[[entity:…]]` reference convention (`dashboard-card-reference.js`, `dashboard-component-editor.js`, `dashboard-reference-editor.js`) with a README; the main README gains an *Entity references* section that says plainly the convention is optional and not part of Home Assistant.
+
 ### Added (rooms card)
 - `default_model`: the model the card opens on (`house`, `garage`, `all`); in the editor's Display section as *Opens on*.
 

@@ -554,7 +554,7 @@ rooms:
 
 The card's own options (`look`, `merge_static`, `daylight`, ...) are taken from `card:`; `look` is replaced by the theme unless the theme is `off`. The rooms' floors are kept out of `merge_static`. In the card editor's preview `merge_static` is off, so detection sees every floor.
 
-Dashboards that keep entity bindings in one place and refer to them with `[[entity:role]]` tokens (the `dashboard-entity-reference` convention: source cards with `card_reference_id` naming entities through `entity_reference_id`, `entity_reference_fields` or `entity_reference_extra`) are handled by the scanner (2.4.2): a floor3d card found inside such a wrapper is offered with its tokens resolved from the wrapper's dashboard, and any role the sources do not define is listed. A rooms card placed inside the same wrapper may keep the tokens instead; the wrapper resolves them when the card is rendered: tick **Keep `[[entity:…]]` references** in the editor before pressing **Use** (2.5), and the `card:` block and the detected rooms are written with their tokens, so one source block feeds the regular card and the rooms card alike. A tap on a wall selects the room behind it; a tap outside the model closes the panel. The themes beyond the first seven are palettes of `look.custom` (their colours are in the card editor's swatches), chosen on a real house with its lamps on.
+Entity-reference tokens (`[[entity:…]]`): see *Entity references* below.
 
 **Taps** (2.5). A tap on a floor, a wall or a piece of furniture selects the room. A tap on an object bound to a `light` or `gesture` row of the embedded card (a lampshade) runs that row's action — the lamp toggles, the room stays as it was — so a single tap and the card's double tap no longer collide (the double tap on such an object is swallowed). `object_tap: panel` opens the room's panel with that entity's tile highlighted instead; `object_tap: room` keeps the 2.4 behaviour. A room's floor is always the room, whatever is bound to it.
 
@@ -596,6 +596,48 @@ rooms:
 When all are shown, a gap (`models_gap`), a hairline in the theme's line colour (not with theme `off`, where the gap alone separates the views and the overlay takes the card's own stage colour) and a small caption with each model's name separate the views (`model_labels: no` for none). In the editor, **Add another model** adds an entry, **Found cards go to** picks which model a found card is used for; **Detect rooms** runs on every model. A model keeps its own `camera_position`: when all are shown each gets a narrower view, so a camera set for the full width may need to sit further back (or use Reset view).
 
 **From outside the card** (2.5): `#model=garage&room=bay` in the dashboard URL, or `window.dispatchEvent(new CustomEvent('floor3dx-rooms-select', {detail: {model: 'garage', room: 'bay'}}))`, shows a model or opens a room — for a dashboard's own selector, or a notification's link. Names work as well as ids.
+
+## Entity references (one source of truth for bindings)
+
+**Optional.** None of this is needed to use floor3dx-card, the Rooms Card or the Snapshot Card: they take ordinary entity ids. Skip this section unless your dashboard binds the same entities in many places and you want one source of truth for them.
+
+A floor3d configuration binds a few hundred entities, and the same entities appear on tiles, in popups and in the Rooms Card. To keep them from drifting apart, floor3dx-card understands the **`dashboard-entity-reference` convention**: entities are named once on *source cards* and referred to everywhere else by role. The same resources also restore Home Assistant's visual editor for **any** card that carries `card_mod`, layout options or other extras HA's editors refuse or strip — the editor works on a clean copy and puts the extras back on save — so they are worth a look even without references.
+
+```yaml
+# a source card, anywhere on the main dashboard
+type: entities
+card_reference_id: indoor_lights
+entities:
+  - entity: switch.kitchen_counter
+    entity_reference_id: indoor_lights.kitchen_counter_lights
+```
+
+```yaml
+# the 3D card, inside the wrapper that resolves the roles when it renders
+type: custom:dashboard-entity-reference
+dashboard: lovelace                    # the dashboard with the source cards
+card:
+  type: custom:floor3dx-card
+  objfile: house.glb
+  entities:
+    - entity: '[[entity:indoor_lights.kitchen_counter_lights]]'
+      type3d: light
+      object_id: '86_1'
+```
+
+The wrapper (`custom:dashboard-entity-reference`) and its source-card metadata (`card_reference_id`; `entity_reference_id`, `entity_reference_fields`, `entity_reference_extra`) are **not part of Home Assistant**: they come from three frontend resources by the author of this card — `dashboard-card-reference.js` (the runtime), `dashboard-component-editor.js` and `dashboard-reference-editor.js` (editing with the native visual editors, ids mapped back to roles on save) — in this repository under [`extras/dashboard-references/`](extras/dashboard-references/) (its README says what each does and how to install; the convention is explained in [this forum post](FORUM-POST-URL)). Without them, `[[entity:…]]` is just a string and the card shows the hint *entity references unresolved*.
+
+What this card does with references, with or without the resources installed:
+
+| Where | Behaviour |
+|---|---|
+| Regular card, inside a wrapper | Nothing special: the wrapper hands the card resolved ids. |
+| Regular card editor → **Find rooms cards in my dashboards** (2.5) | Offers a Rooms Card's `card:` block resolved (*Use*) or with its tokens (*Use with references*). |
+| Rooms Card editor → **Find floor3d cards** | A card found inside a wrapper is offered with its tokens resolved from the wrapper's dashboard (`entity_reference_*` of cards with a `card_reference_id`), roles the sources do not define listed. Tick **Keep `[[entity:…]]` references** before *Use* and the `card:` block — and the rooms detected afterwards — keep their tokens, for a Rooms Card that sits inside a wrapper itself. |
+| Rooms Card detection | A row whose `entity` is a token is placed by its `type3d` (`light`, `door`, `cover`, `shade`, `rotate`, `gesture`, `color`, `hide`, `transparent` are controls), so detection works on a card it cannot resolve. |
+| Rooms Card at runtime | Tokens outside a wrapper show a hint on the card (lamps stay dark, panels read NaN); inside a wrapper everything resolves, rooms included. |
+
+Rules of thumb: inside the component editor leave *Keep references* unticked (the editor restores tokens row by row); tick it when you build the Rooms Card on its own and will wrap it afterwards. The scanner's shared code is `src/rooms/scan.ts`; the token logic `src/rooms/references.ts` (unit tests `references.test.ts`, `scan.test.ts`).
 
 ## Companion card: Floor3D Snapshot Card
 
