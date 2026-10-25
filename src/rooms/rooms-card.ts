@@ -65,6 +65,13 @@ const STYLE = `
 .panel{position:absolute;top:60px;right:14px;max-height:calc(100% - 74px);width:min(340px,calc(100% - 28px));display:flex;flex-direction:column;border-radius:18px;background:var(--f3r-panel);-webkit-backdrop-filter:blur(var(--f3r-blur));backdrop-filter:blur(var(--f3r-blur));border:1px solid var(--f3r-line);box-shadow:0 10px 40px rgba(0,0,0,.25);overflow:hidden;animation:f3r-in .18s ease}
 @keyframes f3r-in{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}}
 :host(.narrow) .panel{top:auto;left:10px;right:10px;bottom:10px;width:auto;max-height:58%;animation-name:f3r-up}
+/* phones: the title keeps to half the width, the Rooms button is an icon, the model switcher drops to a second row on the right */
+:host(.narrow) .title{max-width:48%}:host(.narrow) .title span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+:host(.narrow) .menu{flex-wrap:wrap;justify-content:flex-end;max-width:calc(52% - 14px)}
+:host(.narrow) .menu > button span{display:none}:host(.narrow) .menu > button{padding:0 8px}
+:host(.narrow) .menu::before{content:"";order:8;flex-basis:100%;height:0}
+:host(.narrow) .menu .seg{order:9}
+:host(.narrow.models) .list{top:104px;max-height:calc(100% - 126px)}
 @keyframes f3r-up{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
 .panelhead{flex:none;display:flex;gap:12px;align-items:center;padding:14px 14px 10px}.roomicon{display:grid;place-items:center;width:42px;height:42px;border-radius:13px;background:rgba(var(--f3r-accent),.16);color:rgb(var(--f3r-accent))}
 .panelhead h3{margin:0 0 2px;font-size:18px;font-weight:500}.panelhead p{margin:0;color:var(--f3r-muted);font-size:12px}.panelhead .grow{flex:1;min-width:0}
@@ -672,6 +679,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
     const hasModel = this._slots.some((s) => s.el);
     const title = c.title ? `<div class="title">${c.icon ? icon(c.icon) : ''}<span>${esc(c.title)}${c.subtitle ? `<br><small>${esc(c.subtitle)}</small>` : ''}</span></div>` : '';
     const many = this._slots.length > 1 && c.models_menu !== false && c.models_menu !== 'no';
+    this.classList.toggle('models', many);
     const switcher = many ? `<div class="seg" role="group" aria-label="Model">${this._slots.map((s) => `<button data-action="model" data-model="${esc(s.id)}" aria-pressed="${this._active === s.id}">${esc(s.name)}</button>`).join('')}<button data-action="model" data-model="${ALL}" aria-pressed="${this._active === ALL}">${this._slots.length === 2 ? 'Both' : 'All'}</button></div>` : '';
     const views = this._views();
     const reset = hasModel ? (views ? `<button data-action="views" aria-pressed="${this._viewsOpen}" aria-label="Views" title="Views">${icon('mdi:camera-outline')}</button>` : `<button data-action="reset" aria-label="Reset view" title="Reset view">${icon('mdi:camera-flip-outline')}</button>`) : '';

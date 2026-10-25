@@ -12,6 +12,7 @@ os.makedirs(OUT, exist_ok=True)
 THEME = os.environ.get('THEME', 'architect')
 CARD_LOOK = os.environ.get('CARD_LOOK', '')  # with THEME=off: the embedded cards' own look, e.g. arctic
 LAYOUT = os.environ.get('LAYOUT', '')
+W, H = [int(x) for x in os.environ.get('SIZE', '1100x620').split('x')]  # the card's size; set VW/VH for the viewport too
 
 JS = r"""async ([house, garage, theme, width, height, cardLook, layout]) => {
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -58,12 +59,12 @@ STEP = r"""async ([what]) => {
 }"""
 
 def after(page):
-    r = page.evaluate(JS, [HOUSE, GARAGE, THEME, 1100, 620, CARD_LOOK, LAYOUT])
+    r = page.evaluate(JS, [HOUSE, GARAGE, THEME, W, H, CARD_LOOK, LAYOUT])
     print('setup', r, flush=True)
     for what in ('house', 'garage', 'both'):
         a = page.evaluate(STEP, [what])
         page.wait_for_timeout(500)
-        page.screenshot(path=f'{OUT}/{THEME}-{what}.png', clip={'x': 0, 'y': 0, 'width': 1100, 'height': 620}, timeout=120000)
+        page.screenshot(path=f'{OUT}/{THEME}-{what}.png', clip={'x': 0, 'y': 0, 'width': W, 'height': H}, timeout=120000)
         print(what, a, flush=True)
 
 result, errors = run(query=f'path=/dev/private/&model={HOUSE["file"]}&', after=after, timeout_ms=400000)
