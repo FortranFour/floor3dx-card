@@ -6,6 +6,8 @@
 - `default_model`: the model the card opens on (`house`, `garage`, `all`); in the editor's Display section as *Opens on*.
 
 ### Fixed (rooms card)
+- In a panel view the card is as tall as what is left of the window below its top (`innerHeight`, less the safe area) instead of `100vh - header`, which on phones ran a little past the view and needed a scroll; it follows window resizes and rotation.
+- The model captions hide while the bottom sheet is open on a phone (they showed through it).
 - On phones (cards under 700px wide) the title, the model switcher, Reset view and Rooms no longer crowd each other: the title keeps to half the width, the switcher takes the first row on the right, Reset view and Rooms (an icon) the second; the Rooms list opens below them.
 
 ## 2.5.0

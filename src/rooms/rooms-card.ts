@@ -37,6 +37,7 @@ const STYLE = `
 .stage > .models.many.lined.column > .model + .model:not([hidden])::before{left:8%;right:8%;top:calc(var(--f3r-gap,14px) / -2);bottom:auto;border-left:0;border-top:1px solid var(--f3r-line)}
 .stage > .models > .model > .caption{position:absolute;z-index:2;left:12px;bottom:10px;padding:3px 9px;border-radius:9px;background:var(--f3r-panel);color:var(--f3r-muted);font-size:12px;pointer-events:none;display:none}
 .stage > .models.many > .model > .caption{display:block}
+:host(.narrow.open) .stage > .models > .model > .caption{display:none}
 .stage > .models > .model ::part(card),.stage > .models > .model floor3dpro-card{display:block;width:100%;height:100%}
 .ui{position:absolute;inset:0;pointer-events:none}
 .ui > *{pointer-events:auto}
@@ -158,6 +159,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
   private _onEditor = (e: Event) => this._editorRequest((e as CustomEvent).detail);
   private _onSelect = (e: Event) => this._fromOutside((e as CustomEvent).detail);
   private _onHash = () => this._fromHash();
+  private _onResize = () => { this._layout(); this._movePins(0); };
 
   constructor() {
     super();
@@ -238,6 +240,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
     window.addEventListener(ROOMS_EDITOR_EVENT, this._onEditor);
     window.addEventListener(ROOMS_SELECT_EVENT, this._onSelect);
     window.addEventListener('hashchange', this._onHash);
+    window.addEventListener('resize', this._onResize);
     this._fromHash();
     this._request();
   }
@@ -250,6 +253,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
     window.removeEventListener(ROOMS_EDITOR_EVENT, this._onEditor);
     window.removeEventListener(ROOMS_SELECT_EVENT, this._onSelect);
     window.removeEventListener('hashchange', this._onHash);
+    window.removeEventListener('resize', this._onResize);
   }
 
   // the first model's parts, for the harness and for anyone who poked at 2.4's internals
@@ -264,7 +268,12 @@ export class Floor3dxRoomsCard extends HTMLElement {
     if (rect.width) this.classList.toggle('narrow', rect.width < 700);
     const h = this._config?.height;
     if (h) this.style.setProperty('--f3r-height', typeof h === 'number' ? h + 'px' : String(h));
-    else this.style.setProperty('--f3r-height', this._inPanel() ? 'calc(100vh - var(--header-height, 56px))' : this._isPreview() && this._wideEditor() ? PREVIEW_HEIGHT : '60vh');
+    else if (this._inPanel()) {
+      // what is left of the window below the card's top: 100vh counts the space behind a phone's
+      // bars and HA's header, and left the card a little taller than the view, with a scroll
+      const top = Math.min(Math.max(0, rect.top), window.innerHeight / 2);
+      this.style.setProperty('--f3r-height', `calc(${Math.round(window.innerHeight - top)}px - env(safe-area-inset-bottom, 0px))`);
+    } else this.style.setProperty('--f3r-height', this._isPreview() && this._wideEditor() ? PREVIEW_HEIGHT : '60vh');
     // every model, side by side or stacked: as configured, else by the card's shape
     const layout = this._config?.layout;
     const column = layout === 'column' || (layout !== 'row' && rect.width && rect.height && rect.height > rect.width);
@@ -694,6 +703,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
       : this._viewsOpen && views ? `<div class="list" role="menu"><button data-action="reset">${icon('mdi:camera-flip-outline')}<span>Reset view</span></button>${views.views.map((v, i) => `<button data-action="view" data-i="${i}">${icon('mdi:magnify-expand')}<span>${esc(String(v.name || `View ${i + 1}`))}</span></button>`).join('')}</div>` : '';
     const pins = c.pins !== false && c.pins !== 'no' ? `<div class="pins">${rooms.filter((r) => (r.floors || []).length).map((r) => { const n = this._activeCount(r); return `<button class="pin ${n ? 'on' : ''} ${r.id === this._hover ? 'hover' : ''}" hidden data-action="room" data-room="${esc(r.id)}" aria-pressed="${r.id === this._room}" aria-label="${esc(this._roomName(r))}${n ? `, ${n} on` : ''}">${icon(r.icon || 'mdi:door-open')}<span class="pn">${esc(this._roomName(r))}</span>${n ? `<span class="count" aria-hidden="true">${n}</span>` : ''}</button>`; }).join('')}</div>` : '';
     const panel = room ? this._panel(room) : '';
+    this.classList.toggle('open', !!room);
     const tokens = this._isPreview() ? 0 : tokenRoles(c).length;
     const hint = !hasModel ? `<div class="hint">Open the card editor to choose a floor3d card and detect its rooms.</div>` : !rooms.length ? `<div class="hint">No rooms yet: detect them in the card editor.</div>` : tokens ? `<div class="hint">${tokens} entity reference${tokens === 1 ? '' : 's'} ([[entity:…]]) unresolved: this card must sit inside a dashboard-entity-reference wrapper.</div>` : '';
     this._ui.innerHTML = `${title}${menu}${list}${pins}${panel}${hint}${this._toast ? `<div class="toast" role="status">${esc(this._toast)}</div>` : ''}`;
