@@ -61,6 +61,19 @@ export function themeOf(key: any): RoomsTheme {
   return THEMES.find((t) => t.key === k) || THEMES[1];
 }
 
+/** For theme `off`: the stage the embedded card itself draws (its look's stage, else its backgroundColor), so the overlay and the space between models match it. */
+export function stageOfCard(card: any): string | null {
+  const look = card?.look?.theme ? String(card.look.theme).toLowerCase() : '';
+  if (look && look !== 'off') {
+    if (look === 'custom' && card.look.custom?.stage && /^#[0-9a-f]{6}$/i.test(card.look.custom.stage)) return card.look.custom.stage;
+    const t = THEMES.find((x) => x.key === look && x.look);
+    if (t) return t.stage;
+  }
+  const bg = card?.backgroundColor;
+  if (typeof bg === 'string' && /^#[0-9a-f]{6}$/i.test(bg)) return bg;
+  return bg && bg !== 'transparent' ? null : null;
+}
+
 /** `#rrggbb` → `r, g, b` for rgba() in CSS. */
 export function rgb(h: string): string {
   const n = parseInt(h.slice(1), 16);

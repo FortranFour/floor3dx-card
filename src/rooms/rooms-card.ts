@@ -6,7 +6,7 @@
 // colours of the chosen theme. The card is meant to fill a panel view. Several models (a house
 // and a garage) can share one card (`models:`), each in its own view, with a switcher.
 import * as THREE from 'three';
-import { THEMES, RoomsTheme, themeOf, rgb } from './themes';
+import { THEMES, RoomsTheme, themeOf, stageOfCard, rgb } from './themes';
 import { Room, RoomEntity, RoomIndex, suggestRooms, floorCandidates, slug } from './rooms';
 import { Tiles, TilesHost, CSS_TILES, isOn, esc, domainOf, titleCase, icon, ACTIVE_DOMAINS, OFFABLE } from './tiles';
 
@@ -32,8 +32,8 @@ const STYLE = `
 .stage > .models.column{flex-direction:column}
 .stage > .models > .model{position:relative;flex:1 1 0;min-width:0;min-height:0}
 .stage > .models > .model[hidden]{display:none}
-.stage > .models.many > .model + .model:not([hidden])::before{content:"";position:absolute;left:calc(var(--f3r-gap,14px) / -2);top:8%;bottom:8%;border-left:1px solid var(--f3r-line);pointer-events:none}
-.stage > .models.many.column > .model + .model:not([hidden])::before{left:8%;right:8%;top:calc(var(--f3r-gap,14px) / -2);bottom:auto;border-left:0;border-top:1px solid var(--f3r-line)}
+.stage > .models.many.lined > .model + .model:not([hidden])::before{content:"";position:absolute;left:calc(var(--f3r-gap,14px) / -2);top:8%;bottom:8%;border-left:1px solid var(--f3r-line);pointer-events:none}
+.stage > .models.many.lined.column > .model + .model:not([hidden])::before{left:8%;right:8%;top:calc(var(--f3r-gap,14px) / -2);bottom:auto;border-left:0;border-top:1px solid var(--f3r-line)}
 .stage > .models > .model > .caption{position:absolute;z-index:2;left:12px;bottom:10px;padding:3px 9px;border-radius:9px;background:var(--f3r-panel);color:var(--f3r-muted);font-size:12px;pointer-events:none;display:none}
 .stage > .models.many > .model > .caption{display:block}
 .stage > .models > .model ::part(card),.stage > .models > .model floor3dpro-card{display:block;width:100%;height:100%}
@@ -195,6 +195,11 @@ export class Floor3dxRoomsCard extends HTMLElement {
     if (new Set(ids).size !== ids.length) throw new Error('Room ids must be unique');
     this._config = { guest_mode: true, pins: true, ...config, rooms };
     this._theme = themeOf(config.theme);
+    if (this._theme.key === 'off') {
+      // the model as it is: the overlay takes the embedded card's own stage colour
+      const stage = stageOfCard(modelDefs(this._config)[0]?.card);
+      if (stage) { const lum = parseInt(stage.slice(1), 16); const l = (0.2126 * ((lum >> 16) & 255) + 0.7152 * ((lum >> 8) & 255) + 0.0722 * (lum & 255)) / 255; this._theme = { ...this._theme, stage, light: l > 0.5, edges: l > 0.5 ? '#1b2430' : '#ffffff' }; }
+    }
     if (this._room && !ids.includes(this._room)) this._room = null;
     const defs = modelDefs(this._config);
     if (defs.length > 1 && (this._active === ALL || !defs.some((d) => d.id === this._active)) && !this._slots.length) this._active = defs[0].id;
@@ -253,6 +258,8 @@ export class Floor3dxRoomsCard extends HTMLElement {
     this._modelsHost.classList.toggle('column', !!column);
     const shownCount = this._slots.filter((s) => this._active === ALL || s.id === this._active).length;
     this._modelsHost.classList.toggle('many', shownCount > 1 && this._config?.model_labels !== false && this._config?.model_labels !== 'no');
+    // the hairline belongs to a theme; with the model as it is, the gap alone separates the views
+    this._modelsHost.classList.toggle('lined', this._theme.key !== 'off');
     const gap = Number(this._config?.models_gap);
     if (Number.isFinite(gap) && gap >= 0) this._modelsHost.style.setProperty('--f3r-gap', gap + 'px'); else this._modelsHost.style.removeProperty('--f3r-gap');
     this._slots.forEach((s) => {

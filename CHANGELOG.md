@@ -13,7 +13,7 @@
 
 - **`dashboard` palette**: Home Assistant's stock light dashboard (page grey, white walls, capsule-blue floors, slate lines; the rooms card's overlay takes the icon blue as accent and capsule-blue panels). A palette may now carry `accent` and `panel` for the rooms card. 34 palettes, 41 rooms themes.
 
-- With all models shown, a gap, a hairline and a small caption with the model's name separate the views (`models_gap`, `model_labels`). The editor's per-model "Receives Use" buttons are one **Found cards go to** dropdown.
+- With all models shown, a gap, a hairline and a small caption with the model's name separate the views (`models_gap`, `model_labels`); with theme `off` there is no hairline, and the overlay and the gap take the embedded card's own stage colour (its look's stage, else its `backgroundColor`). The editor's per-model "Receives Use" buttons are one **Found cards go to** dropdown.
 
 ### Fixed
 - The look's fragment shader returns from one place, so ANGLE's D3D compiler (Windows browsers) no longer logs `warning X4000: use of potentially uninitialized variable (f_f3dxThemed)` as a program info log. The picture is unchanged (pixel-identical on the reference views).

@@ -10,11 +10,13 @@ from render_views import HOUSE, GARAGE
 OUT = sys.argv[1] if len(sys.argv) > 1 else 'dev/out/rooms-models'
 os.makedirs(OUT, exist_ok=True)
 THEME = os.environ.get('THEME', 'architect')
+CARD_LOOK = os.environ.get('CARD_LOOK', '')  # with THEME=off: the embedded cards' own look, e.g. arctic
+LAYOUT = os.environ.get('LAYOUT', '')
 
-JS = r"""async ([house, garage, theme, width, height]) => {
+JS = r"""async ([house, garage, theme, width, height, cardLook, layout]) => {
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   const base = window.card;
-  const model = (m) => { const card = Object.assign({}, base._config, {objfile: m.file, entities: m.lights, object_groups: [], shadow: 'yes', globalLightPower: 0.77}); delete card.style; delete card.type; if (m.camera) { card.camera_position = m.camera.position; card.camera_target = m.camera.target; } else { delete card.camera_position; delete card.camera_target; } return card; };
+  const model = (m) => { const card = Object.assign({}, base._config, {objfile: m.file, entities: m.lights, object_groups: [], shadow: 'yes', globalLightPower: 0.77}); if (cardLook) card.look = {theme: cardLook, edge_skip: 'seams, floors, ceilings'}; delete card.style; delete card.type; if (m.camera) { card.camera_position = m.camera.position; card.camera_target = m.camera.target; } else { delete card.camera_position; delete card.camera_target; } return card; };
   const states = {'light.a': {state: 'on', attributes: {brightness: 200, friendly_name: 'Living Room Lamp'}}, 'light.b': {state: 'on', attributes: {brightness: 120, friendly_name: 'Dining Pendant'}},
     'light.c': {state: 'off', attributes: {friendly_name: 'Kitchen Spots'}}, 'light.d': {state: 'on', attributes: {brightness: 255, friendly_name: 'Bedroom Lamp'}}, 'light.e': {state: 'on', attributes: {friendly_name: 'Bath Light'}},
     'light.garage': {state: 'on', attributes: {brightness: 255, friendly_name: 'Garage Lights'}}, 'cover.garage_door': {state: 'closed', attributes: {device_class: 'garage', friendly_name: 'Garage Door'}},
@@ -35,7 +37,7 @@ JS = r"""async ([house, garage, theme, width, height]) => {
   for (const id of ['house', 'garage']) { const a = got.find(d => d.rooms && d.model === id); (a ? a.rooms : []).forEach(r => { r.model = id; if (rooms.some(x => x.id === r.id)) r.id = id + '-' + r.id; rooms.push(r); }); }
   const bay = rooms.find(r => r.model === 'garage') || null;
   if (bay) { bay.name = 'Garage'; bay.icon = 'mdi:garage-variant'; bay.entities = [{entity: 'light.garage'}, {entity: 'cover.garage_door'}, {entity: 'sensor.garage_temp'}, {entity: 'binary_sensor.garage_side_door'}]; }
-  el.setConfig({models, theme, rooms, title: 'House', height: height + 'px', guest_mode: false, labels: true});
+  el.setConfig(Object.assign({models, theme, rooms, title: 'House', height: height + 'px', guest_mode: false, labels: true}, layout ? {layout} : {}));
   await ready();
   const t1 = performance.now(); while (!el._tints.length && performance.now() - t1 < 60000) await sleep(200);
   await sleep(600);
@@ -56,7 +58,7 @@ STEP = r"""async ([what]) => {
 }"""
 
 def after(page):
-    r = page.evaluate(JS, [HOUSE, GARAGE, THEME, 1100, 620])
+    r = page.evaluate(JS, [HOUSE, GARAGE, THEME, 1100, 620, CARD_LOOK, LAYOUT])
     print('setup', r, flush=True)
     for what in ('house', 'garage', 'both'):
         a = page.evaluate(STEP, [what])
