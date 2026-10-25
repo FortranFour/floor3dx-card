@@ -67,7 +67,7 @@ const STYLE = `
 @keyframes f3r-up{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
 .panelhead{flex:none;display:flex;gap:12px;align-items:center;padding:14px 14px 10px}.roomicon{display:grid;place-items:center;width:42px;height:42px;border-radius:13px;background:rgba(var(--f3r-accent),.16);color:rgb(var(--f3r-accent))}
 .panelhead h3{margin:0 0 2px;font-size:18px;font-weight:500}.panelhead p{margin:0;color:var(--f3r-muted);font-size:12px}.panelhead .grow{flex:1;min-width:0}
-.panelhead p.readouts{margin-top:3px;color:var(--f3r-ink);font-size:12px;display:flex;flex-wrap:wrap;gap:2px 0}.readouts span+span:before{content:"·";margin:0 6px;color:var(--f3r-muted)}.readouts .alert{color:rgb(var(--f3r-on))}
+.panelhead p.readouts{margin-top:3px;color:var(--f3r-ink);font-size:12px;display:flex;flex-wrap:wrap;gap:2px 0;line-height:1.5}.readouts em{font-style:normal;color:var(--f3r-muted)}.readouts span+span:before{content:"·";margin:0 6px;color:var(--f3r-muted)}.readouts .alert{color:rgb(var(--f3r-on))}
 .tiles{display:grid;grid-template-columns:1fr;gap:8px;padding:4px 12px 12px;overflow:auto;flex:0 1 auto;min-height:0;align-content:start;grid-auto-rows:max-content}
 :host(.narrow) .tiles{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
 .tile.focus{box-shadow:0 0 0 2px rgb(var(--f3r-accent));transition:box-shadow .3s}
@@ -632,21 +632,25 @@ export class Floor3dxRoomsCard extends HTMLElement {
   private _roomName(r: Room): string { return titleCase(r.name || r.id); }
   private _sensorTiles(): boolean { return this._config.sensor_tiles === true || this._config.sensor_tiles === 'yes'; }
   /** The room's sensors as a line of readouts: "21 °C · 48 % · Window open". */
+  /** The room's sensors as a line of labelled readouts: "Temperature 21.4°C · Humidity 48% · Side door closed". */
   private _readouts(room: Room): string {
     if (this._sensorTiles()) return '';
     const out: string[] = [];
+    const roomName = room.name || room.id;
+    // the label: the entity's label or friendly name, without the room's own name in front of it
+    const labelOf = (e: any) => { const n = this._tiles.name(e, roomName); return n.replace(new RegExp('^' + roomName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s+', 'i'), '') || n; };
     for (const e of room.entities || []) {
       if (!READOUT_DOMAINS.has(domainOf(e.entity)) || this._tiles.hidden(e)) continue;
       const s = this._s(e.entity); if (!s || s.state === 'unavailable' || s.state === 'unknown') continue;
-      const a = s.attributes || {}, dc = a.device_class || '';
+      const a = s.attributes || {}, dc = a.device_class || '', label = labelOf(e);
       if (domainOf(e.entity) === 'sensor') {
         const n = Number(s.state), unit = a.unit_of_measurement || '';
-        const val = Number.isFinite(n) ? (Math.abs(n) >= 100 ? Math.round(n) : Math.round(n * 10) / 10) : s.state;
-        out.push(`<span title="${esc(this._tiles.name(e, room.name || room.id))}">${esc(String(val))}${unit ? (unit.startsWith('°') || unit === '%' ? '' : ' ') + esc(unit) : ''}</span>`);
+        const val = Number.isFinite(n) ? (Math.abs(n) >= 100 ? Math.round(n) : Math.round(n * 10) / 10) : titleCase(String(s.state).replace(/_/g, ' '));
+        out.push(`<span><em>${esc(label)}</em> ${esc(String(val))}${unit ? (unit.startsWith('°') || unit === '%' ? '' : ' ') + esc(unit) : ''}</span>`);
       } else {
-        const on = isOn(s), label = e.name || (/door|window|garage|opening/.test(dc) ? titleCase(dc) : this._tiles.name(e, room.name || room.id));
-        const word = /door|window|garage|opening/.test(dc) ? (on ? 'open' : 'closed') : /motion|occupancy|presence/.test(dc) ? (on ? 'motion' : 'clear') : /moisture/.test(dc) ? (on ? 'wet' : 'dry') : /smoke|gas|carbon_monoxide|safety|problem/.test(dc) ? (on ? 'alert' : 'ok') : /lock/.test(dc) ? (on ? 'unlocked' : 'locked') : (on ? 'on' : 'off');
-        out.push(`<span class="${on && /door|window|garage|opening|moisture|smoke|gas|carbon_monoxide|safety|problem|lock/.test(dc) ? 'alert' : ''}">${esc(label)} ${word}</span>`);
+        const on = isOn(s);
+        const word = /door|window|garage|opening/.test(dc) ? (on ? 'open' : 'closed') : /motion|occupancy|presence/.test(dc) ? (on ? 'motion' : 'clear') : /moisture/.test(dc) ? (on ? 'wet' : 'dry') : /smoke|gas|carbon_monoxide|safety|problem/.test(dc) ? (on ? 'alert' : 'ok') : /lock/.test(dc) ? (on ? 'unlocked' : 'locked') : /battery/.test(dc) ? (on ? 'low' : 'ok') : /connectivity/.test(dc) ? (on ? 'connected' : 'disconnected') : (on ? 'on' : 'off');
+        out.push(`<span class="${on && /door|window|garage|opening|moisture|smoke|gas|carbon_monoxide|safety|problem|lock|battery/.test(dc) ? 'alert' : ''}"><em>${esc(label)}</em> ${word}</span>`);
       }
     }
     return out.length ? `<p class="readouts">${out.join('')}</p>` : '';

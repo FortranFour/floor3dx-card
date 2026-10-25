@@ -559,7 +559,7 @@ Dashboards that keep entity bindings in one place and refer to them with `[[enti
 
 **Colour** (2.5). Lights with colour get the nine swatches (two rows: red, orange, yellow, green, cyan; white, pink, purple, blue), or with `color_control: slider` a hue slider whose thumb takes the light's current hue (`hs_color: [hue, 100]` when released; a white swatch beside it unless the light has a Warmth slider), or `both`.
 
-**Readouts** (2.5). Sensors and binary sensors in a room (the "also add sensors" option of detection, or added by hand) are shown as one line under the room's name — `21.4°C · 48% · Window open` — rather than as tiles; a door, window, leak or smoke sensor that is on is highlighted. `sensor_tiles: yes` makes them tiles again.
+**Readouts** (2.5). Sensors and binary sensors in a room (the "also add sensors" option of detection, or added by hand) are shown as one line under the room's name — `Temperature 21.4°C · Humidity 48% · Side door closed` — rather than as tiles; a door, window, leak or smoke sensor that is on is highlighted. `sensor_tiles: yes` makes them tiles again.
 
 **Reset view** (2.5). The camera button next to *Rooms* flies the camera back to the configured view; when the embedded card has saved views (`zoom_areas`) the button opens a list of them with Reset on top.
 

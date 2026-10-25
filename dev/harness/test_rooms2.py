@@ -91,7 +91,7 @@ JS = r"""async () => {
   // 4. readouts: the sensors are a line under the room name, not tiles
   const ro = el.shadowRoot.querySelector('.readouts');
   out.readouts = ro ? ro.textContent : null;
-  out.readoutsOk = !!ro && /21\.4°C/.test(ro.textContent) && /48%/.test(ro.textContent) && /Window open/.test(ro.textContent);
+  out.readoutsOk = !!ro && /Temperature 21\.4°C/.test(ro.textContent) && /Humidity 48%/.test(ro.textContent) && /Window open/.test(ro.textContent);
   out.tileCount = el.shadowRoot.querySelectorAll('.tiles .tile').length;
   // 5. object_tap: room: the tap selects the room, nothing toggles
   el._select(null); el.setConfig(cfg({object_tap: 'room'})); await ready(el);
