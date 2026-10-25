@@ -15,6 +15,11 @@
 
 - With all models shown, a gap, a hairline and a small caption with the model's name separate the views (`models_gap`, `model_labels`); with theme `off` there is no hairline, and the overlay and the gap take the embedded card's own stage colour (its look's stage, else its `backgroundColor`). The editor's per-model "Receives Use" buttons are one **Found cards go to** dropdown.
 
+### Changed (rooms card)
+- The room's readouts sit below the header row, full width; the icon stays beside the room's name.
+- The *Rooms* button closes an open room panel before showing the list (the list also sits above the panel).
+- A hint on the card when its configuration still carries `[[entity:…]]` tokens outside a wrapper (lamps dark, panels NaN): it must sit inside a `dashboard-entity-reference` wrapper.
+
 ### Fixed
 - The look's fragment shader returns from one place, so ANGLE's D3D compiler (Windows browsers) no longer logs `warning X4000: use of potentially uninitialized variable (f_f3dxThemed)` as a program info log. The picture is unchanged (pixel-identical on the reference views).
 
