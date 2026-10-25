@@ -13,6 +13,9 @@
 
 - **`dashboard` palette**: Home Assistant's stock light dashboard (page grey, white walls, capsule-blue floors, slate lines; the rooms card's overlay takes the icon blue as accent and capsule-blue panels). A palette may now carry `accent` and `panel` for the rooms card. 34 palettes, 41 rooms themes.
 
+### Fixed
+- The look's fragment shader returns from one place, so ANGLE's D3D compiler (Windows browsers) no longer logs `warning X4000: use of potentially uninitialized variable (f_f3dxThemed)` as a program info log. The picture is unchanged (pixel-identical on the reference views).
+
 ### Added (card editor)
 - **Find rooms cards in my dashboards** in the 3D model section: lists the rooms cards (one entry per model) and takes a model's `card:` block as this card's configuration, resolved or with its references kept. The dashboard scanner is shared by both editors (`src/rooms/scan.ts`, unit test `scan.test.ts`).
 

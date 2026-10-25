@@ -117,56 +117,55 @@ uniform vec3 uCustomFloor;
 uniform float uCustomHue;
 uniform int uLinear; // 1 under managed colours: the palette below is in display values
 vec3 f3dxThemedRaw(vec3 c) {
+  // one return at the end: the D3D compiler behind ANGLE (Windows browsers) logged "potentially
+  // uninitialized variable" for a function that returned from inside its branches
   float strongest = max(c.r, max(c.g, c.b));
   float weakest = min(c.r, min(c.g, c.b));
   float saturation = strongest > 0.0 ? (strongest - weakest) / strongest : 0.0;
   float luma = dot(c, vec3(0.299, 0.587, 0.114));
   bool signal = uKeepSignal == 1 && strongest > 0.45 && saturation > 0.45;
-  if (uTheme == 0) {
-    if (signal) return c;
+  vec3 hue = c / max(strongest, 0.001);
+  vec3 r = c;
+  if (signal) {
+    r = c;
+  } else if (uTheme == 0) {
     // neon: dark blue surfaces; walls a touch lighter and greener, floors darker; brightness keeps a trace
     vec3 base = uSurface == 1 ? vec3(0.075, 0.114, 0.19) : uSurface == 2 ? vec3(0.055, 0.086, 0.16) : vec3(0.09, 0.12, 0.2);
     vec3 lit = uSurface == 1 ? vec3(0.08, 0.19, 0.25) : vec3(0.16, 0.22, 0.36);
     vec3 m = mix(base, lit, clamp(luma * 1.4, 0.0, 1.0));
     // a hint of the original hue so textures and coloured furniture still read
-    return mix(m, m * (c / max(strongest, 0.001)) * 1.6, 0.18);
-  }
-  if (signal) return c;
-  if (uTheme == 1) {
+    r = mix(m, m * hue * 1.6, 0.18);
+  } else if (uTheme == 1) {
     // blueprint: shades of blue, lighter where the model was lighter
-    return mix(vec3(0.04, 0.13, 0.3), vec3(0.2, 0.42, 0.75), clamp(luma * 1.6, 0.0, 1.0));
-  }
-  vec3 hue = c / max(strongest, 0.001);
-  if (uTheme == 3) {
+    r = mix(vec3(0.04, 0.13, 0.3), vec3(0.2, 0.42, 0.75), clamp(luma * 1.6, 0.0, 1.0));
+  } else if (uTheme == 3) {
     // paper: an architect's drawing, cream card with ink lines; walls a shade warmer, floors parchment
     vec3 light = uSurface == 1 ? vec3(0.90, 0.84, 0.72) : uSurface == 2 ? vec3(0.87, 0.80, 0.66) : vec3(0.93, 0.89, 0.80);
     vec3 shade = vec3(0.55, 0.47, 0.36);
     vec3 m = mix(shade, light, clamp(0.35 + luma * 0.8, 0.0, 1.0));
-    return mix(m, m * hue, 0.08);
-  }
-  if (uTheme == 4) {
+    r = mix(m, m * hue, 0.08);
+  } else if (uTheme == 4) {
     // ember: charcoal surfaces with a warm cast, amber lines; walls lighter, floors darkest
     vec3 base = uSurface == 1 ? vec3(0.15, 0.125, 0.115) : uSurface == 2 ? vec3(0.095, 0.08, 0.075) : vec3(0.17, 0.145, 0.13);
     vec3 lit = vec3(0.36, 0.28, 0.22);
     vec3 m = mix(base, lit, clamp(luma * 1.3, 0.0, 1.0));
-    return mix(m, m * hue * 1.4, 0.15);
-  }
-  if (uTheme == 6) {
+    r = mix(m, m * hue * 1.4, 0.15);
+  } else if (uTheme == 6) {
     // custom: the user's colours; dark where the model is dark, light (per surface) where it is bright
     vec3 light = uSurface == 1 ? uCustomWall : uSurface == 2 ? uCustomFloor : uCustomLight;
     vec3 m = mix(uCustomDark, light, clamp(luma * 1.3, 0.0, 1.0));
-    return mix(m, m * hue, uCustomHue);
-  }
-  if (uTheme == 5) {
+    r = mix(m, m * hue, uCustomHue);
+  } else if (uTheme == 5) {
     // pastel: the model's own colours, lightened and softened, on a pale stage
     vec3 grey = vec3(clamp(0.70 + luma * 0.27, 0.0, 0.97));
-    return clamp(grey * mix(vec3(1.0), hue, 0.45), 0.0, 0.97);
+    r = clamp(grey * mix(vec3(1.0), hue, 0.45), 0.0, 0.97);
+  } else {
+    // day: light surfaces with a trace of their hue
+    vec3 grey = vec3(clamp(0.62 + luma * 0.36, 0.0, 0.97));
+    r = mix(grey, grey * hue, 0.12);
   }
-  // day: light surfaces with a trace of their hue
-  vec3 grey = vec3(clamp(0.62 + luma * 0.36, 0.0, 0.97));
-  return mix(grey, grey * hue, 0.12);
-}
-`;
+  return r;
+}`;
 
 interface Themed {
   material: THREE.Material;
@@ -469,7 +468,7 @@ export class Look {
       // managed colours the input is linear and the output gets encoded, so convert on the way in and out
       shader.fragmentShader = shader.fragmentShader.replace(
         'void main() {',
-        'vec3 f3dxThemed(vec3 c) {\n  if (uLinear == 1) return pow(f3dxThemedRaw(pow(c, vec3(1.0 / 2.2))), vec3(2.2));\n  return f3dxThemedRaw(c);\n}\nvoid main() {',
+        'vec3 f3dxThemed(vec3 c) {\n  vec3 r = uLinear == 1 ? pow(f3dxThemedRaw(pow(c, vec3(1.0 / 2.2))), vec3(2.2)) : f3dxThemedRaw(c);\n  return r;\n}\nvoid main() {',
       );
       if (flat) {
         // lowered by uDrop along the model's up axis, so the floor or ceiling in the same plane wins
