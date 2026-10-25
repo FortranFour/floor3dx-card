@@ -65,12 +65,12 @@ const STYLE = `
 .panel{position:absolute;top:60px;right:14px;max-height:calc(100% - 74px);width:min(340px,calc(100% - 28px));display:flex;flex-direction:column;border-radius:18px;background:var(--f3r-panel);-webkit-backdrop-filter:blur(var(--f3r-blur));backdrop-filter:blur(var(--f3r-blur));border:1px solid var(--f3r-line);box-shadow:0 10px 40px rgba(0,0,0,.25);overflow:hidden;animation:f3r-in .18s ease}
 @keyframes f3r-in{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}}
 :host(.narrow) .panel{top:auto;left:10px;right:10px;bottom:10px;width:auto;max-height:58%;animation-name:f3r-up}
-/* phones: the title keeps to half the width, the Rooms button is an icon, the model switcher drops to a second row on the right */
+/* phones: the title keeps to half the width, the model switcher takes the first row on the right, Reset view and Rooms (an icon) the second */
 :host(.narrow) .title{max-width:48%}:host(.narrow) .title span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 :host(.narrow) .menu{flex-wrap:wrap;justify-content:flex-end;max-width:calc(52% - 14px)}
 :host(.narrow) .menu > button span{display:none}:host(.narrow) .menu > button{padding:0 8px}
-:host(.narrow) .menu::before{content:"";order:8;flex-basis:100%;height:0}
-:host(.narrow) .menu .seg{order:9}
+:host(.narrow) .menu::before{content:"";order:0;flex-basis:100%;height:0}
+:host(.narrow) .menu .seg{order:-1}
 :host(.narrow.models) .list{top:104px;max-height:calc(100% - 126px)}
 @keyframes f3r-up{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
 .panelhead{flex:none;display:flex;gap:12px;align-items:center;padding:14px 14px 10px}.roomicon{display:grid;place-items:center;width:42px;height:42px;border-radius:13px;background:rgba(var(--f3r-accent),.16);color:rgb(var(--f3r-accent))}
@@ -210,7 +210,12 @@ export class Floor3dxRoomsCard extends HTMLElement {
     }
     if (this._room && !ids.includes(this._room)) this._room = null;
     const defs = modelDefs(this._config);
-    if (defs.length > 1 && (this._active === ALL || !defs.some((d) => d.id === this._active)) && !this._slots.length) this._active = defs[0].id;
+    if (defs.length > 1 && !this._slots.length) {
+      // the model the card opens on: `default_model` (an id, a name, or `all`), else the first
+      const want = String(this._config.default_model || '').toLowerCase();
+      const def = defs.find((d) => d.id === want || d.name.toLowerCase() === want);
+      this._active = def ? def.id : want === ALL || want === 'both' ? ALL : this._active !== ALL && defs.some((d) => d.id === this._active) ? this._active : defs[0].id;
+    }
     if (defs.length <= 1) this._active = ALL;
     this._applyTheme();
     this._mountModels();

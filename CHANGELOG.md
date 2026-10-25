@@ -2,8 +2,11 @@
 
 ## 2.5.1
 
+### Added (rooms card)
+- `default_model`: the model the card opens on (`house`, `garage`, `all`); in the editor's Display section as *Opens on*.
+
 ### Fixed (rooms card)
-- On phones (cards under 700px wide) the title, the model switcher, Reset view and Rooms no longer crowd each other: the title keeps to half the width, Rooms is an icon, and the switcher drops to a second row on the right; the Rooms list opens below it.
+- On phones (cards under 700px wide) the title, the model switcher, Reset view and Rooms no longer crowd each other: the title keeps to half the width, the switcher takes the first row on the right, Reset view and Rooms (an icon) the second; the Rooms list opens below them.
 
 ## 2.5.0
 

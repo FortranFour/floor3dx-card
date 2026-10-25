@@ -530,6 +530,7 @@ rooms:
 | `models` | several models in one card (2.5): a list of `{id, name, width, card}`, each `card` a floor3d card configuration; replaces `card:`. `width` is the share of the width when all are shown | |
 | `layout` | `row`, `column`: how the models are arranged when all are shown (2.5) | by the card's shape: side by side when wider than tall |
 | `models_menu` | `no`: no House / Garage / Both switcher on the card (2.5) | `yes` |
+| `default_model` | the model the card opens on: a model's `id` or name, or `all` (2.5.1); `#model=` in the URL overrides it | the first model |
 | `models_gap` | px between the models when all are shown (2.5) | `14` |
 | `model_labels` | `no`: no divider line and no name caption in each view when all are shown (2.5) | `yes` |
 | `rooms[].model` | the `id` of the model the room is on (2.5) | the first model |

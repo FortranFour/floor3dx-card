@@ -126,6 +126,7 @@ JS = r"""async () => {
   await ready(el3);
   mark('multi');
   out.slots = el3._slots.length;
+  const el4 = document.createElement('floor3dx-rooms-card'); el4.setConfig({models: [m('House'), m('Annex')], theme: 'architect', rooms: [], default_model: 'annex'}); out.defaultModel = el4._active === 'annex'; el4.setConfig({models: [m('House'), m('Annex')], theme: 'architect', rooms: [], default_model: 'both'}); out.defaultBoth = el4._active === 'all';
   out.switcher = el3.shadowRoot.querySelectorAll('.seg button').length;
   out.firstShown = el3._active === 'house' && !el3._slots[0].host.hidden && el3._slots[1].host.hidden;
   el3.shadowRoot.querySelector('.seg button[data-model=all]').click(); await sleep(200);
@@ -223,7 +224,7 @@ if __name__ == '__main__':
     check('object_tap room: the tap selects the room only', r.get('roomMode'))
     check('hue slider: shown at the current hue, sets hs_color [h, 100]; both adds the swatches', r.get('hueSlider') and r.get('hueCall') and r.get('hueBoth'))
     check('reset view flies the camera home', r.get('resetView'))
-    check('two models: two embedded cards, a switcher with Both, the first shown', r.get('slots') == 2 and r.get('switcher') == 3 and r.get('firstShown'))
+    check('two models: two embedded cards, a switcher with Both, the first shown; default_model picks another', r.get('slots') == 2 and r.get('switcher') == 3 and r.get('firstShown') and r.get('defaultModel') and r.get('defaultBoth'))
     check('Both shows the models side by side', r.get('bothShown'))
     check('selecting a room of the other model shows that model; pins only on the shown model', r.get('selectSwitches') and r.get('pinsOnShown'))
     check('the select event and the URL hash pick a model and a room', r.get('selectEvent') and r.get('hashSelect'))
