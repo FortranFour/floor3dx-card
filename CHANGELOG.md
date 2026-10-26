@@ -6,6 +6,7 @@
 - **The real sun** (`daylight.sun: yes`): one directional light with a shadow map over the model, so sunlight enters only through the openings (glass casts no shadow) and the ceilings of a Sweet Home 3D export stand in for the roof; walls, frames and furniture cast shadows that move across the floors through the day. Shadows are switched on for the card without `shadow: yes`, and every caster shadows from both sides (ceilings face down). `sun_strength`, `sun_shadow_size`, `sun_full`. The exterior objects get the same sun.
 - `daylight.glow: auto`: every translucent pane glows warm after dark (`glow_color`, `glow_intensity`, `glow_entity`), no list of panes and entities needed.
 - `daylight.time`: a fixed hour (`7.5`, `'18:30'`) for previews, without an entity.
+- Rooms card: the overlay is drawn in three regions that are replaced only when their markup changes, and the room panel's entrance animation plays once, when it opens. A state update or a toggled switch no longer rebuilt the whole overlay, which replayed the slide-in and blinked the panel.
 - Editor: the daylight form gains *Real sun with shadows*, *Sun strength*, *Sun shadow map* and *Panes glow after dark*. Harness: `test_sun.py`, `render_sun.py` (the house through a day).
 
 ## 2.5.1

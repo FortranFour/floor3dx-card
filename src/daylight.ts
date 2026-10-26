@@ -43,10 +43,15 @@ export interface DaylightConfig {
   glow_intensity?: number; // for glow: auto; default 0.35
   glow_entity?: string; // for glow: auto: only while this entity is on (an outdoor-lights switch, say)
   sun?: boolean | string; // a real sun with shadows through the openings; needs the ceilings in the model
+  real_sun?: boolean | string; // the same, as the editor writes it
+  pane_glow?: boolean | string; // `glow: auto`, as the editor writes it
+  lamps_night?: number; // `lamps.night`, as the editor writes it
+  lamps_reach?: number; // `lamps.reach`, as the editor writes it
   sun_strength?: number; // the sun's intensity as a multiple of the day ambient; default 1.4
   sun_shadow_size?: number; // shadow map size; default 2048 (4096 for a sharp pool on a big house)
   sun_full?: number; // elevation, degrees, at which the sun reaches full strength; default 8
   time?: number | string; // a fixed hour (7.5, '18:30') instead of the real sun, for previews
+  lamps?: { night?: number; reach?: number }; // the card's own lamps after dark: intensity and reach multiplied (1.6 and 1.3 by default when the block is given)
 }
 
 export interface DaylightWindow {
@@ -107,6 +112,7 @@ export class Daylight {
   private spots: { light: THREE.SpotLight; outward: THREE.Vector3; center: THREE.Vector3; lumens: number; color: string | null }[] = [];
   private glows: { meshes: THREE.Mesh[]; entity: string | null; color: THREE.Color; intensity: number }[] = [];
   private sun: THREE.DirectionalLight | null = null;
+  private dark = 0; // 1 - daylight factor, from the last update
   private modelRadius = 1000;
   private lastSignature = '';
   private dayColor: THREE.Color;
@@ -168,7 +174,7 @@ export class Daylight {
     this.modelRadius = Math.max(100, box.getSize(new THREE.Vector3()).length() / 2);
 
     // the real sun: a directional light with one shadow map over the model
-    if (this.yes(this.cfg.sun, false)) {
+    if (this.yes(this.cfg.sun, false) || this.yes(this.cfg.real_sun, false)) {
       const size = Number(this.cfg.sun_shadow_size) || 2048;
       this.sun = new THREE.DirectionalLight(0xffffff, 0);
       this.sun.layers.enable(EXTERIOR_LAYER);
@@ -250,7 +256,7 @@ export class Daylight {
 
     // glass glow
     const glowList: DaylightGlow[] = Array.isArray(this.cfg.glow) ? this.cfg.glow : [];
-    if (this.cfg.glow === 'auto' || this.cfg.glow === true || String(this.cfg.glow).toLowerCase() === 'yes') {
+    if (this.cfg.glow === 'auto' || this.cfg.glow === true || String(this.cfg.glow).toLowerCase() === 'yes' || this.yes(this.cfg.pane_glow, false)) {
       // every translucent pane of the model (glass has opacity < 1 in a Sweet Home 3D export)
       const panes: THREE.Mesh[] = [];
       deps.scene.traverse((o: any) => {
@@ -282,6 +288,7 @@ export class Daylight {
 
     // Daylight factor f: 0 at or below the night stop, 1 at or above the day stop, smooth between.
     const f = smoothstep(this.stops.night, this.stops.day, sun.elevation);
+    this.dark = 1 - f;
     const wf = weather && this.weatherMap[weather] !== undefined ? this.weatherMap[weather] : 1;
     const fe = f * wf; // effective daylight
     // Colour runs night -> dusk/dawn -> day along the elevation stops, so the low sun is fully the
@@ -380,6 +387,15 @@ export class Daylight {
       this.d.scene.remove(s.light);
       this.d.scene.remove(s.light.target);
     });
+  }
+
+  /** How much brighter and farther the card's lamps shine right now (1 by day, `lamps.night` / `lamps.reach` at night). */
+  lampBoost(): { intensity: number; reach: number } {
+    const l = this.cfg.lamps && typeof this.cfg.lamps === 'object' ? this.cfg.lamps : {};
+    const n = l.night !== undefined ? l.night : this.cfg.lamps_night, r = l.reach !== undefined ? l.reach : this.cfg.lamps_reach;
+    if (n === undefined && r === undefined) return { intensity: 1, reach: 1 };
+    const night = n !== undefined ? Number(n) : 1.6, reach = r !== undefined ? Number(r) : 1.3;
+    return { intensity: 1 + (night - 1) * this.dark, reach: 1 + (reach - 1) * this.dark };
   }
 
   // ---- helpers ---------------------------------------------------------------------------------

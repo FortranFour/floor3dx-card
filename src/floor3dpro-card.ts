@@ -1845,6 +1845,10 @@ export class Floor3dCard extends LitElement {
         this._requestRender('transparent');
       }
       if (this._daylight && this._modelready && this._daylight.update(hass.states)) {
+        // the lamps follow the daylight (daylight.lamps): recompute them at the new darkness
+        if ((this._config as any).daylight && ((this._config as any).daylight.lamps || (this._config as any).daylight.lamps_night || (this._config as any).daylight.lamps_reach)) {
+          this._config.entities.forEach((entity, i) => { if (entity.type3d == 'light' && this._states[i] !== undefined) this._updatelight(entity, i); });
+        }
         this._renderer.shadowMap.needsUpdate = true;
         this._requestRender('daylight');
       }
@@ -2200,8 +2204,8 @@ export class Floor3dCard extends LitElement {
   /** `shadow: yes`, or daylight's real sun, which is nothing without a shadow map. */
   private _shadowsWanted(): boolean {
     if (this._config.shadow && this._config.shadow == 'yes') return true;
-    const sun = (this._config as any).daylight && (this._config as any).daylight.sun;
-    return sun === true || String(sun).toLowerCase() === 'yes' || String(sun).toLowerCase() === 'true';
+    const d = (this._config as any).daylight || {};
+    return [d.sun, d.real_sun].some((v) => v === true || String(v).toLowerCase() === 'yes' || String(v).toLowerCase() === 'true');
   }
 
   private _initDaylight(): void {
@@ -4540,13 +4544,17 @@ export class Floor3dCard extends LitElement {
       }
 
       if (this._states[i] == 'on') {
-        // the light's own reach and decay (as set up in _add3dObjects), for the physical mode's match
-        const reach = (light as any).distance !== undefined ? (light as any).distance : 600;
+        // the light's own reach and decay (as set up in _add3dObjects), for the physical mode's match;
+        // after dark, daylight's `lamps` block makes the lamps brighter and farther-reaching
+        const boost = this._daylight ? this._daylight.lampBoost() : { intensity: 1, reach: 1 };
+        if (light.userData.baseDistance === undefined) light.userData.baseDistance = (light as any).distance !== undefined ? (light as any).distance : 600;
+        if ((light as any).distance !== undefined) (light as any).distance = light.userData.baseDistance * boost.reach;
+        const reach = light.userData.baseDistance * boost.reach;
         const decay = (light as any).decay !== undefined ? (light as any).decay : 2;
         if (this._brightness[i] != -1) {
-          light.intensity = lightIntensity(max, this._brightness[i] / 255, this._config, reach, decay);
+          light.intensity = lightIntensity(max, this._brightness[i] / 255, this._config, reach, decay) * boost.intensity;
         } else {
-          light.intensity = lightIntensity(max, 1, this._config, reach, decay);
+          light.intensity = lightIntensity(max, 1, this._config, reach, decay) * boost.intensity;
         }
         if (!this._color[i]) {
           if (entity.light.color) {

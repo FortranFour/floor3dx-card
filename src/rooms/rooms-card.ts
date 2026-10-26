@@ -40,7 +40,8 @@ const STYLE = `
 :host(.narrow.open) .stage > .models > .model > .caption{display:none}
 .stage > .models > .model ::part(card),.stage > .models > .model floor3dpro-card{display:block;width:100%;height:100%}
 .ui{position:absolute;inset:0;pointer-events:none}
-.ui > *{pointer-events:auto}
+.ui > div{pointer-events:none}
+.ui .title,.ui .menu,.ui .list,.ui .pin,.ui .panel,.ui .toast{pointer-events:auto}
 .title{position:absolute;left:14px;top:12px;display:flex;align-items:center;gap:10px;padding:8px 14px 8px 12px;border-radius:14px;background:var(--f3r-panel);-webkit-backdrop-filter:blur(var(--f3r-blur));backdrop-filter:blur(var(--f3r-blur));border:1px solid var(--f3r-line);font-size:15px;font-weight:500;letter-spacing:-.2px}
 .title small{color:var(--f3r-muted);font-weight:400;font-size:12px}
 .menu{position:absolute;right:14px;top:12px;display:flex;gap:8px;align-items:flex-start}
@@ -66,6 +67,7 @@ const STYLE = `
 .panel{position:absolute;top:60px;right:14px;max-height:calc(100% - 74px);width:min(340px,calc(100% - 28px));display:flex;flex-direction:column;border-radius:18px;background:var(--f3r-panel);-webkit-backdrop-filter:blur(var(--f3r-blur));backdrop-filter:blur(var(--f3r-blur));border:1px solid var(--f3r-line);box-shadow:0 10px 40px rgba(0,0,0,.25);overflow:hidden;animation:f3r-in .18s ease}
 @keyframes f3r-in{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}}
 :host(.narrow) .panel{top:auto;left:10px;right:10px;bottom:10px;width:auto;max-height:58%;animation-name:f3r-up}
+.panel.still{animation:none}
 /* phones: the title keeps to half the width, the model switcher takes the first row on the right, Reset view and Rooms (an icon) the second */
 :host(.narrow) .title{max-width:48%}:host(.narrow) .title span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 :host(.narrow) .menu{flex-wrap:wrap;justify-content:flex-end;max-width:calc(52% - 14px)}
@@ -712,10 +714,15 @@ export class Floor3dxRoomsCard extends HTMLElement {
       : this._viewsOpen && views ? `<div class="list" role="menu"><button data-action="reset">${icon('mdi:camera-flip-outline')}<span>Reset view</span></button>${views.views.map((v, i) => `<button data-action="view" data-i="${i}">${icon('mdi:magnify-expand')}<span>${esc(String(v.name || `View ${i + 1}`))}</span></button>`).join('')}</div>` : '';
     const pins = c.pins !== false && c.pins !== 'no' ? `<div class="pins">${rooms.filter((r) => (r.floors || []).length).map((r) => { const n = this._activeCount(r); return `<button class="pin ${n ? 'on' : ''} ${r.id === this._hover ? 'hover' : ''}" hidden data-action="room" data-room="${esc(r.id)}" aria-pressed="${r.id === this._room}" aria-label="${esc(this._roomName(r))}${n ? `, ${n} on` : ''}">${icon(r.icon || 'mdi:door-open')}<span class="pn">${esc(this._roomName(r))}</span>${n ? `<span class="count" aria-hidden="true">${n}</span>` : ''}</button>`; }).join('')}</div>` : '';
     const panel = room ? this._panel(room) : '';
+    if (!room) this._lastPanelRoom = null;
     this.classList.toggle('open', !!room);
     const tokens = this._isPreview() ? 0 : tokenRoles(c).length;
     const hint = !hasModel ? `<div class="hint">Open the card editor to choose a floor3d card and detect its rooms.</div>` : !rooms.length ? `<div class="hint">No rooms yet: detect them in the card editor.</div>` : tokens ? `<div class="hint">${tokens} entity reference${tokens === 1 ? '' : 's'} ([[entity:…]]) unresolved: this card must sit inside a dashboard-entity-reference wrapper.</div>` : '';
-    this._ui.innerHTML = `${title}${menu}${list}${pins}${panel}${hint}${this._toast ? `<div class="toast" role="status">${esc(this._toast)}</div>` : ''}`;
+    // three regions, each replaced only when its markup changed: a state update that touches one
+    // tile no longer rebuilds the whole overlay (which replayed the panel's entrance and blinked)
+    this._region('chrome', `${title}${menu}${list}${pins}`);
+    this._region('panelhost', panel);
+    this._region('notes', `${hint}${this._toast ? `<div class="toast" role="status">${esc(this._toast)}</div>` : ''}`);
     if (focus) (this._root.querySelector(`[data-focus="${CSS.escape(focus)}"]`) as HTMLElement | null)?.focus({ preventScroll: true });
     const tiles = this._ui.querySelector('.tiles') as HTMLElement | null; if (tiles) tiles.scrollTop = scroll;
     if (this._focus && tiles) {
@@ -724,13 +731,23 @@ export class Floor3dxRoomsCard extends HTMLElement {
     }
     this._placePins();
   }
+  private _regions = new Map<string, { el: HTMLElement; html: string }>();
+  private _region(name: string, html: string): void {
+    let r = this._regions.get(name);
+    if (!r) { const el = document.createElement('div'); el.className = name; this._ui.appendChild(el); r = { el, html: '' }; this._regions.set(name, r); }
+    if (r.html === html) return;
+    r.html = html; r.el.innerHTML = html;
+  }
+  private _lastPanelRoom: string | null = null;
   private _panel(room: Room): string {
     const readouts = this._readouts(room);
     const ents = (room.entities || []).filter((e) => !this._tiles.hidden(e) && (this._sensorTiles() || !READOUT_DOMAINS.has(domainOf(e.entity))));
     const active = this._activeCount(room);
     const offable = ents.filter((e) => OFFABLE.includes(domainOf(e.entity)) && !e.read_only);
     const roomName = room.name || room.id;
-    return `<section class="panel" aria-label="${esc(this._roomName(room))}"><div class="panelhead"><div class="roomicon">${icon(room.icon || 'mdi:door-open')}</div><div class="grow"><h3>${esc(this._roomName(room))}</h3><p>${esc(room.description || (active ? `${active} on` : ents.length ? 'Everything is off' : readouts ? 'Readings only' : 'Nothing to control here'))}</p></div><button class="close" data-action="close" aria-label="Close">${icon('mdi:close')}</button></div>${readouts}<div class="tiles">${ents.length ? ents.map((e) => this._tiles.tile(e, roomName)).join('') : readouts ? '' : '<div class="empty">No entities in this room. Add them in the card editor.</div>'}</div>${offable.length ? `<div class="foot"><button class="quiet" data-action="room-off" data-focus="room-off" ${offable.some((e) => isOn(this._s(e.entity))) ? '' : 'disabled'}>${icon('mdi:power')}All off in this room</button></div>` : ''}</section>`;
+    // the entrance animation plays when the panel opens, not on every re-render while it is open
+    const still = this._lastPanelRoom === room.id; this._lastPanelRoom = room.id;
+    return `<section class="panel${still ? ' still' : ''}" aria-label="${esc(this._roomName(room))}"><div class="panelhead"><div class="roomicon">${icon(room.icon || 'mdi:door-open')}</div><div class="grow"><h3>${esc(this._roomName(room))}</h3><p>${esc(room.description || (active ? `${active} on` : ents.length ? 'Everything is off' : readouts ? 'Readings only' : 'Nothing to control here'))}</p></div><button class="close" data-action="close" aria-label="Close">${icon('mdi:close')}</button></div>${readouts}<div class="tiles">${ents.length ? ents.map((e) => this._tiles.tile(e, roomName)).join('') : readouts ? '' : '<div class="empty">No entities in this room. Add them in the card editor.</div>'}</div>${offable.length ? `<div class="foot"><button class="quiet" data-action="room-off" data-focus="room-off" ${offable.some((e) => isOn(this._s(e.entity))) ? '' : 'disabled'}>${icon('mdi:power')}All off in this room</button></div>` : ''}</section>`;
   }
 
   // ---- actions ----------------------------------------------------------------------------
