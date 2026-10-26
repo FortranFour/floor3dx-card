@@ -2197,6 +2197,13 @@ export class Floor3dCard extends LitElement {
     return ((found && found.objects) || []).flatMap((o) => matchObjects(o.object_id, names));
   }
 
+  /** `shadow: yes`, or daylight's real sun, which is nothing without a shadow map. */
+  private _shadowsWanted(): boolean {
+    if (this._config.shadow && this._config.shadow == 'yes') return true;
+    const sun = (this._config as any).daylight && (this._config as any).daylight.sun;
+    return sun === true || String(sun).toLowerCase() === 'yes' || String(sun).toLowerCase() === 'true';
+  }
+
   private _initDaylight(): void {
     if (!this._config.daylight || this._daylight) return;
     let base = 0.5;
@@ -2695,7 +2702,7 @@ export class Floor3dCard extends LitElement {
       }
     }
 
-    if (this._config.shadow && this._config.shadow == 'yes') {
+    if (this._shadowsWanted()) {
       console.log('Shadow On');
       this._renderer.shadowMap.enabled = true;
       // Faz-1 PRO Skill: MOBILE optimization
@@ -2914,13 +2921,7 @@ export class Floor3dCard extends LitElement {
         }
       }
 
-      const shadow = this._config.shadow ? this._config.shadow : 'no';
-
-      if (shadow == 'no') {
-        element.castShadow = false;
-      } else {
-        element.castShadow = true;
-      }
+      element.castShadow = this._shadowsWanted();
 
       return;
     });

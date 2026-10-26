@@ -8,7 +8,11 @@
 //   - the scene background colour
 //   - a sun spot outside each listed window, bright only on the side the sun is on
 //   - a separate, dimmer ambient for exterior objects at night
-//   - an emissive glow on glass when its room light is on after dark
+//   - an emissive glow on glass when its room light is on after dark, or on every pane at night (`glow: auto`)
+//   - with `sun: yes`, a real sun: one directional light with a shadow map over the whole model, so the
+//     light comes in only through the openings (glass casts no shadow) and the ceilings (room_N_2 in a
+//     Sweet Home 3D export) stand in for the roof; furniture, frames and walls cast shadows that move
+//     through the day. The ambient / colour / background parts above still apply.
 //
 // Everything is derived from a daylight factor f (0 at night, 1 by day) and a dusk weight w (1 with
 // the sun on the horizon, 0 away from it), both from elevation, with the day part scaled by weather.
@@ -34,7 +38,15 @@ export interface DaylightConfig {
   exterior_night?: number; // exterior ambient at night, as a fraction of the day level; default 0.08
   exterior_sun?: number; // directional sun on exterior objects only, as a fraction of the day level; default 0.6
   beam_full?: number; // elevation, degrees, at which window beams reach full strength; default 4
-  glow?: DaylightGlow[];
+  glow?: DaylightGlow[] | 'auto' | boolean; // `auto`: every pane glows after dark
+  glow_color?: string; // for glow: auto; default #ffd27a
+  glow_intensity?: number; // for glow: auto; default 0.35
+  glow_entity?: string; // for glow: auto: only while this entity is on (an outdoor-lights switch, say)
+  sun?: boolean | string; // a real sun with shadows through the openings; needs the ceilings in the model
+  sun_strength?: number; // the sun's intensity as a multiple of the day ambient; default 1.4
+  sun_shadow_size?: number; // shadow map size; default 2048 (4096 for a sharp pool on a big house)
+  sun_full?: number; // elevation, degrees, at which the sun reaches full strength; default 8
+  time?: number | string; // a fixed hour (7.5, '18:30') instead of the real sun, for previews
 }
 
 export interface DaylightWindow {
@@ -93,7 +105,9 @@ export class Daylight {
   private exteriorAmbient: THREE.AmbientLight | null = null;
   private exteriorSun: THREE.DirectionalLight | null = null;
   private spots: { light: THREE.SpotLight; outward: THREE.Vector3; center: THREE.Vector3; lumens: number; color: string | null }[] = [];
-  private glows: { meshes: THREE.Mesh[]; entity: string; color: THREE.Color; intensity: number }[] = [];
+  private glows: { meshes: THREE.Mesh[]; entity: string | null; color: THREE.Color; intensity: number }[] = [];
+  private sun: THREE.DirectionalLight | null = null;
+  private modelRadius = 1000;
   private lastSignature = '';
   private dayColor: THREE.Color;
   private duskColor: THREE.Color;
@@ -151,6 +165,31 @@ export class Daylight {
       if (o.isMesh && o.geometry) box.expandByObject(o);
     });
     box.getCenter(this.modelCenter);
+    this.modelRadius = Math.max(100, box.getSize(new THREE.Vector3()).length() / 2);
+
+    // the real sun: a directional light with one shadow map over the model
+    if (this.yes(this.cfg.sun, false)) {
+      const size = Number(this.cfg.sun_shadow_size) || 2048;
+      this.sun = new THREE.DirectionalLight(0xffffff, 0);
+      this.sun.layers.enable(EXTERIOR_LAYER);
+      this.sun.castShadow = true;
+      this.sun.shadow.mapSize.set(size, size);
+      const r = this.modelRadius * 1.05;
+      const cam = this.sun.shadow.camera as THREE.OrthographicCamera;
+      cam.left = -r; cam.right = r; cam.top = r; cam.bottom = -r;
+      cam.near = 1; cam.far = r * 4;
+      cam.updateProjectionMatrix();
+      this.sun.shadow.bias = -0.0004;
+      this.sun.shadow.normalBias = 1.5;
+      this.sun.target.position.copy(this.modelCenter);
+      deps.scene.add(this.sun);
+      deps.scene.add(this.sun.target);
+      // ceilings face down and would be culled from the shadow pass: let every caster shadow from both sides
+      deps.scene.traverse((o: any) => {
+        if (!o.isMesh || !o.castShadow) return;
+        (Array.isArray(o.material) ? o.material : [o.material]).forEach((m: any) => { if (m) m.shadowSide = THREE.DoubleSide; });
+      });
+    }
 
     if (this.yes(this.cfg.hemisphere, true)) {
       this.hemi = new THREE.HemisphereLight(this.dayColor, this.groundColor, 0);
@@ -210,14 +249,19 @@ export class Daylight {
     });
 
     // glass glow
-    (this.cfg.glow || []).forEach((g) => {
-      const meshes = deps.resolve(g.object_id);
-      meshes.forEach((m: any) => {
-        if (m.material && !m.userData.daylightOwnMaterial) {
-          m.material = Array.isArray(m.material) ? m.material.map((x: any) => x.clone()) : m.material.clone();
-          m.userData.daylightOwnMaterial = true;
-        }
+    const glowList: DaylightGlow[] = Array.isArray(this.cfg.glow) ? this.cfg.glow : [];
+    if (this.cfg.glow === 'auto' || this.cfg.glow === true || String(this.cfg.glow).toLowerCase() === 'yes') {
+      // every translucent pane of the model (glass has opacity < 1 in a Sweet Home 3D export)
+      const panes: THREE.Mesh[] = [];
+      deps.scene.traverse((o: any) => {
+        if (!o.isMesh || !o.material || o.name.startsWith('f3dx_')) return;
+        const mats = Array.isArray(o.material) ? o.material : [o.material];
+        if (mats.some((m: any) => m && m.transparent && m.opacity > 0.02 && m.opacity < 0.95)) panes.push(o);
       });
+      this.glows.push({ meshes: this.ownMaterials(panes), entity: this.cfg.glow_entity || null, color: new THREE.Color(this.cfg.glow_color || '#ffd27a'), intensity: this.cfg.glow_intensity !== undefined ? Number(this.cfg.glow_intensity) : 0.35 });
+    }
+    glowList.forEach((g) => {
+      const meshes = this.ownMaterials(deps.resolve(g.object_id));
       this.glows.push({
         meshes,
         entity: g.entity,
@@ -231,7 +275,7 @@ export class Daylight {
   update(states: any): boolean {
     const sun = this.sunPosition(states);
     const weather = this.cfg.weather_entity && states[this.cfg.weather_entity] ? String(states[this.cfg.weather_entity].state) : '';
-    const glowStates = this.glows.map((g) => (states[g.entity] ? states[g.entity].state : '')).join(',');
+    const glowStates = this.glows.map((g) => (g.entity && states[g.entity] ? states[g.entity].state : '')).join(',');
     const signature = [sun.elevation.toFixed(1), sun.azimuth.toFixed(1), sun.rising ? 'r' : 's', weather, glowStates].join('|');
     if (signature === this.lastSignature) return false;
     this.lastSignature = signature;
@@ -281,7 +325,15 @@ export class Daylight {
 
     // sun spots: bright only when the sun is above the horizon and on that window's side
     const sunDir = this.sunDirection(sun.elevation, sun.azimuth);
-    if (this.exteriorSun) {
+    if (this.sun) {
+      const k = this.cfg.sun_strength !== undefined ? Number(this.cfg.sun_strength) : 1.4;
+      const full = this.cfg.sun_full !== undefined ? Number(this.cfg.sun_full) : 8;
+      this.sun.position.copy(this.modelCenter.clone().add(sunDir.clone().multiplyScalar(this.modelRadius * 2)));
+      this.sun.target.position.copy(this.modelCenter);
+      this.sun.intensity = this.ambientDay * k * smoothstep(0, Math.max(0.1, full), sun.elevation) * wf;
+      this.sun.color.copy(sunColor);
+    }
+    if (this.exteriorSun && !this.sun) {
       const k = this.cfg.exterior_sun !== undefined ? Number(this.cfg.exterior_sun) : 0.6;
       this.exteriorSun.position.copy(this.modelCenter.clone().add(sunDir.clone().multiplyScalar(2000)));
       this.exteriorSun.intensity = this.ambientDay * k * smoothstep(0, 8, sun.elevation) * wf;
@@ -304,7 +356,7 @@ export class Daylight {
     // glass glow after dark
     const dark = 1 - f;
     this.glows.forEach((g) => {
-      const on = states[g.entity] && states[g.entity].state === 'on';
+      const on = !g.entity || (states[g.entity] && states[g.entity].state === 'on');
       const k = on ? dark * g.intensity : 0;
       g.meshes.forEach((m: any) => {
         const mats = Array.isArray(m.material) ? m.material : [m.material];
@@ -318,6 +370,7 @@ export class Daylight {
 
   dispose(): void {
     if (this.hemi) this.d.scene.remove(this.hemi);
+    if (this.sun) { this.d.scene.remove(this.sun); this.d.scene.remove(this.sun.target); }
     if (this.exteriorAmbient) this.d.scene.remove(this.exteriorAmbient);
     if (this.exteriorSun) {
       this.d.scene.remove(this.exteriorSun);
@@ -330,6 +383,17 @@ export class Daylight {
   }
 
   // ---- helpers ---------------------------------------------------------------------------------
+
+  /** Glass gets its own material copies, so the glow does not spread to every pane sharing one. */
+  private ownMaterials(meshes: THREE.Mesh[]): THREE.Mesh[] {
+    meshes.forEach((m: any) => {
+      if (m.material && !m.userData.daylightOwnMaterial) {
+        m.material = Array.isArray(m.material) ? m.material.map((x: any) => x.clone()) : m.material.clone();
+        m.userData.daylightOwnMaterial = true;
+      }
+    });
+    return meshes;
+  }
 
   private yes(v: any, dflt: boolean): boolean {
     if (v === undefined || v === null) return dflt;
@@ -347,6 +411,11 @@ export class Daylight {
   }
 
   private sunPosition(states: any): { elevation: number; azimuth: number; rising: boolean } {
+    if (this.cfg.time !== undefined && this.cfg.time !== null && this.cfg.time !== '') {
+      const m = /^(\d{1,2}):(\d{2})/.exec(String(this.cfg.time));
+      const hour = m ? Number(m[1]) + Number(m[2]) / 60 : parseFloat(String(this.cfg.time));
+      if (!isNaN(hour)) return this.plainDay(hour);
+    }
     if (this.cfg.time_entity && states[this.cfg.time_entity]) {
       const t = states[this.cfg.time_entity];
       const a = t.attributes || {};
@@ -359,11 +428,7 @@ export class Daylight {
       if (m) hour = Number(m[1]) + Number(m[2]) / 60;
       else if (a.hour !== undefined && a.minute !== undefined) hour = Number(a.hour) + Number(a.minute) / 60;
       else hour = parseFloat(t.state);
-      if (!isNaN(hour)) {
-        // a plain day: sunrise 6, noon 12 at 60 degrees, sunset 18; south at noon
-        const x = ((hour - 6) / 12) * Math.PI;
-        return { elevation: 60 * Math.sin(x), azimuth: 90 + (hour - 6) * 15, rising: hour < 12 };
-      }
+      if (!isNaN(hour)) return this.plainDay(hour);
     }
     const sun = states[this.cfg.sun_entity || 'sun.sun'];
     if (sun && sun.attributes) {
@@ -374,6 +439,12 @@ export class Daylight {
       };
     }
     return { elevation: 45, azimuth: 180, rising: false };
+  }
+
+  /** A plain day: sunrise 6, noon 12 at 60 degrees, sunset 18; south at noon. */
+  private plainDay(hour: number): { elevation: number; azimuth: number; rising: boolean } {
+    const x = ((hour - 6) / 12) * Math.PI;
+    return { elevation: 60 * Math.sin(x), azimuth: 90 + (hour - 6) * 15, rising: hour < 12 };
   }
 
   private sunDirection(elevation: number, azimuth: number): THREE.Vector3 {

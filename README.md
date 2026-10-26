@@ -336,6 +336,21 @@ daylight:
       color: '#ffd27a'
 ```
 
+**A real sun** (2.6): `sun: 'yes'` adds one directional light with a shadow map over the whole model, so the light comes in only through the openings — glass casts no shadow — and the ceilings of a Sweet Home 3D export (`room_N_2`, invisible from above but still there) stand in for the roof. Walls, window frames and furniture cast shadows that move across the floors through the day; the pools of sun travel from the east windows in the morning to the west ones in the evening. It needs no `shadow: yes` and no list of windows: shadows are switched on for the card and every caster shadows from both sides. `sun_strength` (default 1.4, a multiple of the day ambient), `sun_shadow_size` (2048; 4096 for a sharper pool on a large house), `sun_full` (the elevation at which the sun reaches full strength, 8°). The exterior objects get the same sun. `glow: auto` makes every translucent pane glow warm after dark (`glow_color`, `glow_intensity` 0.35, `glow_entity` to tie it to a switch), instead of listing panes with their room's entity. `time: 7.5` (or `'18:30'`) fixes the hour for a preview without an entity. `north` matters: with the plan drawn north-up in the view, `north` is the scene direction that points to the top of the picture.
+
+```yaml
+north: { x: -1, z: 0 }          # the scene direction of north
+daylight:
+  sun: 'yes'
+  sun_shadow_size: 4096
+  glow: auto
+  ambient: { day: 0.77, night: 0.45 }      # a modest night
+  colors: { dusk: '#f6c08a', dawn: '#f6c08a' }   # a modest warmth at the horizon
+  sun_colors: { day: '#fff3dc', dusk: '#ffb060', dawn: '#ffc080' }
+```
+
+<p><img src="docs/floor3dx-sun.jpg" alt="The real sun through a day: 8:00, 12:00, 17:00, 22:00" width="100%"></p>
+
 `colors` tints the room light (ambient, hemisphere and camera light); `sun_colors`, when given, tints only the window beams, so the house can stay neutral grey while the sun goes orange. The light colour and the background run along a gradient by sun elevation: the night colour at or below the `night` stop, the dusk (or dawn, when the sun is rising) colour at the `dusk` stop, the day colour at or above the `day` stop, blended smoothly in between, so the low sun is fully orange and both sides of it fade out of it gradually. `north` (the card's existing option) tells the card which way the model faces, so the window spots follow the real sun. `time_entity` accepts a number of hours 0 to 24, a time (an `input_datetime` such as `06:40:00`; 6:00 sunrise, 12:00 noon, 18:00 sunset) or any entity with `elevation` and `azimuth` attributes. `beam_full` is the elevation at which the window beams reach full strength (default 4°). Exterior objects are moved to their own render layer: only the exterior ambient and `exterior_sun`, a directional light that follows the real sun, reach them, and the window spots never touch them; they remain clickable. Each window spot sits just inside its pane and is aimed along the sun's actual direction to where that line meets the floor, so its pool lands near the sill under a high sun, reaches deep into the room under a low one, and swings sideways between morning and afternoon. YAML only for now; no editor section.
 
 <p><img src="https://github.com/user-attachments/assets/1dce8df7-31b4-4fb4-9537-043ca22721c8" alt="Daylight on the plan (1)" width="49%"> <img src="https://github.com/user-attachments/assets/254dfcff-3556-4319-9d59-e9dbe6cb2fa5" alt="Daylight on the plan (2)" width="49%"></p>
@@ -480,6 +495,7 @@ On a Home Assistant without `ha-form` the previous editor is shown instead. `day
 | `rotate.ramp` | seconds a fan takes to reach its speed, and to stop | at once |
 | `look` | see above | off |
 | `look.edge_skip` | `images`, `texts`, `seams`, `floors`, `ceilings`, `coplanar`, object ids / patterns / `<group>` | nothing skipped |
+| `daylight.sun`, `sun_strength`, `sun_shadow_size`, `sun_full`, `glow: auto`, `glow_color`, `glow_intensity`, `glow_entity`, `time` | the real sun with shadows through the openings; every pane glowing after dark; a fixed hour (2.6) | off |
 | `look.custom` | colours of `theme: custom`, or overrides of a named palette; see above | defaults |
 | `look.keep` | objects the theme leaves as the model has them: ids / patterns / `<group>` | none |
 | `hide_spare_panels` | `yes`, `no`: hide unbound panels beside bound text / picture panels | `no` |
