@@ -22,6 +22,8 @@ const PREVIEW_HEIGHT = 'calc(100vh - 235px)';
 const EMBEDDED_TAG = 'floor3dpro-card'; // renamed to floor3dx-card by the build, like every element name
 const ALL = 'all';
 const READOUT_DOMAINS = new Set(['sensor', 'binary_sensor']);
+/** A room entity whose `entity` is a Jinja template rather than an id: a readout rendered by Home Assistant. */
+export function isTemplate(v: any): boolean { return typeof v === 'string' && /\{\{|\{%/.test(v); }
 /** Row types of the embedded card whose double tap runs an action; a `camera` row is a room's popup button, not a control. */
 const TAP_TYPES = new Set(['light', 'gesture']);
 
@@ -93,7 +95,8 @@ const STYLE = `
 @keyframes f3r-up{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
 .panelhead{flex:none;display:flex;gap:12px;align-items:center;padding:14px 14px 10px}.roomicon{display:grid;place-items:center;width:42px;height:42px;border-radius:13px;background:rgba(var(--f3r-accent),.16);color:rgb(var(--f3r-accent))}
 .panelhead h3{margin:0 0 2px;font-size:18px;font-weight:500}.panelhead p{margin:0;color:var(--f3r-muted);font-size:12px}.panelhead .grow{flex:1;min-width:0}
-.readouts{flex:none;margin:0;padding:0 14px 10px;color:var(--f3r-ink);font-size:12px;display:flex;flex-wrap:wrap;gap:2px 0;line-height:1.5}.readouts em{font-style:normal;color:var(--f3r-muted)}.readouts span+span:before{content:"·";margin:0 6px;color:var(--f3r-muted)}.readouts .alert{color:rgb(var(--f3r-on))}
+.readouts.more{padding-top:0}.rule{flex:none;border:0;border-top:1px solid var(--f3r-line);margin:0 14px 8px}
+.readouts{flex:none;margin:0;padding:0 14px 10px;color:var(--f3r-ink);font-size:12px;display:flex;flex-wrap:wrap;gap:2px 0;line-height:1.5}.readouts em{font-style:normal;color:var(--f3r-muted)}.readouts span:before{content:"·";margin:0 6px 0 0;color:var(--f3r-muted)}.readouts span+span:before{margin:0 6px}.readouts .alert{color:rgb(var(--f3r-on))}
 .tiles{display:grid;grid-template-columns:1fr;gap:8px;padding:4px 12px 12px;overflow:auto;flex:0 1 auto;min-height:0;align-content:start;grid-auto-rows:max-content}
 :host(.narrow) .tiles{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
 .tile.focus{box-shadow:0 0 0 2px rgb(var(--f3r-accent));transition:box-shadow .3s}
@@ -152,6 +155,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
   private _hover: string | null = null;
   private _listOpen = false;
   private _viewsOpen = false;
+  private _templates = new Map<string, { text: string; error: boolean; unsub: Promise<() => void> | null }>(); // template readouts, rendered by HA
   private _daylightOn = true; // the day & night switch (remembered per card in this browser)
   private _weatherOn = true; // follow the weather entity (remembered per card in this browser)
   private _fixedHour: number | null = null; // the long-press menu's fixed time, this session
@@ -254,11 +258,13 @@ export class Floor3dxRoomsCard extends HTMLElement {
     if (!this._slots.length) { try { this._daylightOn = localStorage.getItem(this._storeKey('daylight')) !== 'off'; this._weatherOn = localStorage.getItem(this._storeKey('weather')) !== 'off'; } catch (_) { /* private mode */ } }
     this._applyTheme();
     this._mountModels();
+    this._syncTemplates();
     this._request();
   }
   set hass(hass: any) {
     const old = this._hass;
     this._hass = hass;
+    if (!old || old.connection !== hass?.connection) this._syncTemplates();
     this._slots.forEach((s) => { if (s.el) s.el.hass = hass; });
     if (!old || this._roomEntities().some((id) => old.states[id] !== hass.states[id])) { this._paintTints(); this._request(); }
   }
@@ -267,6 +273,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
   getGridOptions(): any { return { columns: 'full', rows: 'auto' }; }
 
   connectedCallback(): void {
+    if (this._config && this._hass) this._syncTemplates();
     this._ro?.observe(this);
     this._layout();
     this._mountModels();
@@ -279,6 +286,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
   }
   disconnectedCallback(): void {
     this._ro?.disconnect();
+    this._dropTemplates();
     this._slots.forEach((s) => clearInterval(s.poll));
     clearTimeout(this._pt); clearTimeout(this._toastTimer); clearTimeout(this._confirmTimer); clearTimeout(this._focusTimer);
     cancelAnimationFrame(this._pinFrame); this._pinFrame = 0;
@@ -781,30 +789,72 @@ export class Floor3dxRoomsCard extends HTMLElement {
   private _roomEntities(): string[] { return (this._config?.rooms || []).flatMap((r: Room) => (r.entities || []).flatMap((e: any) => [e.entity, e.top_entity, e.dimmer, e.remote, this._config.guest_mode_entity].filter(Boolean))); }
   private _activeCount(room: Room): number { return (room.entities || []).filter((e) => ACTIVE_DOMAINS.has(domainOf(e.entity)) && isOn(this._s(e.entity))).length; }
   private _roomName(r: Room): string { return titleCase(r.name || r.id); }
+  /** Subscribe to Home Assistant's rendering of every template readout in the configuration (and drop
+   *  the ones no longer there). HA pushes a new result whenever an entity the template reads changes. */
+  private _syncTemplates(): void {
+    const conn = this._hass?.connection;
+    if (!conn || !this._config) return;
+    const wanted = new Set<string>();
+    (this._config.rooms || []).forEach((r: Room) => (r.entities || []).forEach((e: any) => { if (isTemplate(e.entity)) wanted.add(e.entity); }));
+    this._templates.forEach((t, template) => { if (!wanted.has(template)) { this._templates.delete(template); t.unsub?.then((u) => u()).catch(() => undefined); } });
+    wanted.forEach((template) => {
+      if (this._templates.has(template)) return;
+      const entry = { text: '…', error: false, unsub: null as Promise<() => void> | null };
+      this._templates.set(template, entry);
+      try {
+        entry.unsub = conn.subscribeMessage((msg: any) => {
+          if (msg && msg.error !== undefined && msg.result === undefined) { entry.error = true; entry.text = '⚠ template'; console.warn('floor3dx-rooms-card: template error: ' + (msg.error?.message || msg.error) + '\n' + template); }
+          else { entry.error = false; const r = msg?.result; entry.text = r === undefined || r === null ? '' : String(r); }
+          this._request();
+        }, { type: 'render_template', template, timeout: 10, report_errors: true });
+        entry.unsub.catch((err: any) => { entry.error = true; entry.text = '⚠ template'; console.warn('floor3dx-rooms-card: template rejected: ' + (err?.message || err)); this._request(); });
+      } catch (err) { entry.error = true; entry.text = '⚠ template'; }
+    });
+  }
+  private _dropTemplates(): void {
+    this._templates.forEach((t) => t.unsub?.then((u) => u()).catch(() => undefined));
+    this._templates.clear();
+  }
   private _sensorTiles(): boolean { return this._config.sensor_tiles === true || this._config.sensor_tiles === 'yes'; }
   /** The room's sensors as a line of readouts: "21 °C · 48 % · Window open". */
   /** The room's sensors as a line of labelled readouts: "Temperature 21.4°C · Humidity 48% · Side door closed". */
   private _readouts(room: Room): string {
-    if (this._sensorTiles()) return '';
-    const out: string[] = [];
+    // `break: yes` after an entity starts a new line of readouts; `break: rule` puts a hairline between
+    const groups: string[][] = [[]], rules: boolean[] = [];
+    const cur = () => groups[groups.length - 1];
+    const breakAfter = (e: any) => { const b = String(e.break ?? '').toLowerCase(); if (!b || b === 'no' || b === 'false') return; rules.push(b === 'rule' || b === 'line' || b === 'divider'); groups.push([]); };
     const roomName = room.name || room.id;
     // the label: the entity's label or friendly name, without the room's own name in front of it
     const labelOf = (e: any) => { const n = this._tiles.name(e, roomName); return n.replace(new RegExp('^' + roomName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s+', 'i'), '') || n; };
     for (const e of room.entities || []) {
-      if (!READOUT_DOMAINS.has(domainOf(e.entity)) || this._tiles.hidden(e)) continue;
+      if (this._tiles.hidden(e)) continue;
+      if (isTemplate(e.entity)) {
+        // a template readout: Home Assistant renders it and pushes every change (see _syncTemplates)
+        const t = this._templates.get(e.entity);
+        const text = t ? t.text : '…';
+        if (text === '') continue;
+        cur().push(`<span${t?.error ? ' class="alert"' : ''}>${e.name ? `<em>${esc(e.name)}</em> ` : ''}${esc(text)}</span>`);
+        breakAfter(e);
+        continue;
+      }
+      if (this._sensorTiles() || !READOUT_DOMAINS.has(domainOf(e.entity))) continue;
       const s = this._s(e.entity); if (!s || s.state === 'unavailable' || s.state === 'unknown') continue;
       const a = s.attributes || {}, dc = a.device_class || '', label = labelOf(e);
       if (domainOf(e.entity) === 'sensor') {
         const n = Number(s.state), unit = a.unit_of_measurement || '';
         const val = Number.isFinite(n) ? (Math.abs(n) >= 100 ? Math.round(n) : Math.round(n * 10) / 10) : titleCase(String(s.state).replace(/_/g, ' '));
-        out.push(`<span><em>${esc(label)}</em> ${esc(String(val))}${unit ? (unit.startsWith('°') || unit === '%' ? '' : ' ') + esc(unit) : ''}</span>`);
+        cur().push(`<span><em>${esc(label)}</em> ${esc(String(val))}${unit ? (unit.startsWith('°') || unit === '%' ? '' : ' ') + esc(unit) : ''}</span>`);
+        breakAfter(e);
       } else {
         const on = isOn(s);
         const word = /door|window|garage|opening/.test(dc) ? (on ? 'open' : 'closed') : /motion|occupancy|presence/.test(dc) ? (on ? 'motion' : 'clear') : /moisture/.test(dc) ? (on ? 'wet' : 'dry') : /smoke|gas|carbon_monoxide|safety|problem/.test(dc) ? (on ? 'alert' : 'ok') : /lock/.test(dc) ? (on ? 'unlocked' : 'locked') : /battery/.test(dc) ? (on ? 'low' : 'ok') : /connectivity/.test(dc) ? (on ? 'connected' : 'disconnected') : (on ? 'on' : 'off');
-        out.push(`<span class="${on && /door|window|garage|opening|moisture|smoke|gas|carbon_monoxide|safety|problem|lock|battery/.test(dc) ? 'alert' : ''}"><em>${esc(label)}</em> ${word}</span>`);
+        cur().push(`<span class="${on && /door|window|garage|opening|moisture|smoke|gas|carbon_monoxide|safety|problem|lock|battery/.test(dc) ? 'alert' : ''}"><em>${esc(label)}</em> ${word}</span>`);
+        breakAfter(e);
       }
     }
-    return out.length ? `<p class="readouts">${out.join('')}</p>` : '';
+    const filled = groups.map((g, i) => ({ g, rule: i > 0 && rules[i - 1] })).filter((x) => x.g.length);
+    if (!filled.length) return '';
+    return filled.map((x, i) => `${i > 0 && x.rule ? '<hr class="rule">' : ''}<p class="readouts${i > 0 ? ' more' : ''}">${x.g.join('')}</p>`).join('');
   }
 
   private _render(): void {
@@ -855,7 +905,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
   private _lastPanelRoom: string | null = null;
   private _panel(room: Room): string {
     const readouts = this._readouts(room);
-    const ents = (room.entities || []).filter((e) => !this._tiles.hidden(e) && (this._sensorTiles() || !READOUT_DOMAINS.has(domainOf(e.entity))));
+    const ents = (room.entities || []).filter((e) => !this._tiles.hidden(e) && !isTemplate(e.entity) && (this._sensorTiles() || !READOUT_DOMAINS.has(domainOf(e.entity))));
     const active = this._activeCount(room);
     const offable = ents.filter((e) => OFFABLE.includes(domainOf(e.entity)) && !e.read_only);
     const roomName = room.name || room.id;

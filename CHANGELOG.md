@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.10.0
+
+### Added
+- Rooms card: **template readouts**. A room entity whose `entity` is a Jinja template (`{{ … }}` / `{% … %}`) is rendered by Home Assistant (a `render_template` subscription, pushed on every change) and shown as a readout under the room's name with its `name` as the label; never a tile; `⚠ template` on an error. The editor accepts the template in the *Entity* field.
+- Rooms card: **readouts in groups**. `break: yes` on a readout starts a new line after it, `break: rule` a thin divider and a new line; in the editor, *After this readout*. Harness: `test_template_readouts.py`.
+
+### Fixed
+- Rooms card: the first readout under the room name has its bullet too, so a line that wraps reads the same as the first.
+
 ## 2.9.1
 
 ### Fixed
