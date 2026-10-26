@@ -187,6 +187,8 @@ export class Floor3dCard extends LitElement {
   private _daylight: Daylight | null = null;
   private _roomLight: RoomLight | null = null; // light_rooms: lamps confined to their room
   private _daylightOn = true; // setDaylight() before the model is ready is honoured when the daylight is built
+  private _weatherOn = true;
+  private _fixedHour: number | null = null;
   // look: NeonPlan / NextFloor style themes on the loaded model
   private _look: Look | null = null;
   private _transparency: Transparency | null = null;
@@ -2246,10 +2248,28 @@ export class Floor3dCard extends LitElement {
     return this._daylight.isEnabled();
   }
 
-  /** The daylight's state for a switch: whether the card has daylight, whether it is on, and 0 (day) to 1 (night). */
-  public daylightState(): { has: boolean; on: boolean; dark: number } {
-    if (!this._daylight) return { has: !!this._config.daylight, on: this._daylightOn, dark: 0 };
-    return { has: true, on: this._daylight.isEnabled(), dark: this._daylight.darkness() };
+  /** The daylight's state for a switch: whether the card has daylight, whether it is on, 0 (day) to
+   *  1 (night), the weather entity's presence, whether it is followed and its condition, a fixed hour. */
+  public daylightState(): { has: boolean; on: boolean; dark: number; weather: boolean; weatherOn: boolean; condition: string; fixed: number | null } {
+    const d = this._daylight;
+    if (!d) return { has: !!this._config.daylight, on: this._daylightOn, dark: 0, weather: !!(this._config.daylight && this._config.daylight.weather_entity), weatherOn: this._weatherOn, condition: '', fixed: this._fixedHour };
+    return { has: true, on: d.isEnabled(), dark: d.darkness(), weather: d.hasWeather(), weatherOn: d.isWeatherFollowed(), condition: d.condition(), fixed: d.fixedHour() };
+  }
+
+  /** Follow the weather entity or ignore it (the Rooms Card's long-press menu). */
+  public setDaylightWeather(on: boolean): void {
+    this._weatherOn = on;
+    if (!this._daylight) return;
+    this._daylight.setWeather(on);
+    if (this._modelready && this._hass && this._daylight.update(this._hass.states)) this._afterDaylight();
+  }
+
+  /** Fix the daylight's hour at runtime (null: the entity or the clock again). */
+  public setDaylightTime(hour: number | null): void {
+    this._fixedHour = hour;
+    if (!this._daylight) return;
+    this._daylight.setFixedTime(hour);
+    if (this._modelready && this._hass && this._daylight.update(this._hass.states)) this._afterDaylight();
   }
 
   private _initDaylight(): void {
@@ -2271,6 +2291,8 @@ export class Floor3dCard extends LitElement {
       stageColor: this._look && this._look.active ? (k: number) => this._look.stageColor(k) : undefined,
     });
     this._daylight.setEnabled(this._daylightOn);
+    this._daylight.setWeather(this._weatherOn);
+    this._daylight.setFixedTime(this._fixedHour);
     this._daylight.update(this._hass.states);
     this._renderer.shadowMap.needsUpdate = true;
   }

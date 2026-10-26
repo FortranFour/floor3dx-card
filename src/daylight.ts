@@ -33,6 +33,7 @@ export interface DaylightConfig {
   background?: boolean | string | { day?: string; dusk?: string; night?: string }; // default yes
   hemisphere?: boolean | string; // default yes
   weather?: { [condition: string]: number }; // condition -> factor, merged over defaults
+  weather_effects?: any; // the sky as weather: clouds take the sun before the daylight, rain and fog cool the tint, snow brightens; default on with `sun`
   windows?: DaylightWindow[]; // sun spots
   exterior?: string[]; // object ids or <group> names lit by the exterior ambient only
   exterior_night?: number; // exterior ambient at night, as a fraction of the day level; default 0.08
@@ -82,6 +83,18 @@ interface Deps {
   stageColor?: (daylight: number) => THREE.Color | null; // from an active look
 }
 
+/** HA's weather conditions in five kinds, for the tint and the Rooms Card's badge. */
+export function weatherKind(condition: string): '' | 'clear' | 'partly' | 'cloud' | 'rain' | 'snow' | 'fog' {
+  const c = String(condition || '').toLowerCase();
+  if (!c || c === 'unknown' || c === 'unavailable') return '';
+  if (c === 'snowy' || c === 'snowy-rainy') return 'snow';
+  if (c === 'fog') return 'fog';
+  if (c === 'rainy' || c === 'pouring' || c === 'hail' || c === 'lightning' || c === 'lightning-rainy') return 'rain';
+  if (c === 'cloudy' || c === 'windy-variant') return 'cloud';
+  if (c === 'partlycloudy') return 'partly';
+  return 'clear'; // sunny, clear, clear-night, windy, exceptional
+}
+
 const DEFAULT_WEATHER: { [c: string]: number } = {
   'clear-night': 1,
   sunny: 1,
@@ -114,6 +127,9 @@ export class Daylight {
   private sun: THREE.DirectionalLight | null = null;
   private dark = 0; // 1 - daylight factor, from the last update
   private enabled = true; // off: a steady, neutral day (no sun, no beams, no glow, no night)
+  private weatherOn = true; // off: the weather entity is ignored (the Rooms Card's "Follow the weather")
+  private fixedTime: number | null = null; // a runtime hour override (the Rooms Card's "Fix the time")
+  private lastWeather = ''; // the condition in force at the last update ('' when none)
   private modelRadius = 1000;
   private lastSignature = '';
   private dayColor: THREE.Color;
@@ -284,11 +300,20 @@ export class Daylight {
   isEnabled(): boolean { return this.enabled; }
   /** 0 by day, 1 at night, from the last update. */
   darkness(): number { return this.dark; }
+  /** Whether a weather entity is configured and followed, and the condition it reports now. */
+  setWeather(on: boolean): void { this.weatherOn = on; }
+  isWeatherFollowed(): boolean { return this.weatherOn; }
+  hasWeather(): boolean { return !!this.cfg.weather_entity; }
+  condition(): string { return this.lastWeather; }
+  /** Fix the hour at runtime (null: back to the entity or the clock). Call update() afterwards. */
+  setFixedTime(hour: number | null): void { this.fixedTime = hour; }
+  fixedHour(): number | null { return this.fixedTime; }
 
   /** Recompute from the current states. Returns true when anything changed. */
   update(states: any): boolean {
     const sun = this.enabled ? this.sunPosition(states) : { elevation: 90, azimuth: 180, rising: false };
-    const weather = this.enabled && this.cfg.weather_entity && states[this.cfg.weather_entity] ? String(states[this.cfg.weather_entity].state) : '';
+    const weather = this.enabled && this.weatherOn && this.cfg.weather_entity && states[this.cfg.weather_entity] ? String(states[this.cfg.weather_entity].state) : '';
+    this.lastWeather = this.cfg.weather_entity && states[this.cfg.weather_entity] ? String(states[this.cfg.weather_entity].state) : '';
     const glowStates = this.glows.map((g) => (g.entity && states[g.entity] ? states[g.entity].state : '')).join(',');
     const signature = [this.enabled ? 'on' : 'off', sun.elevation.toFixed(1), sun.azimuth.toFixed(1), sun.rising ? 'r' : 's', weather, glowStates].join('|');
     if (signature === this.lastSignature) return false;
@@ -298,18 +323,24 @@ export class Daylight {
     const f = smoothstep(this.stops.night, this.stops.day, sun.elevation);
     this.dark = 1 - f;
     const wf = weather && this.weatherMap[weather] !== undefined ? this.weatherMap[weather] : 1;
-    const fe = f * wf; // effective daylight
+    // weather_effects (default with the real sun): clouds take the direct sun first and the diffuse
+    // light only half as much, rain and fog cool the tint, snow keeps the day bright
+    const effects = this.yes(this.cfg.weather_effects, this.yes(this.cfg.sun, false) || this.yes(this.cfg.real_sun, false));
+    const kind = effects ? weatherKind(weather) : '';
+    const wdiff = effects ? (kind === 'snow' ? Math.max(wf, 0.8) : 1 - (1 - wf) * 0.5) : wf; // diffuse light
+    const wsun = effects ? wf * wf : wf; // the direct sun and the beams
+    const fe = f * wdiff; // effective daylight
     // Colour runs night -> dusk/dawn -> day along the elevation stops, so the low sun is fully the
     // horizon colour and both sides of it blend out of it gradually.
     const horizon = sun.rising ? this.dawnColor : this.duskColor;
     const color = this.gradient(this.nightColor, horizon, this.dayColor, sun.elevation);
-    if (wf < 1) color.lerp(new THREE.Color('#c8ccd2'), (1 - wf) * f); // overcast greys the tint
+    if (wf < 1) color.lerp(new THREE.Color(kind === 'rain' || kind === 'fog' ? '#b4c2d2' : kind === 'snow' ? '#dde4ec' : '#c8ccd2'), (1 - wf) * f); // overcast greys the tint, rain and fog cool it
     // beam colour: its own gradient when sun_colors is given, else the room colour
     let sunColor = color;
     if (this.sunDay) {
       const sunHorizon = sun.rising ? this.sunDawn : this.sunDusk;
       sunColor = this.gradient(sunHorizon, sunHorizon, this.sunDay, sun.elevation);
-      if (wf < 1) sunColor.lerp(new THREE.Color('#d8d8d8'), (1 - wf) * f);
+      if (wf < 1) sunColor.lerp(new THREE.Color('#d8d8d8'), (1 - wsun) * f);
     }
 
     const intensity = this.ambientNight + (this.ambientDay - this.ambientNight) * fe;
@@ -345,20 +376,20 @@ export class Daylight {
       const full = this.cfg.sun_full !== undefined ? Number(this.cfg.sun_full) : 8;
       this.sun.position.copy(this.modelCenter.clone().add(sunDir.clone().multiplyScalar(this.modelRadius * 2)));
       this.sun.target.position.copy(this.modelCenter);
-      this.sun.intensity = this.enabled ? this.ambientDay * k * smoothstep(0, Math.max(0.1, full), sun.elevation) * wf : 0;
+      this.sun.intensity = this.enabled ? this.ambientDay * k * smoothstep(0, Math.max(0.1, full), sun.elevation) * wsun : 0;
       this.sun.color.copy(sunColor);
     }
     if (this.exteriorSun && !this.sun) {
       const k = this.cfg.exterior_sun !== undefined ? Number(this.cfg.exterior_sun) : 0.6;
       this.exteriorSun.position.copy(this.modelCenter.clone().add(sunDir.clone().multiplyScalar(2000)));
-      this.exteriorSun.intensity = this.enabled ? this.ambientDay * k * smoothstep(0, 8, sun.elevation) * wf : 0;
+      this.exteriorSun.intensity = this.enabled ? this.ambientDay * k * smoothstep(0, 8, sun.elevation) * wsun : 0;
       this.exteriorSun.color.copy(sunColor);
     }
     this.spots.forEach((s) => {
       const facing = Math.max(0, s.outward.dot(sunDir));
       const full = this.cfg.beam_full !== undefined ? Number(this.cfg.beam_full) : 4;
       const low = smoothstep(0, Math.max(0.1, full), sun.elevation); // no beam until the sun is a little up
-      s.light.intensity = this.enabled ? lightIntensity(s.lumens, facing * low * wf, this.d.cardConfig, s.light.distance, s.light.decay) : 0;
+      s.light.intensity = this.enabled ? lightIntensity(s.lumens, facing * low * wsun, this.d.cardConfig, s.light.distance, s.light.decay) : 0;
       s.light.color.copy(s.color ? new THREE.Color(s.color) : sunColor);
       // aim the beam the way the sun actually comes through the window: along -sunDir from the pane
       // to where that line meets the floor (capped), so the pool travels across the room through the day
@@ -435,6 +466,7 @@ export class Daylight {
   }
 
   private sunPosition(states: any): { elevation: number; azimuth: number; rising: boolean } {
+    if (this.fixedTime !== null) return this.plainDay(this.fixedTime);
     if (this.cfg.time !== undefined && this.cfg.time !== null && this.cfg.time !== '') {
       const m = /^(\d{1,2}):(\d{2})/.exec(String(this.cfg.time));
       const hour = m ? Number(m[1]) + Number(m[2]) / 60 : parseFloat(String(this.cfg.time));

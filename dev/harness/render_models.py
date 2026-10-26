@@ -53,6 +53,8 @@ STEP = r"""async ([what]) => {
   if (what === 'garage') { el._showModel('garage'); const bay = el._config.rooms.find(r => r.model === 'garage'); if (bay) el._select(bay.id); }
   if (what === 'both') { el._select(null); el._showModel('all'); }
   if (what === 'off') { el._setDaylight(false); }
+  if (what.startsWith('weather:')) { const cond = what.slice(8); el.hass = Object.assign({}, el.hass, {states: Object.assign({}, el.hass.states, {'weather.home': {state: cond, attributes: {}}})}); }
+  if (what === 'menu') { el._dlMenu = true; el._request(); }
   if (what === 'night') { el._setDaylight(true); el._slots.forEach(s => { s.el._config.daylight.time = 23; s.el._daylight.lastSignature = ''; s.el._daylight.cfg.time = 23; s.el.setDaylight(true); }); }
   await sleep(500);
   el._slots.forEach(s => { s.el._render && s.el._render(); });

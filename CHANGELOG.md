@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.9.0
+
+### Added
+- **Weather in the light** (`daylight.weather_effects`, default on with the real sun): with a `weather_entity`, clouds take the direct sun before the diffuse light (sun × factor², daylight × (1 − (1 − factor)/2)), rain and fog cool the tint, snow keeps the day bright. Without the sun the daylight is scaled by the condition's factor as before.
+- Rooms card: the compass's badge shows the sky — sun, partly cloudy, overcast, rain, snow, fog, the moon at night unless it rains or snows. A **long press** on the compass opens a menu: *Follow the weather* (remembered per card in the browser) and *Fix the time* at noon or midnight. `setDaylightWeather(on)`, `setDaylightTime(hour)` on the 3D card. Harness: `test_weather_switch.py`.
+
 ## 2.8.0
 
 ### Added

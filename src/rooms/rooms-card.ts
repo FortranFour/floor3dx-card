@@ -6,6 +6,7 @@
 // colours of the chosen theme. The card is meant to fill a panel view. Several models (a house
 // and a garage) can share one card (`models:`), each in its own view, with a switcher.
 import * as THREE from 'three';
+import { weatherKind } from '../daylight';
 import { THEMES, RoomsTheme, themeOf, stageOfCard, rgb } from './themes';
 import { Room, RoomEntity, RoomIndex, suggestRooms, floorCandidates, slug } from './rooms';
 import { Tiles, TilesHost, CSS_TILES, isOn, esc, domainOf, titleCase, icon, ACTIVE_DOMAINS, OFFABLE } from './tiles';
@@ -83,7 +84,9 @@ const STYLE = `
 .menu .dl .n{fill:#e5473b}.menu .dl .s{fill:currentColor;fill-opacity:.4}
 .menu .dl .badge{position:absolute;right:-5px;top:-5px;width:16px;height:16px;border-radius:8px;display:grid;place-items:center;background:var(--f3r-panel);border:1px solid var(--f3r-line);color:#e9a825}
 .menu .dl .badge svg{width:10px;height:10px;fill:currentColor}
-.menu .dl .badge.night{color:#8da2d6}
+.menu .dl .badge.night{color:#8da2d6}.menu .dl .badge.cloud{color:#7d8b9c}.menu .dl .badge.rain{color:#4f87c8}.menu .dl .badge.snow{color:#7fb6d9}.menu .dl .badge.fog{color:#9aa5b1}
+.menu .dl .badge svg.stroke{fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round}
+.list .chk{width:16px;height:16px;border-radius:5px;border:1.5px solid currentColor;display:grid;place-items:center;font-size:11px;line-height:1}.list button[disabled]{opacity:.45}
 .menu .dl[aria-pressed=false] svg{opacity:.35}
 .menu .dl[aria-pressed=false] .n{fill:currentColor}
 :host(.narrow.models) .list{top:104px;max-height:calc(100% - 126px)}
@@ -150,6 +153,11 @@ export class Floor3dxRoomsCard extends HTMLElement {
   private _listOpen = false;
   private _viewsOpen = false;
   private _daylightOn = true; // the day & night switch (remembered per card in this browser)
+  private _weatherOn = true; // follow the weather entity (remembered per card in this browser)
+  private _fixedHour: number | null = null; // the long-press menu's fixed time, this session
+  private _dlMenu = false; // the compass's long-press menu
+  private _dlPress = 0; // its timer
+  private _dlLong = false; // the click after a long-press is swallowed
   private _needleQueued = false;
   private _focus: string | null = null; // an entity whose tile is highlighted (object_tap: panel)
   private _focusTimer: any;
@@ -195,9 +203,17 @@ export class Floor3dxRoomsCard extends HTMLElement {
     this._ui.addEventListener('click', (e) => this._click(e));
     this._ui.addEventListener('change', (e) => this._change(e));
     this._ui.addEventListener('input', (e) => this._input(e));
-    this._ui.addEventListener('pointerdown', () => { this._pointer = true; clearTimeout(this._pt); this._pt = setTimeout(() => this._release(), 1500); });
-    this._ui.addEventListener('pointerup', () => this._release());
-    this._ui.addEventListener('pointercancel', () => this._release());
+    this._ui.addEventListener('pointerdown', (e) => {
+      this._pointer = true; clearTimeout(this._pt); this._pt = setTimeout(() => this._release(), 1500);
+      this._dlLong = false;
+      // a long press on the compass opens its menu; the click that follows the release is swallowed
+      clearTimeout(this._dlPress);
+      if ((e.target as HTMLElement).closest('button.dl') && this._daylightOn) this._dlPress = window.setTimeout(() => { this._dlLong = true; this._dlMenu = !this._dlMenu; this._listOpen = false; this._viewsOpen = false; this._release(); this._request(); }, 450);
+    });
+    this._ui.addEventListener('contextmenu', (e) => { if ((e.target as HTMLElement).closest('button.dl')) e.preventDefault(); });
+    this._ui.addEventListener('pointerup', () => { clearTimeout(this._dlPress); this._release(); });
+    this._ui.addEventListener('pointercancel', () => { clearTimeout(this._dlPress); this._dlLong = false; this._release(); });
+    this._ui.addEventListener('pointerleave', () => clearTimeout(this._dlPress));
     this._ro = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { this._layout(); this._movePins(0); }) : null;
     const card = this;
     const host: TilesHost = {
@@ -235,7 +251,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
       this._active = def ? def.id : want === ALL || want === 'both' ? ALL : this._active !== ALL && defs.some((d) => d.id === this._active) ? this._active : defs[0].id;
     }
     if (defs.length <= 1) this._active = ALL;
-    if (!this._slots.length) { try { this._daylightOn = localStorage.getItem(this._storeKey('daylight')) !== 'off'; } catch (_) { /* private mode */ } }
+    if (!this._slots.length) { try { this._daylightOn = localStorage.getItem(this._storeKey('daylight')) !== 'off'; this._weatherOn = localStorage.getItem(this._storeKey('weather')) !== 'off'; } catch (_) { /* private mode */ } }
     this._applyTheme();
     this._mountModels();
     this._request();
@@ -383,6 +399,8 @@ export class Floor3dxRoomsCard extends HTMLElement {
         try { el.setConfig(cfg); slot.el = el; } catch (err) { this._toast = `Model configuration: ${(err as Error).message}`; el.remove(); }
         if (slot.el) {
           if (!this._daylightOn && el.setDaylight) el.setDaylight(false);
+          if (!this._weatherOn && el.setDaylightWeather) el.setDaylightWeather(false);
+          if (this._fixedHour !== null && el.setDaylightTime) el.setDaylightTime(this._fixedHour);
           if (this._hass) el.hass = this._hass;
           slot.poll = setInterval(() => { if (el._modelready) { clearInterval(slot.poll); this._onModelReady(slot); } }, 200);
         }
@@ -501,12 +519,49 @@ export class Floor3dxRoomsCard extends HTMLElement {
     const states = this._slots.filter((s) => s.el?.daylightState).map((s) => s.el.daylightState());
     if (!states.some((d) => d.has)) return '';
     const on = this._daylightOn, night = on && states.some((d) => d.has && d.dark > 0.5);
-    // the badge is inline SVG (mdi's sun and moon), so it draws even before ha-icon is defined
-    const sunPath = 'M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10m0-5 1.9 3.1h-3.8M12 22l-1.9-3.1h3.8M2 12l3.1-1.9v3.8M22 12l-3.1 1.9v-3.8M4.9 4.9l3.5.9-2.6 2.6M19.1 19.1l-3.5-.9 2.6-2.6M19.1 4.9l-.9 3.5-2.6-2.6M4.9 19.1l.9-3.5 2.6 2.6';
-    const moonPath = 'M17.8 15.9a8 8 0 0 1-9.7-9.7A8 8 0 1 0 17.8 15.9z';
-    const badge = on ? `<span class="badge${night ? ' night' : ''}"><svg viewBox="0 0 24 24"><path d="${night ? moonPath : sunPath}"/></svg></span>` : '';
-    const title = on ? `Day & night lighting on (${night ? 'night' : 'day'}) · tap to switch off · the needle points north` : 'Day & night lighting off · tap to switch on · the needle points north';
+    // the sky right now: the weather condition (when followed) over day or night
+    const live = states.find((d) => d.has && d.weather && d.weatherOn && d.condition);
+    const kind = on && live ? weatherKind(live.condition) : '';
+    const wet = kind === 'rain' || kind === 'snow';
+    const key = !on ? '' : night && !wet ? 'night' : kind && kind !== 'clear' ? kind : 'day';
+    // the badge is inline SVG (mdi-like sun, moon, cloud, rain, snow, fog), so it draws before ha-icon is defined
+    const paths: { [k: string]: [string, boolean] } = {
+      day: ['M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10m0-5 1.9 3.1h-3.8M12 22l-1.9-3.1h3.8M2 12l3.1-1.9v3.8M22 12l-3.1 1.9v-3.8M4.9 4.9l3.5.9-2.6 2.6M19.1 19.1l-3.5-.9 2.6-2.6M19.1 4.9l-.9 3.5-2.6-2.6M4.9 19.1l.9-3.5 2.6 2.6', false],
+      night: ['M17.8 15.9a8 8 0 0 1-9.7-9.7A8 8 0 1 0 17.8 15.9z', false],
+      partly: ['M17 20H8a4 4 0 0 1-.5-7.97A5 5 0 0 1 17 11.5 4.25 4.25 0 0 1 17 20zM6.5 8.5a3.5 3.5 0 0 1 6.6-1.6 6.4 6.4 0 0 0-5.2 4A3.5 3.5 0 0 1 6.5 8.5z', false],
+      cloud: ['M6.5 20a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 17.6 9.5 5.25 5.25 0 0 1 17 20H6.5z', false],
+      rain: ['M6.5 16a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 17.6 5.5 5.25 5.25 0 0 1 17 16H6.5zM8 18l-1.5 3.5M12 18l-1.5 3.5M16 18l-1.5 3.5', true],
+      snow: ['M12 2v20M3.3 7l17.4 10M3.3 17 20.7 7M12 2l-2.5 2.5M12 2l2.5 2.5M12 22l-2.5-2.5M12 22l2.5-2.5', true],
+      fog: ['M3 9h18M3 13h18M3 17h12', true],
+    };
+    const [path, stroke] = paths[key] || paths.day;
+    const cls = key === 'night' ? 'night' : key === 'partly' || key === 'cloud' ? 'cloud' : key === 'rain' || key === 'snow' || key === 'fog' ? key : '';
+    const badge = on ? `<span class="badge${cls ? ' ' + cls : ''}"><svg viewBox="0 0 24 24"${stroke ? ' class="stroke"' : ''}><path d="${path}"/></svg></span>` : '';
+    const words: { [k: string]: string } = { day: 'day', night: 'night', partly: 'partly cloudy', cloud: 'overcast', rain: 'rain', snow: 'snow', fog: 'fog' };
+    const fixed = this._fixedHour !== null ? ` · time fixed at ${this._fixedHour === 12 ? 'noon' : 'midnight'}` : '';
+    const title = on ? `Day & night lighting on (${words[key] || key}${fixed}) · tap to switch off, hold for options · the needle points north` : 'Day & night lighting off · tap to switch on · the needle points north';
     return `<button class="dl" data-action="daylight" aria-pressed="${on}" aria-label="Day and night lighting" title="${title}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.6" fill="none" stroke="currentColor" stroke-opacity=".35" stroke-width="1.3"/><g class="needle"><path class="n" d="M12 2.6 L14.7 12 L9.3 12 Z"/><path class="s" d="M12 21.4 L14.7 12 L9.3 12 Z"/></g><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>${badge}</button>`;
+  }
+  /** The compass's long-press menu: follow the weather, fix the time at noon or midnight. */
+  private _daylightMenu(): string {
+    const states = this._slots.filter((s) => s.el?.daylightState).map((s) => s.el.daylightState());
+    const weather = states.some((d) => d.has && d.weather);
+    const chk = (on: boolean) => `<span class="chk">${on ? '✓' : ''}</span>`;
+    return `<div class="list" role="menu"><div class="group">Day &amp; night lighting</div>` +
+      `<button data-action="dl-weather" aria-pressed="${weather && this._weatherOn}"${weather ? '' : ' disabled title="No weather entity in daylight"'}>${chk(weather && this._weatherOn)}<span>Follow the weather</span></button>` +
+      `<button data-action="dl-time" data-i="12" aria-pressed="${this._fixedHour === 12}">${chk(this._fixedHour === 12)}<span>Fix the time: noon</span></button>` +
+      `<button data-action="dl-time" data-i="0" aria-pressed="${this._fixedHour === 0}">${chk(this._fixedHour === 0)}<span>Fix the time: midnight</span></button></div>`;
+  }
+  private _setWeather(on: boolean): void {
+    this._weatherOn = on;
+    this._slots.forEach((s) => { if (s.el?.setDaylightWeather) s.el.setDaylightWeather(on); });
+    try { localStorage.setItem(this._storeKey('weather'), on ? 'on' : 'off'); } catch (_) { /* private mode */ }
+    this._request();
+  }
+  private _setFixedHour(hour: number | null): void {
+    this._fixedHour = hour;
+    this._slots.forEach((s) => { if (s.el?.setDaylightTime) s.el.setDaylightTime(hour); });
+    this._request();
   }
   private _setDaylight(on: boolean): void {
     this._daylightOn = on;
@@ -768,6 +823,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
     const menu = rooms.length || hasModel ? `<div class="menu">${switcher}${dl}${reset}${rooms.length ? `<button data-action="list" aria-pressed="${this._listOpen}" aria-label="Rooms">${icon('mdi:floor-plan')}<span>Rooms</span></button>` : ''}</div>` : '';
     const roomButton = (r: Room) => { const n = this._activeCount(r); return `<button data-action="room" data-room="${esc(r.id)}" aria-pressed="${r.id === this._room}">${icon(r.icon || 'mdi:door-open')}<span>${esc(this._roomName(r))}</span><span class="n">${n ? `${n} on` : ''}</span></button>`; };
     const list = this._listOpen ? `<div class="list" role="menu">${this._slots.length > 1 ? this._slots.map((s) => { const rs = this._slotRooms(s); return rs.length ? `<div class="group">${esc(s.name)}</div>${rs.map(roomButton).join('')}` : ''; }).join('') : rooms.map(roomButton).join('')}</div>`
+      : this._dlMenu ? this._daylightMenu()
       : this._viewsOpen && views ? `<div class="list" role="menu"><button data-action="reset">${icon('mdi:camera-flip-outline')}<span>Reset view</span></button>${views.views.map((v, i) => `<button data-action="view" data-i="${i}">${icon('mdi:magnify-expand')}<span>${esc(String(v.name || `View ${i + 1}`))}</span></button>`).join('')}</div>` : '';
     const pins = c.pins !== false && c.pins !== 'no' ? `<div class="pins">${rooms.filter((r) => (r.floors || []).length).map((r) => { const n = this._activeCount(r); return `<button class="pin ${n ? 'on' : ''} ${r.id === this._hover ? 'hover' : ''}" hidden data-action="room" data-room="${esc(r.id)}" aria-pressed="${r.id === this._room}" aria-label="${esc(this._roomName(r))}${n ? `, ${n} on` : ''}">${icon(r.icon || 'mdi:door-open')}<span class="pn">${esc(this._roomName(r))}</span>${n ? `<span class="count" aria-hidden="true">${n}</span>` : ''}</button>`; }).join('')}</div>` : '';
     const panel = room ? this._panel(room) : '';
@@ -836,10 +892,13 @@ export class Floor3dxRoomsCard extends HTMLElement {
     const { action, entity: id = '', room, model, i } = b.dataset as any;
     if (action === 'room') { this._listOpen = false; this._select(room === this._room ? null : room); return; }
     if (action === 'close') { this._select(null); return; }
+    this._dlMenu = this._dlMenu && action !== 'list' && action !== 'views' && action !== 'reset' && action !== 'model' && action !== 'room';
     if (action === 'list') { this._listOpen = !this._listOpen; this._viewsOpen = false; if (this._listOpen && this._room) { this._room = null; this._confirm = null; this._paintTints(); } this._request(); return; }
     if (action === 'views') { this._viewsOpen = !this._viewsOpen; this._listOpen = false; this._request(); return; }
     if (action === 'reset') { this._viewsOpen = false; this._resetView(); this._request(); return; }
-    if (action === 'daylight') { this._setDaylight(!this._daylightOn); return; }
+    if (action === 'daylight') { if (this._dlLong) { this._dlLong = false; return; } this._dlMenu = false; this._setDaylight(!this._daylightOn); return; }
+    if (action === 'dl-weather') { this._setWeather(!this._weatherOn); return; }
+    if (action === 'dl-time') { const h = Number(i); this._setFixedHour(this._fixedHour === h ? null : h); return; }
     if (action === 'view') { this._viewsOpen = false; this._gotoView(Number(i)); this._request(); return; }
     if (action === 'model') { this._listOpen = false; this._viewsOpen = false; this._showModel(model); return; }
     if (action === 'room-off') {
