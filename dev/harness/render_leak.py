@@ -28,16 +28,20 @@ JS = r"""async ([card, extra, w, h]) => {
   delete cfg.style; delete cfg.card_mod;
   Object.assign(cfg, extra);
   if (extra.all_lamps) cfg.entities.forEach(e => { if (e.type3d === 'light') { e.light = Object.assign({}, e.light || {}, {shadow: 'yes'}); } });
-  delete cfg.all_lamps;
-  cfg.daylight = Object.assign({}, cfg.daylight || {}, {time: 23});
+  const merge = (a, b) => { for (const k of Object.keys(b)) { if (b[k] && typeof b[k] === 'object' && !Array.isArray(b[k]) && a[k] && typeof a[k] === 'object') merge(a[k], b[k]); else if (b[k] === null) delete a[k]; else a[k] = b[k]; } return a; };
+  if (extra.patch) cfg.entities.forEach(e => { const p = extra.patch[e.object_id]; if (p && e.type3d === (p.type3d || 'light')) merge(e, p); });
+  const only = extra.on || null, hour = extra.hour !== undefined ? extra.hour : 23, marks = extra.mark || [];
+  delete cfg.all_lamps; delete cfg.patch; delete cfg.on; delete cfg.hour; delete cfg.mark;
+  cfg.daylight = Object.assign({}, cfg.daylight || {}, {time: hour});
   if (extra.camera) { cfg.camera_position = extra.camera.position; cfg.camera_target = extra.camera.target; delete cfg.camera; }
   const states = {};
-  cfg.entities.forEach(e => { if (e.entity && !states[e.entity]) states[e.entity] = e.type3d === 'light' ? {state: 'on', attributes: {brightness: 255}} : {state: '0', attributes: {}}; });
+  cfg.entities.forEach(e => { if (e.entity && (!states[e.entity] || e.entity_template)) states[e.entity] = (e.type3d === 'light' || e.type3d === 'color') && !e.entity_template ? {state: only && !only.includes(e.entity) ? 'off' : 'on', attributes: {}} : {state: '0', attributes: {}}; });
   const c = document.createElement('floor3dx-card'); c.setConfig(cfg); c.hass = {states, language: 'en', themes: {}, config: {}, user: {}, callService() {}};
   const host = document.createElement('div'); host.id = 'shot'; host.style.cssText = `position:fixed;left:0;top:0;width:${w}px;height:${h}px;z-index:99;background:#000`; document.body.appendChild(host); host.appendChild(c);
   const t0 = performance.now(); while (!c._modelready && performance.now() - t0 < 300000) await new Promise(r => setTimeout(r, 200));
   await new Promise(r => setTimeout(r, 2500)); c._render(); await new Promise(r => setTimeout(r, 500)); c._render();
-  window.shot = host; return {ready: c._modelready, casters: c._shadowCandidates.filter(x => x.light.castShadow).length, budget: c._shadowBudget};
+  const at = {}; marks.forEach(name => { const o = c._scene.getObjectByName(name); if (!o) return; const B = new (Object.getPrototypeOf(o.geometry.boundingBox || (o.geometry.computeBoundingBox(), o.geometry.boundingBox)).constructor)(); B.setFromObject(o); const v = B.getCenter(c._camera.position.clone()).project(c._camera); const cw = c._renderer.domElement.clientWidth, ch = c._renderer.domElement.clientHeight; at[name] = [Math.round((v.x + 1) / 2 * cw), Math.round((1 - v.y) / 2 * ch)]; });
+  window.shot = host; return {ready: c._modelready, casters: c._shadowCandidates.filter(x => x.light.castShadow).length, budget: c._shadowBudget, at};
 }"""
 
 def after(page):

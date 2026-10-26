@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.9.1
+
+### Fixed
+- Every entity row keeps its slot in the card's per-row state. A row with no state — a `gesture` row without an `entity`, or an entity Home Assistant does not have — pushed nothing into the arrays that hold each row's state, brightness, colour, text and position, so every row after it read its neighbour's: a lamp that was on when the page loaded came up dark until its switch next changed, a text panel showed another entity's value. Since the original floor3d-card. Harness: `test_row_slots.py`; `render_spot.py` and `render_leak.py` patches for tuning lamps on a card's YAML.
+
 ## 2.9.0
 
 ### Added

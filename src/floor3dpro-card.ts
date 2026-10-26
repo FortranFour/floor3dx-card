@@ -1637,6 +1637,23 @@ export class Floor3dCard extends LitElement {
               this._color.push(fromEntity.color);
               this._brightness.push(fromEntity.brightness);
             } else {
+              // a row with no state (a gesture row without an entity, an entity HA does not have)
+              // still takes its slot in every per-row array: the arrays are indexed by the row's
+              // position in `entities`, and skipping a row shifted every row after it onto its
+              // neighbour's state, brightness, colour, text canvas and position until that
+              // entity next changed
+              this._states.push(undefined);
+              this._canvas.push(null);
+              this._unit_of_measurement.push('');
+              this._text.push('');
+              this._imageUrls.push('');
+              this._spritetext.push('');
+              this._rooms.push('');
+              this._sprites.push('');
+              this._position.push(null);
+              this._lights.push('');
+              this._color.push(null);
+              this._brightness.push(-1);
               this._warnMissingEntityOnce(entity);
             }
           });
