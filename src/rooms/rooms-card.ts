@@ -51,6 +51,8 @@ const STYLE = `
 .menu .seg button{border:0;border-radius:0;background:transparent;-webkit-backdrop-filter:none;backdrop-filter:none;min-width:44px}
 .menu .seg button[aria-pressed=true]{background:rgba(var(--f3r-accent),.18)}
 .menu .seg button + button{border-left:1px solid var(--f3r-line)}
+/* the dividers either side of the pressed segment vanish, so its tint fills the slot edge to edge */
+.menu .seg button[aria-pressed=true] + button,.menu .seg button + button[aria-pressed=true]{border-left-color:transparent}
 .list{position:absolute;z-index:3;right:14px;top:58px;max-height:calc(100% - 80px);overflow:auto;padding:6px;border-radius:14px;background:var(--f3r-panel);-webkit-backdrop-filter:blur(var(--f3r-blur));backdrop-filter:blur(var(--f3r-blur));border:1px solid var(--f3r-line);display:flex;flex-direction:column;gap:2px;min-width:200px}
 .list button{display:flex;align-items:center;gap:10px;padding:8px 10px;border:0;border-radius:10px;background:transparent;text-align:left;font-size:14px}
 .list button[aria-pressed=true]{background:rgba(var(--f3r-accent),.18);color:rgb(var(--f3r-accent))}

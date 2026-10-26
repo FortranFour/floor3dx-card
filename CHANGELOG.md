@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.6.1
+
+### Fixed
+- Rooms card: the model switcher's pressed segment is tinted edge to edge; the hairline divider next to it showed as a pale strip inside the highlight.
+
 ## 2.6.0
 
 ### Added
