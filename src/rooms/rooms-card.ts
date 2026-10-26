@@ -28,13 +28,13 @@ const STYLE = `
 :host{display:block;position:relative;height:var(--f3r-height,60vh);min-height:240px;--f3r-ink:#eef2f7;--f3r-muted:rgba(238,242,247,.72);--f3r-stage:7,15,31;--f3r-accent:255,140,58;--f3r-on:255,193,7;--f3r-line:rgba(255,255,255,.16);--f3r-alpha:.55;--f3r-panel:rgba(var(--f3r-stage),var(--f3r-alpha));--f3r-blur:14px;font-family:var(--paper-font-body1_-_font-family,Roboto,sans-serif);color:var(--f3r-ink)}
 :host(.light){--f3r-ink:#1b2430;--f3r-muted:rgba(27,36,48,.7);--f3r-line:rgba(0,0,0,.14);--f3r-alpha:.6}
 *{box-sizing:border-box}button,input{font:inherit}button{cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;color:inherit}button:disabled{cursor:default;opacity:.45}button:focus-visible,input:focus-visible{outline:2px solid rgb(var(--f3r-accent));outline-offset:2px}ha-icon{width:22px;height:22px;flex:none;color:inherit;--mdc-icon-size:22px}
-.stage{position:absolute;inset:0;overflow:hidden;background:rgb(var(--f3r-stage))}
+.stage{position:absolute;inset:0;overflow:hidden;background:var(--f3r-canvas,rgb(var(--f3r-stage)))}
 .stage > .models{position:absolute;inset:0;display:flex;flex-direction:row;gap:var(--f3r-gap,14px)}
 .stage > .models.column{flex-direction:column}
 .stage > .models > .model{position:relative;flex:1 1 0;min-width:0;min-height:0}
 .stage > .models > .model[hidden]{display:none}
-.stage > .models.many.lined > .model + .model:not([hidden])::before{content:"";position:absolute;left:calc(var(--f3r-gap,14px) / -2);top:8%;bottom:8%;border-left:1px solid var(--f3r-line);pointer-events:none}
-.stage > .models.many.lined.column > .model + .model:not([hidden])::before{left:8%;right:8%;top:calc(var(--f3r-gap,14px) / -2);bottom:auto;border-left:0;border-top:1px solid var(--f3r-line)}
+.stage > .models.many > .model + .model:not([hidden])::before{content:"";position:absolute;left:calc(var(--f3r-gap,14px) / -2);top:8%;bottom:8%;border-left:1px solid var(--f3r-divider,var(--f3r-line));pointer-events:none}
+.stage > .models.many.column > .model + .model:not([hidden])::before{left:8%;right:8%;top:calc(var(--f3r-gap,14px) / -2);bottom:auto;border-left:0;border-top:1px solid var(--f3r-divider,var(--f3r-line))}
 .stage > .models > .model > .caption{position:absolute;z-index:2;left:12px;bottom:10px;padding:3px 9px;border-radius:9px;background:var(--f3r-panel);color:var(--f3r-muted);font-size:12px;pointer-events:none;display:none}
 .stage > .models.many > .model > .caption{display:block}
 :host(.narrow.open) .stage > .models > .model > .caption{display:none}
@@ -281,7 +281,6 @@ export class Floor3dxRoomsCard extends HTMLElement {
     const shownCount = this._slots.filter((s) => this._active === ALL || s.id === this._active).length;
     this._modelsHost.classList.toggle('many', shownCount > 1 && this._config?.model_labels !== false && this._config?.model_labels !== 'no');
     // the hairline belongs to a theme; with the model as it is, the gap alone separates the views
-    this._modelsHost.classList.toggle('lined', this._theme.key !== 'off');
     const gap = Number(this._config?.models_gap);
     if (Number.isFinite(gap) && gap >= 0) this._modelsHost.style.setProperty('--f3r-gap', gap + 'px'); else this._modelsHost.style.removeProperty('--f3r-gap');
     this._slots.forEach((s) => {
@@ -400,8 +399,18 @@ export class Floor3dxRoomsCard extends HTMLElement {
     // swallowed unless taps leave objects to the card (object_tap: room)
     host.addEventListener('dblclick', (e) => { if (this._objectTap() !== 'room' && this._boundRow(slot, this._hits(e, slot))) e.stopPropagation(); }, true);
   }
+  /** The space between the models and the hairline take the colour the embedded card actually draws behind its model (a theme's stage at its time of day, the card's own backgroundColor), so the gap is invisible and the line reads on light and dark alike. */
+  private _syncCanvas(slot: Slot): void {
+    const bg = slot.el?._scene?.background;
+    if (!bg || !bg.isColor) { this.style.removeProperty('--f3r-canvas'); this.style.removeProperty('--f3r-divider'); return; }
+    const hex = '#' + bg.getHexString();
+    const lum = 0.2126 * bg.r + 0.7152 * bg.g + 0.0722 * bg.b; // linear-ish, good enough to pick a side
+    this.style.setProperty('--f3r-canvas', hex);
+    this.style.setProperty('--f3r-divider', lum > 0.4 ? 'rgba(0,0,0,.22)' : 'rgba(255,255,255,.28)');
+  }
   private _onModelReady(slot: Slot): void {
     const el = slot.el; if (!el || !el._scene) return;
+    if (slot === this._slots[0]) this._syncCanvas(slot);
     this._buildIndex(slot);
     const controls = el._controls;
     if (controls && controls.addEventListener) controls.addEventListener('change', () => this._movePins(0));

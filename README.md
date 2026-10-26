@@ -593,7 +593,7 @@ rooms:
     entities: [{ entity: light.garage }, { entity: cover.garage_door }, { entity: sensor.garage_temp }]
 ```
 
-When all are shown, a gap (`models_gap`), a hairline in the theme's line colour (not with theme `off`, where the gap alone separates the views and the overlay takes the card's own stage colour) and a small caption with each model's name separate the views (`model_labels: no` for none). In the editor, **Add another model** adds an entry, **Found cards go to** picks which model a found card is used for; **Detect rooms** runs on every model. A model keeps its own `camera_position`: when all are shown each gets a narrower view, so a camera set for the full width may need to sit further back (or use Reset view).
+When all are shown, a gap (`models_gap`), a hairline (dark on a light stage, light on a dark one; the gap itself takes the colour the model is drawn on, so it is invisible with any theme) and a small caption with each model's name separate the views (`model_labels: no` for none). In the editor, **Add another model** adds an entry, **Found cards go to** picks which model a found card is used for; **Detect rooms** runs on every model. A model keeps its own `camera_position`: when all are shown each gets a narrower view, so a camera set for the full width may need to sit further back (or use Reset view).
 
 **From outside the card** (2.5): `#model=garage&room=bay` in the dashboard URL, or `window.dispatchEvent(new CustomEvent('floor3dx-rooms-select', {detail: {model: 'garage', room: 'bay'}}))`, shows a model or opens a room — for a dashboard's own selector, or a notification's link. Names work as well as ids.
 

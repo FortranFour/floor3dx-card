@@ -26,7 +26,7 @@
 
 - **`dashboard` palette**: Home Assistant's stock light dashboard (page grey, white walls, capsule-blue floors, slate lines; the rooms card's overlay takes the icon blue as accent and capsule-blue panels). A palette may now carry `accent` and `panel` for the rooms card. 34 palettes, 41 rooms themes.
 
-- With all models shown, a gap, a hairline and a small caption with the model's name separate the views (`models_gap`, `model_labels`); with theme `off` there is no hairline, and the overlay and the gap take the embedded card's own stage colour (its look's stage, else its `backgroundColor`). The editor's per-model "Receives Use" buttons are one **Found cards go to** dropdown.
+- With all models shown, a gap, a hairline and a small caption with the model's name separate the views (`models_gap`, `model_labels`). The gap takes the colour the embedded card actually draws behind its model (so it is invisible with every theme, `day` and `off` included) and the hairline is dark on a light stage, light on a dark one. The editor's per-model "Receives Use" buttons are one **Found cards go to** dropdown.
 
 ### Changed (rooms card)
 - The room's readouts sit below the header row, full width; the icon stays beside the room's name.
