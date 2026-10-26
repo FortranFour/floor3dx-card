@@ -18,12 +18,14 @@
 // Both settings are page wide in three.js (ColorManagement and the shader chunks are globals), so
 // all floor3dx cards on one dashboard view should use the same values.
 import * as THREE from 'three';
+import { ROOM_LIGHT_PARS } from './room-light';
 
 export type LightsMode = 'legacy' | 'physical';
 export type ColorMode = 'legacy' | 'managed';
 
 const CHUNK = THREE.ShaderChunk as unknown as { [name: string]: string };
-const ORIGINAL_LIGHTS = CHUNK.lights_pars_begin;
+// + the room mask of light_rooms (room-light.ts), declared where every lit material can call it
+const ORIGINAL_LIGHTS = CHUNK.lights_pars_begin + ROOM_LIGHT_PARS;
 
 // r130's getDistanceAttenuation without PHYSICALLY_CORRECT_LIGHTS.
 const LEGACY_ATTENUATION = `float getDistanceAttenuation( const in float lightDistance, const in float cutoffDistance, const in float decayExponent ) {

@@ -66,6 +66,7 @@ export interface Floor3dCardConfig {
   hide_objects?: any;
   shadow_budget?: number;
   wall_seal?: number;
+  light_rooms?: any;
   type3d: string;
   object_id: string;
   object_groups: any;

@@ -22,6 +22,7 @@ const SWITCH_DEFAULTS: { [key: string]: 'yes' | 'no' } = {
   antialias: 'yes',
   hide_spare_panels: 'no',
   merge_static: 'no',
+  light_rooms: 'no',
 };
 
 // Other top-level options whose value, when missing, is the one written here.

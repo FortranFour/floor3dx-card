@@ -276,6 +276,18 @@ wall_seal: 0.5
 
 A wall is its `wall_<id>_<n>` meshes together (the `walls` prefix of `look` applies when set); the stretch is about the wall's centre and along its length only, so the thickness, the height, and the door and window frames set into the wall are as they were, and the wall's edge lines and shadows follow the stretched geometry. Each stretched wall gets its own copy of its geometry, so a box shared between walls in the file, or a model shared between cards on a page, is not stretched twice. Off without the option: the geometry is exactly the file's.
 
+### Lamps stay in their room (`light_rooms`)
+
+A point or spot light in three.js shines through walls: nothing occludes it unless it casts a shadow, so a lamp against a wall lights the floor of the room behind it, and a lamp in the kitchen lights the hall. Shadow maps fix that one lamp at a time, each costing a texture unit (16 or 32 for the whole material, see the budget below) and six scene passes. `light_rooms: 'yes'` confines every lamp to its room instead, for free:
+
+```yaml
+light_rooms: 'yes'
+```
+
+When the model loads, the floors (`room_N_1` of a Sweet Home 3D export) are drawn once from above into a small room map; floors that touch (an alcove, a bay window, a threshold drawn as its own floor) count as one room. While shading, each lamp's light is kept only where the surface lies in the same room as the lamp, or on no room at all (a wall face, a threshold, the ground just outside) within 25 cm of the lamp's room, so the walls of the room are still lit from inside. A lamp in no room, outside or on a floor that is not a room, shines as before. Lamps with shadows keep them. The trade: light no longer spills through an open doorway into the next room. `light_rooms: {margin: 40, floors: 'floor_*', join: 'no'}` changes the margin (model units), the floor names (`*` wildcard) and the joining. In the editor's Light and shadows section. Off by default.
+
+![A kitchen lamp lighting the hall through the wall, and with light_rooms](docs/floor3dx-light-rooms.jpg)
+
 ### Shadow budget
 
 Every shadow-casting light needs a shadow map, and each shadow map takes a texture unit in the shader. A GPU exposes a fixed number of them to one material (16 on phones and integrated graphics, 32 on many discrete cards); a scene that asks for more fails to compile its shaders and draws nothing, a black card with no error. The card now counts: with `shadow: 'yes'`, the first N lights whose entry does not say `shadow: 'no'` get a shadow, where N is what the GPU has left after its own textures, and the rest still shine without one. A console warning names the lights that lost their shadow. With `extralightmode: 'yes'` the lights that are on come first, so a light gets its shadow when it is switched on if there is room. `shadow_budget` overrides N for a GPU that still goes black at the computed value.
@@ -505,6 +517,7 @@ On a Home Assistant without `ha-form` the previous editor is shown instead. `day
 | `type3d: transparent` | `transparent.transparency`, `transparent.transparency_off`, `transparent.state`, `transparent.invert` | |
 | `shadow_budget` | number of shadow-casting lights | from the GPU's texture units |
 | `wall_seal` | model units each wall is stretched at each end | off |
+| `light_rooms` | `yes`: lamps light only their own room; or `{margin, floors, join}` | off |
 | `lights` | `legacy`, `physical`; see Version 2.0 above | `legacy` |
 | `color_management` | `legacy`, `managed`; see Version 2.0 above | `legacy` |
 | `exposure` | tone-mapping exposure | 0.6 |
@@ -580,7 +593,6 @@ Entity-reference tokens (`[[entity:…]]`): see *Entity references* below.
 
 **Reset view** (2.5). The camera button next to *Rooms* flies the camera back to the configured view; when the embedded card has saved views (`zoom_areas`) the button opens a list of them with Reset on top.
 
-**Day & night switch** (2.7). When a model has `daylight`, a compass button sits before *Reset view*: its needle points to where north is on screen (red tip, turning as you orbit, from the card's `north`), and a small sun or moon badge says what the daylight is doing right now. Tap it to switch the day-and-night effects off — the model is drawn as a steady, neutral day (the day ambient and background, no sun or beams, no glow, lamps unboosted) and the compass dims (its needle loses its red); tap again for the real sky. The configuration is untouched, and the choice is remembered per card in that browser. On phones the buttons take the first row to the right of the title and the model switcher the second.
 
 ### Several models in one card (2.5)
 
@@ -612,6 +624,12 @@ rooms:
 ```
 
 When all are shown, a gap (`models_gap`), a hairline (dark on a light stage, light on a dark one; the gap itself takes the colour the model is drawn on, so it is invisible with any theme) and a small caption with each model's name separate the views (`model_labels: no` for none). In the editor, **Add another model** adds an entry, **Found cards go to** picks which model a found card is used for; **Detect rooms** runs on every model. A model keeps its own `camera_position`: when all are shown each gets a narrower view, so a camera set for the full width may need to sit further back (or use Reset view).
+
+### Day & night switch (2.7)
+
+When a model has `daylight`, a compass button sits before *Reset view*: its needle points to where north is on screen (red tip, turning as you orbit, from the card's `north`), and a small sun or moon badge says what the daylight is doing right now. Tap it to switch the day-and-night effects off — the model is drawn as a steady, neutral day (the day ambient and background, no sun or beams, no glow, lamps unboosted) and the compass dims (its needle loses its red); tap again for the real sky. The configuration is untouched, and the choice is remembered per card in that browser. On phones the buttons take the first row to the right of the title and the model switcher the second.
+
+![The day & night switch on the Rooms Card](docs/floor3dx-rooms-day-night.jpg)
 
 **From outside the card** (2.5): `#model=garage&room=bay` in the dashboard URL, or `window.dispatchEvent(new CustomEvent('floor3dx-rooms-select', {detail: {model: 'garage', room: 'bay'}}))`, shows a model or opens a room — for a dashboard's own selector, or a notification's link. Names work as well as ids.
 

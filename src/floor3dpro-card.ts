@@ -39,6 +39,10 @@ import { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { loadCompressedGLTF, applyTextureQuality } from './model-loader';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
 import { applyRenderMode, lightIntensity, exposure, colorMode } from './render-mode';
+import { RoomLight, installRoomLight, roomLightUniforms } from './room-light';
+
+installRoomLight();
+(window as any).__f3dxRoomLight = roomLightUniforms();
 import { mergeStatic, reservedNames } from './merge-static';
 import { Object3D } from 'three';
 import '../elements/button';
@@ -181,6 +185,7 @@ export class Floor3dCard extends LitElement {
   private _shadeSignature: string[] = [];
   // daylight: time-of-day lighting for a roofless plan
   private _daylight: Daylight | null = null;
+  private _roomLight: RoomLight | null = null; // light_rooms: lamps confined to their room
   private _daylightOn = true; // setDaylight() before the model is ready is honoured when the daylight is built
   // look: NeonPlan / NextFloor style themes on the loaded model
   private _look: Look | null = null;
@@ -717,6 +722,8 @@ export class Floor3dCard extends LitElement {
       this._renderer.setPixelRatio(ratio);
     }
 
+    // the shared room-mask uniforms point at this card's rooms (or are off) for this frame
+    if (this._roomLight) this._roomLight.bind(this._camera); else RoomLight.unbind();
     this._renderer.render(this._scene, this._camera);
 
     if (moving) {
@@ -2202,6 +2209,23 @@ export class Floor3dCard extends LitElement {
     return [d.sun, d.real_sun].some((v) => v === true || String(v).toLowerCase() === 'yes' || String(v).toLowerCase() === 'true');
   }
 
+  // light_rooms: lamps confined to their room by a room-id map of the floors (room-light.ts).
+  private _initRoomLight(): void {
+    const opt = (this._config as any).light_rooms;
+    if (this._roomLight) { this._roomLight.dispose(); this._roomLight = null; }
+    const on = opt === true || (typeof opt === 'object' && opt !== null) || ['yes', 'true', 'on'].includes(String(opt).toLowerCase());
+    if (!on || !this._renderer) return;
+    const meshes: THREE.Mesh[] = [];
+    this._levels.forEach((level) => level.traverse((o: any) => { if (o.isMesh) meshes.push(o); }));
+    this._roomLight = new RoomLight(this._renderer, this._bboxmodel, meshes, opt);
+    if (!this._roomLight.active) {
+      console.warn('floor3d-card: light_rooms found no floors (room_*_1); set light_rooms.floors to the names of the floor objects.');
+      this._roomLight = null;
+    } else {
+      console.log('floor3d-card: light_rooms: ' + this._roomLight.rooms + ' floors, ' + this._roomLight.joined + ' rooms once touching floors are joined; lamps stay in their room');
+    }
+  }
+
   /** The lamps follow the daylight (daylight.lamps): recompute them at the new darkness, then redraw. */
   private _afterDaylight(): void {
     const d = (this._config as any).daylight;
@@ -2742,6 +2766,7 @@ export class Floor3dCard extends LitElement {
 
     this._expandObjectPatterns();
     this._sealWalls(); // geometry first: the look's edge lines and the lights' shadows follow it
+    this._initRoomLight(); // the room map from the floors, before merging takes their names
     this._applyLook(); // materials only: colour-condition clones made in _add3dObjects are then themed
     this._add3dObjects();
     // edge lines last: door, shade and rotate setup re-centres geometry on its pivot and moves the

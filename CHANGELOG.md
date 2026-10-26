@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.8.0
+
+### Added
+- **Lamps stay in their room** (`light_rooms: 'yes'`). A lamp no longer lights the room behind its wall: the floors (`room_N_1`) are drawn once into a room map when the model loads, touching floors joined, and in the shader each point or spot light reaches only surfaces in its own room, or on no room within `margin` (25) of it, so walls are still lit from inside. No shadow maps, no texture-unit budget, nothing extra per frame beyond one texture read per lamp; lamps with shadows keep them. Light no longer spills through doorways. `{margin, floors, join}`; editor checkbox in Light and shadows. Harness: `test_room_light.py`, `render_leak.py`.
+- README: the day & night switch moved after *Several models in one card*, with a picture.
+
 ## 2.7.0
 
 ### Added
