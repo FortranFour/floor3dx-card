@@ -580,6 +580,8 @@ Entity-reference tokens (`[[entity:…]]`): see *Entity references* below.
 
 **Reset view** (2.5). The camera button next to *Rooms* flies the camera back to the configured view; when the embedded card has saved views (`zoom_areas`) the button opens a list of them with Reset on top.
 
+**Day & night switch** (2.7). When a model has `daylight`, a compass button sits before *Reset view*: its needle points to where north is on screen (red tip, turning as you orbit, from the card's `north`), and a small sun or moon badge says what the daylight is doing right now. Tap it to switch the day-and-night effects off — the model is drawn as a steady, neutral day (the day ambient and background, no sun or beams, no glow, lamps unboosted) and the compass dims (its needle loses its red); tap again for the real sky. The configuration is untouched, and the choice is remembered per card in that browser. On phones the buttons take the first row to the right of the title and the model switcher the second.
+
 ### Several models in one card (2.5)
 
 A house and a garage can share one rooms card: `models:` instead of `card:`, one entry per model, each with its own floor3d card configuration and its own rooms. Each model is rendered in its own view (its own camera, rotated on its own; they cannot collide), and a switcher at the top shows **House · Garage · Both** — one model filling the card, or all of them side by side (stacked when the card is taller than wide; `layout: row | column` forces one). Only the shown models render; the others stay loaded. One theme, one panel; the *Rooms* menu is grouped by model, and selecting a room of a hidden model shows that model.

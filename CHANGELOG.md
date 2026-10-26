@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.7.0
+
+### Added
+- Rooms card: a **day & night switch**. When a model has `daylight`, a compass button (its needle points to where north is on screen, turning with the camera; a sun or moon badge for the current state) switches the day-and-night effects off and on: off, the model is a steady neutral day and the compass dims. Remembered per card in the browser. `setDaylight(on)` / `daylightState()` on the 3D card for other wrappers. Harness: `test_daylight_switch.py`.
+
+### Changed
+- Rooms card on phones: the buttons (compass, Reset view, Rooms) take the first row to the right of the title again, the model switcher the second.
+
 ## 2.6.1
 
 ### Fixed

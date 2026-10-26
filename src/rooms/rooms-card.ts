@@ -70,12 +70,22 @@ const STYLE = `
 @keyframes f3r-in{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}}
 :host(.narrow) .panel{top:auto;left:10px;right:10px;bottom:10px;width:auto;max-height:58%;animation-name:f3r-up}
 .panel.still{animation:none}
-/* phones: the title keeps to half the width, the model switcher takes the first row on the right, Reset view and Rooms (an icon) the second */
+/* phones: the title keeps to half the width; the buttons (icons only) take the first row on the right, the model switcher the second */
 :host(.narrow) .title{max-width:48%}:host(.narrow) .title span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 :host(.narrow) .menu{flex-wrap:wrap;justify-content:flex-end;max-width:calc(52% - 14px)}
 :host(.narrow) .menu > button span{display:none}:host(.narrow) .menu > button{padding:0 8px}
-:host(.narrow) .menu::before{content:"";order:0;flex-basis:100%;height:0}
-:host(.narrow) .menu .seg{order:-1}
+:host(.narrow) .menu::before{content:"";order:1;flex-basis:100%;height:0}
+:host(.narrow) .menu .seg{order:2}
+/* day & night lighting: a compass whose needle points north on screen; off, it is dimmed and the needle loses its red */
+.menu .dl{position:relative;padding:0 8px}
+.menu .dl svg{width:22px;height:22px;display:block;overflow:visible}
+.menu .dl .needle{transform-origin:12px 12px;transition:transform .15s}
+.menu .dl .n{fill:#e5473b}.menu .dl .s{fill:currentColor;fill-opacity:.4}
+.menu .dl .badge{position:absolute;right:-5px;top:-5px;width:16px;height:16px;border-radius:8px;display:grid;place-items:center;background:var(--f3r-panel);border:1px solid var(--f3r-line);color:#e9a825}
+.menu .dl .badge svg{width:10px;height:10px;fill:currentColor}
+.menu .dl .badge.night{color:#8da2d6}
+.menu .dl[aria-pressed=false] svg{opacity:.35}
+.menu .dl[aria-pressed=false] .n{fill:currentColor}
 :host(.narrow.models) .list{top:104px;max-height:calc(100% - 126px)}
 @keyframes f3r-up{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
 .panelhead{flex:none;display:flex;gap:12px;align-items:center;padding:14px 14px 10px}.roomicon{display:grid;place-items:center;width:42px;height:42px;border-radius:13px;background:rgba(var(--f3r-accent),.16);color:rgb(var(--f3r-accent))}
@@ -139,6 +149,8 @@ export class Floor3dxRoomsCard extends HTMLElement {
   private _hover: string | null = null;
   private _listOpen = false;
   private _viewsOpen = false;
+  private _daylightOn = true; // the day & night switch (remembered per card in this browser)
+  private _needleQueued = false;
   private _focus: string | null = null; // an entity whose tile is highlighted (object_tap: panel)
   private _focusTimer: any;
   private _busy = new Set<string>();
@@ -223,6 +235,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
       this._active = def ? def.id : want === ALL || want === 'both' ? ALL : this._active !== ALL && defs.some((d) => d.id === this._active) ? this._active : defs[0].id;
     }
     if (defs.length <= 1) this._active = ALL;
+    if (!this._slots.length) { try { this._daylightOn = localStorage.getItem(this._storeKey('daylight')) !== 'off'; } catch (_) { /* private mode */ } }
     this._applyTheme();
     this._mountModels();
     this._request();
@@ -369,6 +382,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
         host.appendChild(el);
         try { el.setConfig(cfg); slot.el = el; } catch (err) { this._toast = `Model configuration: ${(err as Error).message}`; el.remove(); }
         if (slot.el) {
+          if (!this._daylightOn && el.setDaylight) el.setDaylight(false);
           if (this._hass) el.hass = this._hass;
           slot.poll = setInterval(() => { if (el._modelready) { clearInterval(slot.poll); this._onModelReady(slot); } }, 200);
         }
@@ -417,7 +431,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
     if (slot === this._slots[0]) this._syncCanvas(slot);
     this._buildIndex(slot);
     const controls = el._controls;
-    if (controls && controls.addEventListener) controls.addEventListener('change', () => this._movePins(0));
+    if (controls && controls.addEventListener) controls.addEventListener('change', () => { this._movePins(0); this._needleSoon(); });
     if (el._camera && controls) slot.home = { position: el._camera.position.clone(), target: controls.target.clone() };
     this._movePins(0);
     this._request();
@@ -481,6 +495,46 @@ export class Floor3dxRoomsCard extends HTMLElement {
 
   // ---- the camera ---------------------------------------------------------------------------
   /** Back to the configured view, in a short flight; every model when all are shown. */
+  /** The day & night switch: a compass (its needle points north on screen, red tip) with a sun or moon
+   *  badge for what the daylight is doing now; off, dimmed and struck through. Only when a model has daylight. */
+  private _daylightButton(): string {
+    const states = this._slots.filter((s) => s.el?.daylightState).map((s) => s.el.daylightState());
+    if (!states.some((d) => d.has)) return '';
+    const on = this._daylightOn, night = on && states.some((d) => d.has && d.dark > 0.5);
+    // the badge is inline SVG (mdi's sun and moon), so it draws even before ha-icon is defined
+    const sunPath = 'M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10m0-5 1.9 3.1h-3.8M12 22l-1.9-3.1h3.8M2 12l3.1-1.9v3.8M22 12l-3.1 1.9v-3.8M4.9 4.9l3.5.9-2.6 2.6M19.1 19.1l-3.5-.9 2.6-2.6M19.1 4.9l-.9 3.5-2.6-2.6M4.9 19.1l.9-3.5 2.6 2.6';
+    const moonPath = 'M17.8 15.9a8 8 0 0 1-9.7-9.7A8 8 0 1 0 17.8 15.9z';
+    const badge = on ? `<span class="badge${night ? ' night' : ''}"><svg viewBox="0 0 24 24"><path d="${night ? moonPath : sunPath}"/></svg></span>` : '';
+    const title = on ? `Day & night lighting on (${night ? 'night' : 'day'}) · tap to switch off · the needle points north` : 'Day & night lighting off · tap to switch on · the needle points north';
+    return `<button class="dl" data-action="daylight" aria-pressed="${on}" aria-label="Day and night lighting" title="${title}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.6" fill="none" stroke="currentColor" stroke-opacity=".35" stroke-width="1.3"/><g class="needle"><path class="n" d="M12 2.6 L14.7 12 L9.3 12 Z"/><path class="s" d="M12 21.4 L14.7 12 L9.3 12 Z"/></g><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>${badge}</button>`;
+  }
+  private _setDaylight(on: boolean): void {
+    this._daylightOn = on;
+    this._slots.forEach((s) => { if (s.el?.setDaylight) s.el.setDaylight(on); });
+    try { localStorage.setItem(this._storeKey('daylight'), on ? 'on' : 'off'); } catch (_) { /* private mode */ }
+    this._request();
+  }
+  private _storeKey(what: string): string { return `floor3dx-rooms:${what}:${this._config?.title || ''}:${modelDefs(this._config).map((d) => d.card?.objfile || '').join(',')}`; }
+  /** Turn the compass needle to where north is on screen for the model in view (the first of several). */
+  private _needleSoon(): void {
+    if (this._needleQueued) return;
+    this._needleQueued = true;
+    requestAnimationFrame(() => { this._needleQueued = false; this._turnNeedle(); });
+  }
+  private _turnNeedle(): void {
+    const needle = this._ui.querySelector('.dl .needle') as SVGGElement | null;
+    if (!needle) return;
+    const slot = this._slots.find((s) => s.el?._camera && (this._active === ALL || s.id === this._active)) || this._slots.find((s) => s.el?._camera);
+    if (!slot) return;
+    const north = slot.card?.north || { x: 0, z: -1 };
+    const n = new THREE.Vector3(Number(north.x) || 0, 0, Number(north.z) || 0);
+    if (n.lengthSq() === 0) n.set(0, 0, -1);
+    const cam: THREE.Camera = slot.el._camera;
+    cam.updateMatrixWorld();
+    const v = n.normalize().transformDirection(cam.matrixWorldInverse);
+    const deg = Math.atan2(v.x, v.y) * 180 / Math.PI; // clockwise from screen-up
+    needle.style.transform = `rotate(${deg.toFixed(1)}deg)`;
+  }
   private _resetView(): void {
     const slots = this._slots.filter((s) => s.el && s.home && (this._active === ALL || s.id === this._active));
     if (!slots.length) return;
@@ -710,7 +764,8 @@ export class Floor3dxRoomsCard extends HTMLElement {
     const switcher = many ? `<div class="seg" role="group" aria-label="Model">${this._slots.map((s) => `<button data-action="model" data-model="${esc(s.id)}" aria-pressed="${this._active === s.id}">${esc(s.name)}</button>`).join('')}<button data-action="model" data-model="${ALL}" aria-pressed="${this._active === ALL}">${this._slots.length === 2 ? 'Both' : 'All'}</button></div>` : '';
     const views = this._views();
     const reset = hasModel ? (views ? `<button data-action="views" aria-pressed="${this._viewsOpen}" aria-label="Views" title="Views">${icon('mdi:camera-outline')}</button>` : `<button data-action="reset" aria-label="Reset view" title="Reset view">${icon('mdi:camera-flip-outline')}</button>`) : '';
-    const menu = rooms.length || hasModel ? `<div class="menu">${switcher}${reset}${rooms.length ? `<button data-action="list" aria-pressed="${this._listOpen}" aria-label="Rooms">${icon('mdi:floor-plan')}<span>Rooms</span></button>` : ''}</div>` : '';
+    const dl = this._daylightButton();
+    const menu = rooms.length || hasModel ? `<div class="menu">${switcher}${dl}${reset}${rooms.length ? `<button data-action="list" aria-pressed="${this._listOpen}" aria-label="Rooms">${icon('mdi:floor-plan')}<span>Rooms</span></button>` : ''}</div>` : '';
     const roomButton = (r: Room) => { const n = this._activeCount(r); return `<button data-action="room" data-room="${esc(r.id)}" aria-pressed="${r.id === this._room}">${icon(r.icon || 'mdi:door-open')}<span>${esc(this._roomName(r))}</span><span class="n">${n ? `${n} on` : ''}</span></button>`; };
     const list = this._listOpen ? `<div class="list" role="menu">${this._slots.length > 1 ? this._slots.map((s) => { const rs = this._slotRooms(s); return rs.length ? `<div class="group">${esc(s.name)}</div>${rs.map(roomButton).join('')}` : ''; }).join('') : rooms.map(roomButton).join('')}</div>`
       : this._viewsOpen && views ? `<div class="list" role="menu"><button data-action="reset">${icon('mdi:camera-flip-outline')}<span>Reset view</span></button>${views.views.map((v, i) => `<button data-action="view" data-i="${i}">${icon('mdi:magnify-expand')}<span>${esc(String(v.name || `View ${i + 1}`))}</span></button>`).join('')}</div>` : '';
@@ -732,6 +787,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
       if (t) { t.classList.add('focus'); t.scrollIntoView({ block: 'nearest' }); }
     }
     this._placePins();
+    this._turnNeedle();
   }
   private _regions = new Map<string, { el: HTMLElement; html: string }>();
   private _region(name: string, html: string): void {
@@ -783,6 +839,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
     if (action === 'list') { this._listOpen = !this._listOpen; this._viewsOpen = false; if (this._listOpen && this._room) { this._room = null; this._confirm = null; this._paintTints(); } this._request(); return; }
     if (action === 'views') { this._viewsOpen = !this._viewsOpen; this._listOpen = false; this._request(); return; }
     if (action === 'reset') { this._viewsOpen = false; this._resetView(); this._request(); return; }
+    if (action === 'daylight') { this._setDaylight(!this._daylightOn); return; }
     if (action === 'view') { this._viewsOpen = false; this._gotoView(Number(i)); this._request(); return; }
     if (action === 'model') { this._listOpen = false; this._viewsOpen = false; this._showModel(model); return; }
     if (action === 'room-off') {

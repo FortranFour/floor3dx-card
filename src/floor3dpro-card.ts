@@ -181,6 +181,7 @@ export class Floor3dCard extends LitElement {
   private _shadeSignature: string[] = [];
   // daylight: time-of-day lighting for a roofless plan
   private _daylight: Daylight | null = null;
+  private _daylightOn = true; // setDaylight() before the model is ready is honoured when the daylight is built
   // look: NeonPlan / NextFloor style themes on the loaded model
   private _look: Look | null = null;
   private _transparency: Transparency | null = null;
@@ -1844,14 +1845,7 @@ export class Floor3dCard extends LitElement {
         this._renderer.shadowMap.needsUpdate = true;
         this._requestRender('transparent');
       }
-      if (this._daylight && this._modelready && this._daylight.update(hass.states)) {
-        // the lamps follow the daylight (daylight.lamps): recompute them at the new darkness
-        if ((this._config as any).daylight && ((this._config as any).daylight.lamps || (this._config as any).daylight.lamps_night || (this._config as any).daylight.lamps_reach)) {
-          this._config.entities.forEach((entity, i) => { if (entity.type3d == 'light' && this._states[i] !== undefined) this._updatelight(entity, i); });
-        }
-        this._renderer.shadowMap.needsUpdate = true;
-        this._requestRender('daylight');
-      }
+      if (this._daylight && this._modelready && this._daylight.update(hass.states)) this._afterDaylight();
     } catch (e) {
       console.log(e);
       throw new Error('Error in hass: ' + e);
@@ -2208,6 +2202,32 @@ export class Floor3dCard extends LitElement {
     return [d.sun, d.real_sun].some((v) => v === true || String(v).toLowerCase() === 'yes' || String(v).toLowerCase() === 'true');
   }
 
+  /** The lamps follow the daylight (daylight.lamps): recompute them at the new darkness, then redraw. */
+  private _afterDaylight(): void {
+    const d = (this._config as any).daylight;
+    if (d && (d.lamps || d.lamps_night || d.lamps_reach)) {
+      this._config.entities.forEach((entity, i) => { if (entity.type3d == 'light' && this._states[i] !== undefined) this._updatelight(entity, i); });
+    }
+    this._renderer.shadowMap.needsUpdate = true;
+    this._requestRender('daylight');
+  }
+
+  /** Day-and-night effects on or off at runtime (the Rooms Card's switch); the configuration is untouched.
+   *  Off, the scene is a steady neutral day. Returns the state in force (false when the card has no daylight). */
+  public setDaylight(on: boolean): boolean {
+    this._daylightOn = on;
+    if (!this._daylight) return false;
+    this._daylight.setEnabled(on);
+    if (this._modelready && this._hass && this._daylight.update(this._hass.states)) this._afterDaylight();
+    return this._daylight.isEnabled();
+  }
+
+  /** The daylight's state for a switch: whether the card has daylight, whether it is on, and 0 (day) to 1 (night). */
+  public daylightState(): { has: boolean; on: boolean; dark: number } {
+    if (!this._daylight) return { has: !!this._config.daylight, on: this._daylightOn, dark: 0 };
+    return { has: true, on: this._daylight.isEnabled(), dark: this._daylight.darkness() };
+  }
+
   private _initDaylight(): void {
     if (!this._config.daylight || this._daylight) return;
     let base = 0.5;
@@ -2226,6 +2246,7 @@ export class Floor3dCard extends LitElement {
       baseBackground: this._scene.background instanceof THREE.Color ? this._scene.background : null,
       stageColor: this._look && this._look.active ? (k: number) => this._look.stageColor(k) : undefined,
     });
+    this._daylight.setEnabled(this._daylightOn);
     this._daylight.update(this._hass.states);
     this._renderer.shadowMap.needsUpdate = true;
   }

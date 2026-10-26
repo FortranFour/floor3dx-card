@@ -113,6 +113,7 @@ export class Daylight {
   private glows: { meshes: THREE.Mesh[]; entity: string | null; color: THREE.Color; intensity: number }[] = [];
   private sun: THREE.DirectionalLight | null = null;
   private dark = 0; // 1 - daylight factor, from the last update
+  private enabled = true; // off: a steady, neutral day (no sun, no beams, no glow, no night)
   private modelRadius = 1000;
   private lastSignature = '';
   private dayColor: THREE.Color;
@@ -277,12 +278,19 @@ export class Daylight {
     });
   }
 
+  /** Day-and-night effects on or off. Off, the scene is a steady neutral day: the day ambient and
+   *  background, no sun or beams, no glow, lamps unboosted. Call update() afterwards. */
+  setEnabled(on: boolean): void { this.enabled = on; }
+  isEnabled(): boolean { return this.enabled; }
+  /** 0 by day, 1 at night, from the last update. */
+  darkness(): number { return this.dark; }
+
   /** Recompute from the current states. Returns true when anything changed. */
   update(states: any): boolean {
-    const sun = this.sunPosition(states);
-    const weather = this.cfg.weather_entity && states[this.cfg.weather_entity] ? String(states[this.cfg.weather_entity].state) : '';
+    const sun = this.enabled ? this.sunPosition(states) : { elevation: 90, azimuth: 180, rising: false };
+    const weather = this.enabled && this.cfg.weather_entity && states[this.cfg.weather_entity] ? String(states[this.cfg.weather_entity].state) : '';
     const glowStates = this.glows.map((g) => (g.entity && states[g.entity] ? states[g.entity].state : '')).join(',');
-    const signature = [sun.elevation.toFixed(1), sun.azimuth.toFixed(1), sun.rising ? 'r' : 's', weather, glowStates].join('|');
+    const signature = [this.enabled ? 'on' : 'off', sun.elevation.toFixed(1), sun.azimuth.toFixed(1), sun.rising ? 'r' : 's', weather, glowStates].join('|');
     if (signature === this.lastSignature) return false;
     this.lastSignature = signature;
 
@@ -337,20 +345,20 @@ export class Daylight {
       const full = this.cfg.sun_full !== undefined ? Number(this.cfg.sun_full) : 8;
       this.sun.position.copy(this.modelCenter.clone().add(sunDir.clone().multiplyScalar(this.modelRadius * 2)));
       this.sun.target.position.copy(this.modelCenter);
-      this.sun.intensity = this.ambientDay * k * smoothstep(0, Math.max(0.1, full), sun.elevation) * wf;
+      this.sun.intensity = this.enabled ? this.ambientDay * k * smoothstep(0, Math.max(0.1, full), sun.elevation) * wf : 0;
       this.sun.color.copy(sunColor);
     }
     if (this.exteriorSun && !this.sun) {
       const k = this.cfg.exterior_sun !== undefined ? Number(this.cfg.exterior_sun) : 0.6;
       this.exteriorSun.position.copy(this.modelCenter.clone().add(sunDir.clone().multiplyScalar(2000)));
-      this.exteriorSun.intensity = this.ambientDay * k * smoothstep(0, 8, sun.elevation) * wf;
+      this.exteriorSun.intensity = this.enabled ? this.ambientDay * k * smoothstep(0, 8, sun.elevation) * wf : 0;
       this.exteriorSun.color.copy(sunColor);
     }
     this.spots.forEach((s) => {
       const facing = Math.max(0, s.outward.dot(sunDir));
       const full = this.cfg.beam_full !== undefined ? Number(this.cfg.beam_full) : 4;
       const low = smoothstep(0, Math.max(0.1, full), sun.elevation); // no beam until the sun is a little up
-      s.light.intensity = lightIntensity(s.lumens, facing * low * wf, this.d.cardConfig, s.light.distance, s.light.decay);
+      s.light.intensity = this.enabled ? lightIntensity(s.lumens, facing * low * wf, this.d.cardConfig, s.light.distance, s.light.decay) : 0;
       s.light.color.copy(s.color ? new THREE.Color(s.color) : sunColor);
       // aim the beam the way the sun actually comes through the window: along -sunDir from the pane
       // to where that line meets the floor (capped), so the pool travels across the room through the day

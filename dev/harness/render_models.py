@@ -12,12 +12,13 @@ os.makedirs(OUT, exist_ok=True)
 THEME = os.environ.get('THEME', 'architect')
 CARD_LOOK = os.environ.get('CARD_LOOK', '')  # with THEME=off: the embedded cards' own look, e.g. arctic
 LAYOUT = os.environ.get('LAYOUT', '')
+DAYLIGHT = json.loads(os.environ.get('DAYLIGHT', 'null'))  # e.g. '{"sun":"yes","time":15}' gives both models daylight and the switch
 W, H = [int(x) for x in os.environ.get('SIZE', '1100x620').split('x')]  # the card's size; set VW/VH for the viewport too
 
-JS = r"""async ([house, garage, theme, width, height, cardLook, layout]) => {
+JS = r"""async ([house, garage, theme, width, height, cardLook, layout, daylight]) => {
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   const base = window.card;
-  const model = (m) => { const card = Object.assign({}, base._config, {objfile: m.file, entities: m.lights, object_groups: [], shadow: 'yes', globalLightPower: 0.77}); if (cardLook) card.look = {theme: cardLook, edge_skip: 'seams, floors, ceilings'}; delete card.style; delete card.type; if (m.camera) { card.camera_position = m.camera.position; card.camera_target = m.camera.target; } else { delete card.camera_position; delete card.camera_target; } return card; };
+  const model = (m) => { const card = Object.assign({}, base._config, {objfile: m.file, entities: m.lights, object_groups: [], shadow: 'yes', globalLightPower: 0.77}); if (cardLook) card.look = {theme: cardLook, edge_skip: 'seams, floors, ceilings'}; if (daylight) { card.daylight = daylight; card.north = {x: -1, z: -0.1}; } delete card.style; delete card.type; if (m.camera) { card.camera_position = m.camera.position; card.camera_target = m.camera.target; } else { delete card.camera_position; delete card.camera_target; } return card; };
   const states = {'light.a': {state: 'on', attributes: {brightness: 200, friendly_name: 'Living Room Lamp'}}, 'light.b': {state: 'on', attributes: {brightness: 120, friendly_name: 'Dining Pendant'}},
     'light.c': {state: 'off', attributes: {friendly_name: 'Kitchen Spots'}}, 'light.d': {state: 'on', attributes: {brightness: 255, friendly_name: 'Bedroom Lamp'}}, 'light.e': {state: 'on', attributes: {friendly_name: 'Bath Light'}},
     'light.garage': {state: 'on', attributes: {brightness: 255, friendly_name: 'Garage Lights'}}, 'cover.garage_door': {state: 'closed', attributes: {device_class: 'garage', friendly_name: 'Garage Door'}},
@@ -51,6 +52,8 @@ STEP = r"""async ([what]) => {
   if (what === 'house') el._showModel('house');
   if (what === 'garage') { el._showModel('garage'); const bay = el._config.rooms.find(r => r.model === 'garage'); if (bay) el._select(bay.id); }
   if (what === 'both') { el._select(null); el._showModel('all'); }
+  if (what === 'off') { el._setDaylight(false); }
+  if (what === 'night') { el._setDaylight(true); el._slots.forEach(s => { s.el._config.daylight.time = 23; s.el._daylight.lastSignature = ''; s.el._daylight.cfg.time = 23; s.el.setDaylight(true); }); }
   await sleep(500);
   el._slots.forEach(s => { s.el._render && s.el._render(); });
   el._placePins();
@@ -59,9 +62,9 @@ STEP = r"""async ([what]) => {
 }"""
 
 def after(page):
-    r = page.evaluate(JS, [HOUSE, GARAGE, THEME, W, H, CARD_LOOK, LAYOUT])
+    r = page.evaluate(JS, [HOUSE, GARAGE, THEME, W, H, CARD_LOOK, LAYOUT, DAYLIGHT])
     print('setup', r, flush=True)
-    for what in ('house', 'garage', 'both'):
+    for what in os.environ.get('STEPS', 'house,garage,both').split(','):
         a = page.evaluate(STEP, [what])
         page.wait_for_timeout(500)
         page.screenshot(path=f'{OUT}/{THEME}-{what}.png', clip={'x': 0, 'y': 0, 'width': W, 'height': H}, timeout=120000)
