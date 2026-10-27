@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.11.1
+
+### Fixed
+- Card editor preview in a **sections** view: Home Assistant previews a card of a sections view inside a `hui-section` capped at 500 px (the card inside carries the `preview` property but not the attribute the card looked for), so the model stayed 500 px wide in a wide dialog. The cap is lifted on the section as well and the card spans every column of the preview grid; masonry views were already full width. Harness: `test_preview_width.py`.
+
 ## 2.11.0
 
 ### Added

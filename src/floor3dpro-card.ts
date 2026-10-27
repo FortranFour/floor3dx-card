@@ -572,11 +572,13 @@ export class Floor3dCard extends LitElement {
     this.display3dmodel();
   }
 
-  // The hui-card the editor shows this card in (it carries the `preview` attribute), or null.
+  // The element the editor shows this card in, or null: the `hui-card` carrying the `preview`
+  // attribute (masonry views), or, for a card of a sections view, the `hui-section` the editor
+  // previews it in (the card inside has the property only, not the attribute).
   private _previewHost(): HTMLElement | null {
     let node: any = this.parentElement || (this.getRootNode() as any).host;
-    for (let i = 0; i < 12 && node; i++) {
-      if (node.tagName === 'HUI-CARD' && node.hasAttribute && node.hasAttribute('preview')) return node;
+    for (let i = 0; i < 16 && node; i++) {
+      if ((node.tagName === 'HUI-CARD' || node.tagName === 'HUI-SECTION') && node.hasAttribute && node.hasAttribute('preview')) return node;
       node = node.parentElement || (node.getRootNode && node.getRootNode().host);
     }
     return null;
@@ -591,6 +593,14 @@ export class Floor3dCard extends LitElement {
   private _widenPreview(): void {
     const host = this._previewHost();
     if (host && host.style.maxWidth !== 'none') host.style.maxWidth = 'none';
+    // Sections view: the card is a grid item; let it span the preview section whatever its columns.
+    if (host && host.tagName === 'HUI-SECTION') {
+      let node: any = this.parentElement || (this.getRootNode() as any).host;
+      for (let i = 0; i < 16 && node && node !== host; i++) {
+        if (node.classList && node.classList.contains('card') && node.style.gridColumn !== '1 / -1') node.style.gridColumn = '1 / -1';
+        node = node.parentElement || (node.getRootNode && node.getRootNode().host);
+      }
+    }
   }
 
   // The preview's height: what is left of the window below the card's top, so the preview fills
