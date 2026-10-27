@@ -22,6 +22,9 @@ const PREVIEW_HEIGHT = 'calc(100vh - 235px)';
 const EMBEDDED_TAG = 'floor3dpro-card'; // renamed to floor3dx-card by the build, like every element name
 const ALL = 'all';
 const READOUT_DOMAINS = new Set(['sensor', 'binary_sensor']);
+/** The room and model last shown per card on this page: the card editor's preview makes a new element for
+ *  every change, and the panel the user was looking at would close each time. */
+const RECENT = new Map<string, { room: string | null; active: string; at: number }>();
 /** A room entity whose `entity` is a Jinja template rather than an id: a readout rendered by Home Assistant. */
 export function isTemplate(v: any): boolean { return typeof v === 'string' && /\{\{|\{%/.test(v); }
 /** Row types of the embedded card whose double tap runs an action; a `camera` row is a room's popup button, not a control. */
@@ -156,6 +159,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
   private _listOpen = false;
   private _viewsOpen = false;
   private _templates = new Map<string, { text: string; error: boolean; unsub: Promise<() => void> | null }>(); // template readouts, rendered by HA
+  private _fresh = false; // a new element whose room and model may be restored from RECENT when it lands in the editor's preview
   private _daylightOn = true; // the day & night switch (remembered per card in this browser)
   private _weatherOn = true; // follow the weather entity (remembered per card in this browser)
   private _fixedHour: number | null = null; // the long-press menu's fixed time, this session
@@ -255,6 +259,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
       this._active = def ? def.id : want === ALL || want === 'both' ? ALL : this._active !== ALL && defs.some((d) => d.id === this._active) ? this._active : defs[0].id;
     }
     if (defs.length <= 1) this._active = ALL;
+    this._fresh = !this._slots.length;
     if (!this._slots.length) { try { this._daylightOn = localStorage.getItem(this._storeKey('daylight')) !== 'off'; this._weatherOn = localStorage.getItem(this._storeKey('weather')) !== 'off'; } catch (_) { /* private mode */ } }
     this._applyTheme();
     this._mountModels();
@@ -274,6 +279,17 @@ export class Floor3dxRoomsCard extends HTMLElement {
 
   connectedCallback(): void {
     if (this._config && this._hass) this._syncTemplates();
+    if (this._fresh && this._config) {
+      // the editor's preview: a new element for every change of the configuration, so the room and
+      // the model shown a moment ago come back instead of closing on every keystroke
+      this._fresh = false;
+      const r = RECENT.get(this._storeKey('view'));
+      if (r && Date.now() - r.at < 300000 && this._isPreview()) {
+        if (r.active !== ALL && this._slots.some((s) => s.id === r.active)) this._active = r.active;
+        if (r.room && (this._config.rooms || []).some((x: Room) => x.id === r.room)) this._room = r.room;
+        this._layout(); this._request();
+      }
+    }
     this._ro?.observe(this);
     this._layout();
     this._mountModels();
@@ -731,8 +747,10 @@ export class Floor3dxRoomsCard extends HTMLElement {
     this._ui.querySelectorAll('.pin').forEach((p) => p.classList.toggle('hover', (p as HTMLElement).dataset.room === id));
     this._paintTints();
   }
+  private _remember(): void { if (this._config) RECENT.set(this._storeKey('view'), { room: this._room, active: this._active, at: Date.now() }); }
   private _select(id: string | null): void {
     this._room = id;
+    this._remember();
     this._confirm = null;
     if (id !== this._focus) this._focus = null;
     // a room of another model: show that model
@@ -744,6 +762,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
   private _showModel(id: string): void {
     if (id !== ALL && !this._slots.some((s) => s.id === id)) return;
     this._active = id;
+    this._remember();
     this._layout();
     this._movePins(400);
     this._request();

@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.10.1
+
+### Fixed
+- Rooms card: editing the card no longer closes the open room. The editor's preview makes a new card element for every change of the configuration; the room and the model that were open come back on the new one (in the preview only, within five minutes). Harness: `test_preview_keeps_room.py`.
+
 ## 2.10.0
 
 ### Added
