@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.10.5
+
+### Added
+- Rooms card: the panel's subtitle summarises the room's doors, locks and windows after the lamp count — *Doors shut & locked · Windows closed*, or the open and unlocked ones by name and open windows by the side of the room their object stands on (*West window open*, from the 3D card's rows bound to them and the card's `north`). `summary_only: yes` on such an entity keeps it out of the readout lines (editor: *Only in the room's subtitle*). Harness: `test_security_summary.py`.
+
 ## 2.10.4
 
 ### Changed

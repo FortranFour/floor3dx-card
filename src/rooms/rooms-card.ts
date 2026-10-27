@@ -809,6 +809,56 @@ export class Floor3dxRoomsCard extends HTMLElement {
   }
   private _s(id: string): any { return this._hass?.states?.[id]; }
   private _roomOf(id: string | null): Room | undefined { return (this._config.rooms as Room[]).find((r) => r.id === id); }
+  /** The room's doors, locks and windows in a phrase or two for the panel's subtitle: "Doors shut & locked"
+   *  or "Side door open, Back door unlocked"; "Windows closed" or "West window open" (the side from where the
+   *  window's object stands in the model, when the 3D card binds it; else its name). */
+  private _security(room: Room): string[] {
+    const out: string[] = [];
+    const ents = room.entities || [];
+    const nameOf = (e: any) => this._tiles.name(e, room.name || room.id).replace(new RegExp('^' + (room.name || room.id).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s+', 'i'), '');
+    const cls = (e: any) => String(this._s(e.entity)?.attributes?.device_class || '');
+    const doors = ents.filter((e) => (domainOf(e.entity) === 'binary_sensor' && /^(door|garage_door|opening)$/.test(cls(e))) || (domainOf(e.entity) === 'cover' && /^(garage|door|gate)$/.test(cls(e))));
+    const locks = ents.filter((e) => domainOf(e.entity) === 'lock');
+    const windows = ents.filter((e) => domainOf(e.entity) === 'binary_sensor' && cls(e) === 'window');
+    if (doors.length || locks.length) {
+      const openDoors = doors.filter((e) => { const st = this._s(e.entity); return st && (domainOf(e.entity) === 'cover' ? st.state !== 'closed' : st.state === 'on'); });
+      const unlocked = locks.filter((e) => { const st = this._s(e.entity); return st && st.state !== 'locked'; });
+      if (!openDoors.length && !unlocked.length) out.push(doors.length && locks.length ? 'Doors shut & locked' : doors.length ? 'Doors shut' : 'Locked');
+      else out.push([...openDoors.map((e) => `${nameOf(e)} ${domainOf(e.entity) === 'cover' && this._s(e.entity).state !== 'open' ? this._s(e.entity).state : 'open'}`), ...unlocked.map((e) => `${nameOf(e)} ${this._s(e.entity).state === 'unlocked' ? 'unlocked' : this._s(e.entity).state.replace(/_/g, ' ')}`)].join(', '));
+    }
+    if (windows.length) {
+      const open = windows.filter((e) => this._s(e.entity)?.state === 'on');
+      if (!open.length) out.push('Windows closed');
+      else {
+        const byDir = new Map<string, number>();
+        open.forEach((e) => { const dir = this._sideOf(room, e.entity) || nameOf(e); byDir.set(dir, (byDir.get(dir) || 0) + 1); });
+        out.push(Array.from(byDir, ([dir, n]) => `${n > 1 ? `${n} ${dir} windows` : `${dir.charAt(0).toUpperCase() + dir.slice(1)} window`} open`).join(', '));
+      }
+    }
+    return out;
+  }
+  /** The compass side of the room on which an entity's object stands (from the 3D card's door/colour rows
+   *  bound to it), by the card's `north`; null when the model does not bind it. */
+  private _sideOf(room: Room, entityId: string): string | null {
+    const slot = this._slotOf(room), el = slot?.el;
+    if (!el || !el._resolveObjects || !el._modelready) return null;
+    const rows = (slot.card?.entities || []).filter((r: any) => r.entity === entityId && r.object_id);
+    const meshes: THREE.Mesh[] = rows.flatMap((r: any) => { try { return el._resolveObjects(r.object_id) || []; } catch (_) { return []; } });
+    if (!meshes.length) return null;
+    const centre = (ms: THREE.Mesh[]) => { const b = new THREE.Box3(); ms.forEach((m) => { m.updateWorldMatrix(true, false); b.expandByObject(m); }); return b.isEmpty() ? null : b.getCenter(new THREE.Vector3()); };
+    const p = centre(meshes);
+    const floors: THREE.Mesh[] = (room.floors || []).flatMap((f: string) => { try { return el._resolveObjects(f) || []; } catch (_) { return []; } });
+    const c = centre(floors);
+    if (!p || !c) return null;
+    const d = new THREE.Vector3(p.x - c.x, 0, p.z - c.z);
+    if (d.length() < 1) return null;
+    const north = slot.card?.north || { x: 0, z: -1 };
+    const n = new THREE.Vector3(Number(north.x) || 0, 0, Number(north.z) || 0).normalize();
+    const e = new THREE.Vector3(-n.z, 0, n.x); // east is north turned clockwise seen from above
+    const deg = (Math.atan2(d.dot(e), d.dot(n)) * 180) / Math.PI; // 0 north, 90 east
+    const names = ['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest'];
+    return names[Math.round(((deg + 360) % 360) / 45) % 8];
+  }
   private _roomEntities(): string[] { return (this._config?.rooms || []).flatMap((r: Room) => (r.entities || []).flatMap((e: any) => [e.entity, e.top_entity, e.dimmer, e.remote, this._config.guest_mode_entity].filter(Boolean))); }
   private _activeCount(room: Room): number { return (room.entities || []).filter((e) => ACTIVE_DOMAINS.has(domainOf(e.entity)) && isOn(this._s(e.entity))).length; }
   private _roomName(r: Room): string { return titleCase(r.name || r.id); }
@@ -852,7 +902,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
     // the label: the entity's label or friendly name, without the room's own name in front of it
     const labelOf = (e: any) => { const n = this._tiles.name(e, roomName); return n.replace(new RegExp('^' + roomName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s+', 'i'), '') || n; };
     for (const e of room.entities || []) {
-      if (this._tiles.hidden(e)) continue;
+      if (this._tiles.hidden(e) || e.summary_only === true || e.summary_only === 'yes') continue;
       if (isTemplate(e.entity)) {
         // a template readout: Home Assistant renders it and pushes every change (see _syncTemplates)
         const t = this._templates.get(e.entity);
@@ -940,7 +990,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
     const roomName = room.name || room.id;
     // the entrance animation plays when the panel opens, not on every re-render while it is open
     const still = this._lastPanelRoom === room.id; this._lastPanelRoom = room.id;
-    return `<section class="panel${still ? ' still' : ''}" aria-label="${esc(this._roomName(room))}"><div class="panelhead"><div class="roomicon">${icon(room.icon || 'mdi:door-open')}</div><div class="grow"><h3>${esc(this._roomName(room))}</h3><p>${esc(room.description || (active ? `${active} on` : ents.length ? 'Everything is off' : readouts ? 'Readings only' : 'Nothing to control here'))}</p></div><button class="close" data-action="close" aria-label="Close">${icon('mdi:close')}</button></div><div class="body">${readouts}<div class="tiles">${ents.length ? ents.map((e) => this._tiles.tile(e, roomName)).join('') : readouts ? '' : '<div class="empty">No entities in this room. Add them in the card editor.</div>'}</div></div>${offable.length ? `<div class="foot"><button class="quiet" data-action="room-off" data-focus="room-off" ${offable.some((e) => isOn(this._s(e.entity))) ? '' : 'disabled'}>${icon('mdi:power')}All off in this room</button></div>` : ''}</section>`;
+    return `<section class="panel${still ? ' still' : ''}" aria-label="${esc(this._roomName(room))}"><div class="panelhead"><div class="roomicon">${icon(room.icon || 'mdi:door-open')}</div><div class="grow"><h3>${esc(this._roomName(room))}</h3><p>${esc(room.description || [active ? `${active} on` : ents.length ? 'Everything is off' : readouts ? 'Readings only' : 'Nothing to control here', ...this._security(room)].join(' · '))}</p></div><button class="close" data-action="close" aria-label="Close">${icon('mdi:close')}</button></div><div class="body">${readouts}<div class="tiles">${ents.length ? ents.map((e) => this._tiles.tile(e, roomName)).join('') : readouts ? '' : '<div class="empty">No entities in this room. Add them in the card editor.</div>'}</div></div>${offable.length ? `<div class="foot"><button class="quiet" data-action="room-off" data-focus="room-off" ${offable.some((e) => isOn(this._s(e.entity))) ? '' : 'disabled'}>${icon('mdi:power')}All off in this room</button></div>` : ''}</section>`;
   }
 
   // ---- actions ----------------------------------------------------------------------------

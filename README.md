@@ -567,7 +567,7 @@ rooms:
 | `color_control` | `swatches`, `slider` (a hue slider, white beside it unless the light has a Warmth slider), `both` (2.5); per entity, `controls: [brightness, white, slider]` | `swatches` |
 | `sensor_tiles` | `yes`: sensors and binary sensors as tiles; otherwise they are a line of readouts under the room's name (2.5) | `no` |
 | `rooms[].floors` | floor object names; a room without one is reached from the Rooms menu | |
-| `rooms[].entities[]` | `entity` (an id, or a Jinja template — see below), `name`, `icon`, `read_only`, `guest_hidden`, `break` (`yes`: a new line of readouts after this one; `rule`: a divider first), `status` (a Jinja template for a control tile's status line); `top_entity` (a top-down/bottom-up shade's top rail), `dimmer` (the light behind a switch), `remote`, `remote_commands`, `sources`, `controls` (`brightness`, `white`, `color`), as in the snapshot card | |
+| `rooms[].entities[]` | `entity` (an id, or a Jinja template — see below), `name`, `icon`, `read_only`, `guest_hidden`, `break` (`yes`: a new line of readouts after this one; `rule`: a divider first), `status` (a Jinja template for a control tile's status line), `summary_only` (a door, lock or window only in the subtitle); `top_entity` (a top-down/bottom-up shade's top rail), `dimmer` (the light behind a switch), `remote`, `remote_commands`, `sources`, `controls` (`brightness`, `white`, `color`), as in the snapshot card | |
 | `pins` | `yes`, `no`: a pin per room, following the camera | `yes` |
 | `panel_lines` | `yes`: the theme's lines are drawn on text and picture panels too (2.4.2) | `no` |
 | `edge_skip` | the look's `edge_skip` list, replacing the default | `seams, floors, ceilings, texts, images` |
@@ -590,6 +590,8 @@ Entity-reference tokens (`[[entity:…]]`): see *Entity references* below.
 **Colour** (2.5). Lights with colour get the nine swatches (two rows: red, orange, yellow, green, cyan; white, pink, purple, blue), or with `color_control: slider` a hue slider whose thumb takes the light's current hue (`hs_color: [hue, 100]` when released; a white swatch beside it unless the light has a Warmth slider), or `both`.
 
 **Readouts** (2.5). Sensors and binary sensors in a room (the "also add sensors" option of detection, or added by hand) are shown as one line under the room's name — `Temperature 21.4°C · Humidity 48% · Side door closed` — rather than as tiles; a door, window, leak or smoke sensor that is on is highlighted. `sensor_tiles: yes` makes them tiles again.
+
+**Doors, locks and windows in the subtitle** (2.10). Under the room's name, after the lamp count, the panel sums up the room's door and garage sensors, locks and window sensors: *Doors shut & locked · Windows closed*, or *Back door open, Side door unlocked · West window open* — an open window is named by the compass side of the room its object stands on, when the 3D card binds that sensor to an object (a `door` or `color` row) and `north` is set; otherwise by its name. `summary_only: yes` on such an entity keeps it out of the readout lines (editor: *Only in the room's subtitle*).
 
 **Template readouts** (2.10). A room entity whose `entity` is a Jinja template instead of an id is rendered by Home Assistant and shown as a readout, with the `name` as its label — anything the sensors alone cannot say:
 
