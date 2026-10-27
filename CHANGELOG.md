@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.10.7
+
+### Fixed
+- Rooms card: the gap between models took the stage colour once, when the model loaded, so after the daylight changed it (the hour, the weather, the switch, a fixed time) a band of the old colour showed between the views. The gap follows the stage colour on every daylight update (the 3D card now dispatches `floor3dx-daylight`).
+
 ## 2.10.6
 
 ### Fixed

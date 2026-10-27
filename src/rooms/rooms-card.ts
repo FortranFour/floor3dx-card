@@ -426,6 +426,8 @@ export class Floor3dxRoomsCard extends HTMLElement {
         host.appendChild(el);
         try { el.setConfig(cfg); slot.el = el; } catch (err) { this._toast = `Model configuration: ${(err as Error).message}`; el.remove(); }
         if (slot.el) {
+          // the daylight changed the stage colour (the hour, the weather, the switch): the gap follows, the badge too
+          el.addEventListener('floor3dx-daylight', () => { if (slot === this._slots[0]) this._syncCanvas(slot); this._request(); });
           if (!this._daylightOn && el.setDaylight) el.setDaylight(false);
           if (!this._weatherOn && el.setDaylightWeather) el.setDaylightWeather(false);
           if (this._fixedHour !== null && el.setDaylightTime) el.setDaylightTime(this._fixedHour);
@@ -464,10 +466,16 @@ export class Floor3dxRoomsCard extends HTMLElement {
     host.addEventListener('dblclick', (e) => { if (this._objectTap() !== 'room' && this._boundRow(slot, this._hits(e, slot))) e.stopPropagation(); }, true);
   }
   /** The space between the models and the hairline take the colour the embedded card actually draws behind its model (a theme's stage at its time of day, the card's own backgroundColor), so the gap is invisible and the line reads on light and dark alike. */
+  private _canvasHex = '';
+  /** The gap between models takes the first model's stage colour. The daylight changes that colour through
+   *  the day (and with the weather or a fixed time), so this runs on every render and after each daylight
+   *  update, not only when the model loads. */
   private _syncCanvas(slot: Slot): void {
     const bg = slot.el?._scene?.background;
-    if (!bg || !bg.isColor) { this.style.removeProperty('--f3r-canvas'); this.style.removeProperty('--f3r-divider'); return; }
+    if (!bg || !bg.isColor) { if (this._canvasHex) { this._canvasHex = ''; this.style.removeProperty('--f3r-canvas'); this.style.removeProperty('--f3r-divider'); } return; }
     const hex = '#' + bg.getHexString();
+    if (hex === this._canvasHex) return;
+    this._canvasHex = hex;
     const lum = 0.2126 * bg.r + 0.7152 * bg.g + 0.0722 * bg.b; // linear-ish, good enough to pick a side
     this.style.setProperty('--f3r-canvas', hex);
     this.style.setProperty('--f3r-divider', lum > 0.4 ? 'rgba(0,0,0,.22)' : 'rgba(255,255,255,.28)');
@@ -974,6 +982,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
     }
     this._placePins();
     this._turnNeedle();
+    if (this._slots[0]) this._syncCanvas(this._slots[0]);
   }
   private _regions = new Map<string, { el: HTMLElement; html: string }>();
   private _region(name: string, html: string): void {

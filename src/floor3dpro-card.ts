@@ -2253,6 +2253,8 @@ export class Floor3dCard extends LitElement {
     }
     this._renderer.shadowMap.needsUpdate = true;
     this._requestRender('daylight');
+    // wrappers (the Rooms Card) follow the stage colour and the badge
+    this.dispatchEvent(new CustomEvent('floor3dx-daylight', { bubbles: false }));
   }
 
   /** Day-and-night effects on or off at runtime (the Rooms Card's switch); the configuration is untouched.

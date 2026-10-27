@@ -45,6 +45,10 @@ JS = r"""async ([withDaylight]) => {
   ({el, d} = await make());
   out.rememberedPressed = btn().getAttribute('aria-pressed'); out.rememberedAmbient = el._embedded._ambient_light.intensity;
   btn().click(); await sleep(300); el._render(); out.backOn = btn().getAttribute('aria-pressed'); out.backAmbient = el._embedded._ambient_light.intensity;
+  // the gap colour (--f3r-canvas) follows the stage colour the daylight sets: night now, then a fixed noon
+  const canvas = () => el.style.getPropertyValue('--f3r-canvas'), stage = () => '#' + el._embedded._scene.background.getHexString();
+  out.nightCanvas = [canvas(), stage()];
+  el._setFixedHour(12); await sleep(300); el._render(); out.noonCanvas = [canvas(), stage()];
   d.remove();
   return out;
 }"""
@@ -67,6 +71,7 @@ if __name__ == '__main__':
     check('the needle turns when the camera orbits', w.get('angle1') is not None and w.get('angle2') is not None and abs(w['angle2'] - w['angle1']) > 30)
     check('off: ambient at the day level, the sun out, the compass dimmed', w.get('pressedOff') == 'false' and w.get('dayAmbient', 0) > w.get('nightAmbient', 1) * 1.5 and w.get('sunOff') == 0 and w.get('dimmed', 1) < 0.5)
     check('the choice is remembered and reversible', w.get('stored') == 'off' and w.get('rememberedPressed') == 'false' and w.get('backOn') == 'true' and w.get('backAmbient', 1) < w.get('rememberedAmbient', 0))
+    check('the gap colour follows the daylight: night, then a fixed noon', w.get('nightCanvas', ['', 'x'])[0] == w.get('nightCanvas', ['', 'x'])[1] and w.get('noonCanvas', ['', 'x'])[0] == w.get('noonCanvas', ['', 'x'])[1] and w.get('nightCanvas', [''])[0] != w.get('noonCanvas', [''])[0])
     check('no page errors', not errors)
     for e in errors[:5]:
         print('  error:', e[:300])
