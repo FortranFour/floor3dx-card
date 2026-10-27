@@ -688,9 +688,10 @@ export class Floor3dxRoomsCard extends HTMLElement {
   // ---- taps and hover --------------------------------------------------------------------
   private _hits(e: { clientX: number; clientY: number }, slot: Slot): THREE.Intersection[] {
     const el = slot.el;
-    if (!el || !el._renderer || typeof el._getintersect !== 'function') return [];
+    // nothing to hit until the model is in (a hover while it loads reached the raycaster with no objects)
+    if (!el || !el._renderer || !el._modelready || typeof el._getintersect !== 'function') return [];
     const rect = el._renderer.domElement.getBoundingClientRect();
-    return el._getintersect({ offsetX: e.clientX - rect.left, offsetY: e.clientY - rect.top });
+    try { return el._getintersect({ offsetX: e.clientX - rect.left, offsetY: e.clientY - rect.top }) || []; } catch (_) { return []; }
   }
   private _roomAt(hits: THREE.Intersection[], slot: Slot): Room | undefined {
     if (!slot.index || !hits.length) return undefined;

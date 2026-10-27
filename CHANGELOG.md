@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.10.6
+
+### Fixed
+- Rooms card: moving the pointer over a model that was still loading threw `Cannot read properties of undefined (reading 'length')` from the raycaster (once per move, in the console only). Hits are not looked up before the model is ready.
+
 ## 2.10.5
 
 ### Added
