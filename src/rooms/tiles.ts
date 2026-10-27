@@ -338,7 +338,16 @@ export class Tiles {
     } else if (action === 'shade') this.shade(id, b.dataset.rail as string, 100);
     else if (action === 'color') { if (d === 'light') H.call(id, 'light', 'turn_on', { hs_color: [Number(b.dataset.h), Number(b.dataset.s)] }); }
     else if (action === 'fan') { const v = Number(b.dataset.value); v ? H.call(id, 'fan', 'set_percentage', { percentage: v }) : H.call(id, 'fan', 'turn_off'); }
-    else if (action === 'cover') { const svc = b.dataset.service as string; if (g && SENSITIVE_COVERS.has(s.attributes.device_class) && svc !== 'close_cover') return true; H.call(id, 'cover', svc); }
+    else if (action === 'cover') {
+      const svc = b.dataset.service as string, sensitive = SENSITIVE_COVERS.has(s.attributes.device_class);
+      if (g && sensitive && svc !== 'close_cover') return true;
+      // a garage door, gate or door opens on a second tap, like a lock unlocks
+      if (sensitive && svc === 'open_cover') {
+        if (H.confirm?.entity !== id) { H.setConfirm({ entity: id, text: 'Tap Open again to open' }); return true; }
+        H.setConfirm(null);
+      }
+      H.call(id, 'cover', svc);
+    }
     else if (action === 'temp') {
       if (this.thermoLevel() === 'view') return true;
       const a = s.attributes, step = this.tempStep(a), [lo, hi] = this.tempLimits(a), delta = Number(b.dataset.value);

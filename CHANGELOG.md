@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.10.4
+
+### Changed
+- Rooms card: a garage door, gate or door cover (by `device_class`) opens on a second tap — the first shows *Tap Open again to open* on the tile for 3.5 s — as a lock unlocks. Close stays one tap; other covers are unchanged; guest mode still shows Close only. Harness: `test_cover_confirm.py`.
+
 ## 2.10.3
 
 ### Added
