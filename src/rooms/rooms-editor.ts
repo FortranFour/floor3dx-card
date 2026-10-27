@@ -8,11 +8,43 @@ import { esc } from './tiles';
 import { ROOMS_EDITOR_EVENT, ROOMS_PREVIEW_EVENT } from './rooms-card';
 import { tokenRoles } from './references';
 import { scanDashboards, FoundCard } from './scan';
+import { normalizeConfig, cleanConfig } from '../config';
 
 const clone = (v: any) => JSON.parse(JSON.stringify(v ?? null));
 const ENTITY_DOMAINS = /^(light|switch|fan|cover|climate|media_player|lock|input_boolean|scene|script|sensor|binary_sensor|remote|button|input_button|vacuum|humidifier|valve|water_heater|alarm_control_panel)\./;
 
+/** The regular editor hands back its whole block, normalised ('60' -> 60, defaults dropped). Only what
+ *  really changed is written: a top-level key, or an entity row, whose normalised form equals the
+ *  original's keeps the original's text, so the YAML diff is the edit and nothing else (and a wrapper
+ *  that maps rows back to references sees only the rows that changed). */
+function minimalWrite(original: any, next: any): any {
+  if (!original || typeof original !== 'object') return next;
+  const norm = (v: any) => { try { return JSON.stringify(cleanConfig(normalizeConfig({ type: 'custom:floor3dx-card', entities: [], ...v }))); } catch (_) { return undefined; } };
+  const out: any = {};
+  const empty = norm({});
+  const keys = [...Object.keys(original), ...Object.keys(next).filter((k) => !(k in original))];
+  for (const k of keys) {
+    if (!(k in next)) { // dropped as a default by the regular editor: keep it as written if it was one
+      if (norm({ [k]: original[k] }) === empty) out[k] = original[k];
+      continue;
+    }
+    if (k === 'entities' && Array.isArray(next.entities) && Array.isArray(original.entities)) {
+      out.entities = next.entities.map((row: any, idx: number) => {
+        const was = original.entities[idx];
+        if (!was) return row;
+        const a = norm({ entities: [was] }), b = norm({ entities: [row] });
+        return a !== undefined && a === b ? was : row;
+      });
+      continue;
+    }
+    const a = norm({ [k]: original[k] }), b = norm({ [k]: next[k] });
+    out[k] = k in original && a !== undefined && a === b ? original[k] : next[k];
+  }
+  return out;
+}
+
 const STYLE = `
+.inline{margin:8px 0 4px;padding:8px 10px 10px;border:1px solid var(--divider-color,#ddd);border-radius:12px;background:var(--secondary-background-color,rgba(0,0,0,.03))}.inline>p.note{margin:0 0 6px}
 :host{display:block;color:var(--primary-text-color);font-size:14px}
 details{border:1px solid var(--divider-color,rgba(127,127,127,.25));border-radius:12px;margin:0 0 12px;background:var(--card-background-color)}
 summary{cursor:pointer;padding:12px 14px;font-weight:500;list-style:none;display:flex;align-items:center;gap:8px}summary::-webkit-details-marker{display:none}summary:before{content:"▸";color:var(--secondary-text-color);transition:transform .15s}details[open]>summary:before{transform:rotate(90deg)}
@@ -46,6 +78,9 @@ class Floor3dxRoomsCardEditor extends HTMLElement {
   private _target = 0; // the model a found card is used for
   private _scanning = false;
   private _keep = false; // keep [[entity:…]] references when copying
+  private _editing: number | null = null; // the model whose 3D settings are open in the regular card's editor, inline
+  private _inline: any = null; // that editor element (kept across re-renders)
+  private _inlineHeld = ''; // the JSON it last emitted, so its own change is not fed back
   private _busy: string | null = null;
   private _msg: Record<string, [string, string]> = {};
   private _objects = new Map<string, { floors: string[]; all: string[] }>(); // by model id
@@ -63,14 +98,14 @@ class Floor3dxRoomsCardEditor extends HTMLElement {
     window.addEventListener(ROOMS_PREVIEW_EVENT, this._onPreview);
     window.dispatchEvent(new CustomEvent(ROOMS_EDITOR_EVENT, { detail: { request: 'objects' } }));
   }
-  disconnectedCallback(): void { window.removeEventListener(ROOMS_PREVIEW_EVENT, this._onPreview); clearTimeout(this._detectTimer); }
+  disconnectedCallback(): void { window.removeEventListener(ROOMS_PREVIEW_EVENT, this._onPreview); clearTimeout(this._detectTimer); if (this._editing !== null) window.dispatchEvent(new CustomEvent(ROOMS_EDITOR_EVENT, { detail: { request: 'edit-model', model: null } })); }
   setConfig(config: any): void {
     this._config = clone(config) || {};
     this._config.rooms ||= [];
     if (!this._found && this._models().some((m) => m.card && tokenRoles(m.card).length)) this._keep = true;
     this._render();
   }
-  set hass(hass: any) { const first = !this._hass; this._hass = hass; if (first) this._render(); }
+  set hass(hass: any) { const first = !this._hass; this._hass = hass; if (this._inline) this._inline.hass = hass; if (first) this._render(); }
 
   private _emit(): void {
     const config = clone(this._config);
@@ -119,6 +154,39 @@ ${this._section('rooms', '2 · Rooms', `${c.rooms.length} room${c.rooms.length =
 ${this._section('theme', '3 · Theme', THEMES.find((t) => t.key === (c.theme || 'neon'))?.label || String(c.theme), '', this._themeSection())}
 ${this._section('display', '4 · Display', '', '', this._displaySection())}`;
     if (focus) (root.querySelector(`[data-key="${CSS.escape(focus)}"]`) as HTMLElement | null)?.focus();
+    this._mountInline();
+  }
+  /** The regular card's editor inline on one model: one element, kept across this editor's re-renders
+   *  (the HTML is rebuilt on every change) and fed the model's block with its `type`. Its config-changed
+   *  is taken here, written into `models[i].card` and never reaches Home Assistant as this card's. */
+  private _mountInline(): void {
+    const i = this._editing, host = i === null ? null : (this.shadowRoot!.querySelector(`[data-inline="${i}"]`) as HTMLElement | null);
+    if (i === null || !host) { if (this._inline) { this._inline.remove(); this._inline = null; } window.dispatchEvent(new CustomEvent(ROOMS_EDITOR_EVENT, { detail: { request: 'edit-model', model: null } })); return; }
+    const m = this._models()[i]; if (!m?.card) return;
+    if (!customElements.get('floor3dpro-card-editor')) {
+      // the regular editor is a lazy chunk, loaded when a regular card's editor opens; load it now
+      host.innerHTML += '<p class="note">Loading the editor…</p>';
+      const card: any = customElements.get('floor3dx-card');
+      (card && card.getConfigElement ? card.getConfigElement() : import('../editor')).then(() => { if (this._editing === i) this._mountInline(); }).catch((err: any) => { host.innerHTML += `<p class="note warn">The editor could not be loaded: ${esc(String(err?.message || err))}</p>`; });
+      return;
+    }
+    if (!this._inline) {
+      const el: any = document.createElement('floor3dpro-card-editor');
+      el.addEventListener('config-changed', (ev: Event) => {
+        ev.stopPropagation();
+        const cfg = (ev as CustomEvent).detail?.config; if (!cfg) return;
+        this._inlineHeld = JSON.stringify(cfg);
+        const list = this._models(); if (!list[i]) return;
+        const card = { ...cfg }; delete card.type;
+        list[i].card = minimalWrite(list[i].card, card); this._setModels(list); this._emit();
+      });
+      this._inline = el;
+    }
+    if (this._hass) this._inline.hass = this._hass;
+    const withType = { type: 'custom:floor3dx-card', ...m.card };
+    if (JSON.stringify(withType) !== this._inlineHeld) { this._inlineHeld = ''; this._inline.setConfig(withType); }
+    if (this._inline.parentElement !== host) host.appendChild(this._inline);
+    window.dispatchEvent(new CustomEvent(ROOMS_EDITOR_EVENT, { detail: { request: 'edit-model', model: m.id } }));
   }
   private _section(id: string, title: string, badge: string, badgeClass: string, body: string): string {
     return `<details data-section="${id}" ${this._open[id] ? 'open' : ''}><summary>${title}<span class="badge ${badgeClass}">${esc(badge)}</span></summary><div class="body">${body}</div></details>`;
@@ -128,7 +196,7 @@ ${this._section('display', '4 · Display', '', '', this._displaySection())}`;
     const target = models[Math.min(this._target, models.length - 1)];
     const modelItem = (m: ModelItem, i: number) => `<div class="item">
 ${many ? `<div class="row"><label>Name<input type="text" data-model-field="name" data-i="${i}" value="${esc(m.name)}" data-key="mn${i}"></label><label>Width share (blank: equal)<input type="number" min="1" max="99" data-model-field="width" data-i="${i}" value="${esc(m.width ?? '')}" placeholder="50" data-key="mw${i}"></label></div>` : ''}
-<div class="row">${m.card?.objfile ? `<span class="note" style="flex:1">Model: <code>${esc((m.card.path || '') + m.card.objfile)}</code> · ${(m.card.entities || []).length} entity rows${tokenRoles(m.card).length ? ` · ${tokenRoles(m.card).length} reference token${tokenRoles(m.card).length === 1 ? '' : 's'}` : ''}</span>` : `<span class="note warn" style="flex:1">No card yet: find one below and press Use.</span>`}${many ? `<button class="icon" data-act="model-remove" data-i="${i}">Remove</button>` : ''}</div></div>`;
+<div class="row">${m.card?.objfile ? `<span class="note" style="flex:1">Model: <code>${esc((m.card.path || '') + m.card.objfile)}</code> · ${(m.card.entities || []).length} entity rows${tokenRoles(m.card).length ? ` · ${tokenRoles(m.card).length} reference token${tokenRoles(m.card).length === 1 ? '' : 's'}` : ''}</span>` : `<span class="note warn" style="flex:1">No card yet: find one below and press Use.</span>`}${m.card?.objfile ? `<button data-act="model-edit" data-i="${i}" aria-pressed="${this._editing === i}">${this._editing === i ? 'Done with 3D settings' : 'Edit 3D settings'}</button>` : ''}${many ? `<button class="icon" data-act="model-remove" data-i="${i}">Remove</button>` : ''}</div>${this._editing === i ? `<div class="inline" data-inline="${i}"><p class="note">The regular floor3dx card's editor, on this model's block: lamps, daylight, doors, text panels, the look. The preview is this model in the rooms card; <em>pick</em> an object by tapping it there.</p></div>` : ''}</div>`;
     return `<p class="note">The rooms card shows the live 3D model of an existing floor3dx-card (or floor3d-card / floor3dpro-card), with all of that card's lights, text frames, pictures, doors and shades. Pick the card; its configuration is copied in here and the two cards stay independent afterwards. A second model (a garage) gets its own view and a switcher on the card.</p>
 ${models.map(modelItem).join('')}
 <div class="row"><button data-act="scan" ${this._scanning ? 'disabled' : ''}>${this._scanning ? 'Searching dashboards…' : 'Find floor3d cards in my dashboards'}</button><button data-act="model-add">Add another model</button>${many ? `<label>Found cards go to<select id="model-target" data-key="mt">${models.map((m, i) => `<option value="${i}" ${i === this._target ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}</select></label>` : ''}</div>
@@ -267,6 +335,7 @@ ${many ? `<div class="row">${sel('default_model', 'Opens on', [['', esc(this._mo
       this._detectTimer = setTimeout(() => window.dispatchEvent(new CustomEvent(ROOMS_EDITOR_EVENT, { detail: { request: 'objects' } })), 4000);
       return;
     }
+    if (act === 'model-edit') { this._editing = this._editing === i ? null : i; this._render(); return; }
     if (act === 'model-add') {
       const list = this._models(); const n = list.length + 1;
       list.push({ id: slug(`model-${n}`, new Set(list.map((m) => m.id))), name: `Model ${n}`, card: undefined });

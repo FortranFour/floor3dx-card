@@ -456,6 +456,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
     host.addEventListener('pointerup', (e) => {
       const d = this._down; this._down = null;
       if (!d || Math.abs(e.clientX - d.x) > 8 || Math.abs(e.clientY - d.y) > 8 || Date.now() - d.t > 500) return;
+      if (slot.el?._pickMode) return; // the regular editor is picking an object on this model
       this._tap(e, slot);
     });
     host.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse' && !this._down) this._hoverAt(e, slot); });
@@ -1079,6 +1080,12 @@ export class Floor3dxRoomsCard extends HTMLElement {
     if (!detail || !this._isPreview()) return;
     const slot = (detail.model && this._slots.find((s) => s.id === detail.model)) || this._slots[0];
     if (detail.request === 'objects') { this._slots.forEach((s) => { if (s.el?._modelready) this._toEditor({ objects: this._objectNames(s), model: s.id }); }); return; }
+    if (detail.request === 'edit-model') {
+      // the rooms editor opened the regular card's editor on one model: that embedded card becomes the
+      // regular editor's preview card (object lists, picking, highlights, "use current camera")
+      this._slots.forEach((s) => { if (s.el) { s.el.preview = s.id === detail.model; if (!s.el.preview && s.el._pickMode) { s.el._pickMode = false; if (s.el._renderer) s.el._renderer.domElement.style.cursor = ''; } } });
+      return;
+    }
     if (detail.request === 'detect') {
       const scene = slot?.el?._scene;
       if (!slot || !scene || !slot.el._modelready) { this._toEditor({ error: 'The model has not finished loading yet.', model: slot?.id }); return; }

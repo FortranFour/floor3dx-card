@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.11.0
+
+### Added
+- **Edit 3D settings** in the Rooms Card editor: each model has a button that opens the regular card's visual editor inline, editing the Rooms Card's copy of that model's configuration (`card:` / `models[].card`). The card preview switches to the model being edited so *Pick from model* works, and back on **Done**. The write-back is minimal: keys and entity rows you did not change keep their original text (numeric strings, `[[entity:…]]` tokens, row order), so the YAML diff is the edit only. The regular editor loads on first use, not with the card.
+
+### Fixed
+- Rooms Card: a model in pick mode no longer takes a pointer-up as a room tap, and leaving the editor releases the preview.
+
 ## 2.10.7
 
 ### Fixed
