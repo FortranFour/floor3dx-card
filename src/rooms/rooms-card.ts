@@ -100,7 +100,10 @@ const STYLE = `
 .panelhead h3{margin:0 0 2px;font-size:18px;font-weight:500}.panelhead p{margin:0;color:var(--f3r-muted);font-size:12px}.panelhead .grow{flex:1;min-width:0}
 .readouts.more{padding-top:0}.rule{flex:none;border:0;border-top:1px solid var(--f3r-line);margin:0 14px 8px}
 .readouts{flex:none;margin:0;padding:0 14px 10px;color:var(--f3r-ink);font-size:12px;display:flex;flex-wrap:wrap;gap:2px 0;line-height:1.5}.readouts em{font-style:normal;color:var(--f3r-muted)}.readouts span:before{content:"·";margin:0 6px 0 0;color:var(--f3r-muted)}.readouts span+span:before{margin:0 6px}.readouts .alert{color:rgb(var(--f3r-on))}
-.tiles{display:grid;grid-template-columns:1fr;gap:8px;padding:4px 12px 12px;overflow:auto;flex:0 1 auto;min-height:0;align-content:start;grid-auto-rows:max-content}
+.body{display:flex;flex-direction:column;overflow:auto;flex:0 1 auto;min-height:0}
+.readoutbox{position:relative;flex:none;padding-right:34px}.readoutbox .fold{position:absolute;right:10px;top:-2px;width:28px;height:28px;padding:0;border:0;border-radius:8px;background:transparent;color:var(--f3r-muted);display:grid;place-items:center}.readoutbox .fold ha-icon{--mdc-icon-size:20px}
+.readoutbox:not(.open) .readouts.more,.readoutbox:not(.open) .rule{display:none}.readoutbox:not(.open) .readouts{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.tiles{display:grid;grid-template-columns:1fr;gap:8px;padding:4px 12px 12px;flex:none;min-height:0;align-content:start;grid-auto-rows:max-content}
 :host(.narrow) .tiles{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
 .tile.focus{box-shadow:0 0 0 2px rgb(var(--f3r-accent));transition:box-shadow .3s}
 ${CSS_TILES}
@@ -260,7 +263,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
     }
     if (defs.length <= 1) this._active = ALL;
     this._fresh = !this._slots.length;
-    if (!this._slots.length) { try { this._daylightOn = localStorage.getItem(this._storeKey('daylight')) !== 'off'; this._weatherOn = localStorage.getItem(this._storeKey('weather')) !== 'off'; } catch (_) { /* private mode */ } }
+    if (!this._slots.length) { try { this._daylightOn = localStorage.getItem(this._storeKey('daylight')) !== 'off'; this._weatherOn = localStorage.getItem(this._storeKey('weather')) !== 'off'; const f = localStorage.getItem(this._storeKey('readouts')); if (f === 'open' || f === 'closed') this._readoutsFold = f === 'open'; } catch (_) { /* private mode */ } }
     this._applyTheme();
     this._mountModels();
     this._syncTemplates();
@@ -837,6 +840,8 @@ export class Floor3dxRoomsCard extends HTMLElement {
   private _sensorTiles(): boolean { return this._config.sensor_tiles === true || this._config.sensor_tiles === 'yes'; }
   /** The room's sensors as a line of readouts: "21 °C · 48 % · Window open". */
   /** The room's sensors as a line of labelled readouts: "Temperature 21.4°C · Humidity 48% · Side door closed". */
+  private _readoutsFold: boolean | null = null; // the user's choice this session (null: narrow folds, wide opens)
+  private _readoutsOpen(): boolean { if (this._readoutsFold !== null) return this._readoutsFold; return !this.classList.contains('narrow'); }
   private _readouts(room: Room): string {
     // `break: yes` after an entity starts a new line of readouts; `break: rule` puts a hairline between
     const groups: string[][] = [[]], rules: boolean[] = [];
@@ -873,13 +878,17 @@ export class Floor3dxRoomsCard extends HTMLElement {
     }
     const filled = groups.map((g, i) => ({ g, rule: i > 0 && rules[i - 1] })).filter((x) => x.g.length);
     if (!filled.length) return '';
-    return filled.map((x, i) => `${i > 0 && x.rule ? '<hr class="rule">' : ''}<p class="readouts${i > 0 ? ' more' : ''}">${x.g.join('')}</p>`).join('');
+    const lines = filled.map((x, i) => `${i > 0 && x.rule ? '<hr class="rule">' : ''}<p class="readouts${i > 0 ? ' more' : ''}">${x.g.join('')}</p>`).join('');
+    if (filled.length < 2) return lines;
+    // several lines: on a phone they fold to the first one, a chevron opens them (remembered per card)
+    const open = this._readoutsOpen();
+    return `<div class="readoutbox${open ? ' open' : ''}"><button class="fold" data-action="readouts" aria-expanded="${open}" aria-label="${open ? 'Fewer readings' : 'All readings'}" title="${open ? 'Fewer readings' : 'All readings'}">${icon(open ? 'mdi:chevron-up' : 'mdi:chevron-down')}</button>${lines}</div>`;
   }
 
   private _render(): void {
     const c = this._config, rooms: Room[] = c.rooms;
     const focus = (this._root.activeElement as HTMLElement | null)?.dataset?.focus;
-    const scroll = (this._ui.querySelector('.tiles') as HTMLElement | null)?.scrollTop || 0;
+    const scroll = (this._ui.querySelector('.body') as HTMLElement | null)?.scrollTop || 0;
     const room = this._roomOf(this._room);
     const hasModel = this._slots.some((s) => s.el);
     const title = c.title ? `<div class="title">${c.icon ? icon(c.icon) : ''}<span>${esc(c.title)}${c.subtitle ? `<br><small>${esc(c.subtitle)}</small>` : ''}</span></div>` : '';
@@ -906,7 +915,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
     this._region('panelhost', panel);
     this._region('notes', `${hint}${this._toast ? `<div class="toast" role="status">${esc(this._toast)}</div>` : ''}`);
     if (focus) (this._root.querySelector(`[data-focus="${CSS.escape(focus)}"]`) as HTMLElement | null)?.focus({ preventScroll: true });
-    const tiles = this._ui.querySelector('.tiles') as HTMLElement | null; if (tiles) tiles.scrollTop = scroll;
+    const body = this._ui.querySelector('.body') as HTMLElement | null; if (body) body.scrollTop = scroll; const tiles = this._ui.querySelector('.tiles') as HTMLElement | null;
     if (this._focus && tiles) {
       const t = (tiles.querySelector(`[data-entity="${CSS.escape(this._focus)}"]`) as HTMLElement | null)?.closest('.tile') as HTMLElement | null;
       if (t) { t.classList.add('focus'); t.scrollIntoView({ block: 'nearest' }); }
@@ -930,7 +939,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
     const roomName = room.name || room.id;
     // the entrance animation plays when the panel opens, not on every re-render while it is open
     const still = this._lastPanelRoom === room.id; this._lastPanelRoom = room.id;
-    return `<section class="panel${still ? ' still' : ''}" aria-label="${esc(this._roomName(room))}"><div class="panelhead"><div class="roomicon">${icon(room.icon || 'mdi:door-open')}</div><div class="grow"><h3>${esc(this._roomName(room))}</h3><p>${esc(room.description || (active ? `${active} on` : ents.length ? 'Everything is off' : readouts ? 'Readings only' : 'Nothing to control here'))}</p></div><button class="close" data-action="close" aria-label="Close">${icon('mdi:close')}</button></div>${readouts}<div class="tiles">${ents.length ? ents.map((e) => this._tiles.tile(e, roomName)).join('') : readouts ? '' : '<div class="empty">No entities in this room. Add them in the card editor.</div>'}</div>${offable.length ? `<div class="foot"><button class="quiet" data-action="room-off" data-focus="room-off" ${offable.some((e) => isOn(this._s(e.entity))) ? '' : 'disabled'}>${icon('mdi:power')}All off in this room</button></div>` : ''}</section>`;
+    return `<section class="panel${still ? ' still' : ''}" aria-label="${esc(this._roomName(room))}"><div class="panelhead"><div class="roomicon">${icon(room.icon || 'mdi:door-open')}</div><div class="grow"><h3>${esc(this._roomName(room))}</h3><p>${esc(room.description || (active ? `${active} on` : ents.length ? 'Everything is off' : readouts ? 'Readings only' : 'Nothing to control here'))}</p></div><button class="close" data-action="close" aria-label="Close">${icon('mdi:close')}</button></div><div class="body">${readouts}<div class="tiles">${ents.length ? ents.map((e) => this._tiles.tile(e, roomName)).join('') : readouts ? '' : '<div class="empty">No entities in this room. Add them in the card editor.</div>'}</div></div>${offable.length ? `<div class="foot"><button class="quiet" data-action="room-off" data-focus="room-off" ${offable.some((e) => isOn(this._s(e.entity))) ? '' : 'disabled'}>${icon('mdi:power')}All off in this room</button></div>` : ''}</section>`;
   }
 
   // ---- actions ----------------------------------------------------------------------------
@@ -961,6 +970,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
     const { action, entity: id = '', room, model, i } = b.dataset as any;
     if (action === 'room') { this._listOpen = false; this._select(room === this._room ? null : room); return; }
     if (action === 'close') { this._select(null); return; }
+    if (action === 'readouts') { this._readoutsFold = !this._readoutsOpen(); try { localStorage.setItem(this._storeKey('readouts'), this._readoutsFold ? 'open' : 'closed'); } catch (_) { /* private mode */ } this._request(); return; }
     this._dlMenu = this._dlMenu && action !== 'list' && action !== 'views' && action !== 'reset' && action !== 'model' && action !== 'room';
     if (action === 'list') { this._listOpen = !this._listOpen; this._viewsOpen = false; if (this._listOpen && this._room) { this._room = null; this._confirm = null; this._paintTints(); } this._request(); return; }
     if (action === 'views') { this._viewsOpen = !this._viewsOpen; this._listOpen = false; this._request(); return; }

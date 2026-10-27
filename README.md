@@ -602,7 +602,7 @@ Entity-reference tokens (`[[entity:…]]`): see *Entity references* below.
 
 Home Assistant pushes a new result whenever an entity the template reads changes, so the readout is live. Type the template in the editor's *Entity* field. A template that fails shows `⚠ template` and the reason in the console; templates are readouts even with `sensor_tiles: yes`.
 
-**Readouts in groups** (2.10). `break: yes` on a readout starts a new line after it, `break: rule` a thin divider and a new line, so a long room — a garage with the car, the house's energy, the freezer and the doors — reads as sections rather than one run. In the editor: *After this readout* under a sensor, binary sensor or template.
+**Readouts in groups** (2.10). `break: yes` on a readout starts a new line after it, `break: rule` a thin divider and a new line, so a long room — a garage with the car, the house's energy, the freezer and the doors — reads as sections rather than one run. In the editor: *After this readout* under a sensor, binary sensor or template. On a phone, several lines fold to the first one with a chevron to open them (remembered per card in that browser); readouts and tiles scroll together.
 
 **Reset view** (2.5). The camera button next to *Rooms* flies the camera back to the configured view; when the embedded card has saved views (`zoom_areas`) the button opens a list of them with Reset on top.
 

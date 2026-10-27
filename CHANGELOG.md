@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.10.2
+
+### Changed
+- Rooms card: when a room has more than one line of readouts they fold to the first line on a phone, with a chevron to open them all (remembered per card in the browser; open by default on a wide card). The readouts and the tiles scroll together as one body, so a long list no longer squeezes the tiles into a few rows while the sheet stays at the same height.
+
 ## 2.10.1
 
 ### Fixed
