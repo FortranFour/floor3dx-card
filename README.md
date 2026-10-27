@@ -567,7 +567,7 @@ rooms:
 | `color_control` | `swatches`, `slider` (a hue slider, white beside it unless the light has a Warmth slider), `both` (2.5); per entity, `controls: [brightness, white, slider]` | `swatches` |
 | `sensor_tiles` | `yes`: sensors and binary sensors as tiles; otherwise they are a line of readouts under the room's name (2.5) | `no` |
 | `rooms[].floors` | floor object names; a room without one is reached from the Rooms menu | |
-| `rooms[].entities[]` | `entity` (an id, or a Jinja template — see below), `name`, `icon`, `read_only`, `guest_hidden`, `break` (`yes`: a new line of readouts after this one; `rule`: a divider first); `top_entity` (a top-down/bottom-up shade's top rail), `dimmer` (the light behind a switch), `remote`, `remote_commands`, `sources`, `controls` (`brightness`, `white`, `color`), as in the snapshot card | |
+| `rooms[].entities[]` | `entity` (an id, or a Jinja template — see below), `name`, `icon`, `read_only`, `guest_hidden`, `break` (`yes`: a new line of readouts after this one; `rule`: a divider first), `status` (a Jinja template for a control tile's status line); `top_entity` (a top-down/bottom-up shade's top rail), `dimmer` (the light behind a switch), `remote`, `remote_commands`, `sources`, `controls` (`brightness`, `white`, `color`), as in the snapshot card | |
 | `pins` | `yes`, `no`: a pin per room, following the camera | `yes` |
 | `panel_lines` | `yes`: the theme's lines are drawn on text and picture panels too (2.4.2) | `no` |
 | `edge_skip` | the look's `edge_skip` list, replacing the default | `seams, floors, ceilings, texts, images` |
@@ -603,6 +603,16 @@ Entity-reference tokens (`[[entity:…]]`): see *Entity references* below.
 Home Assistant pushes a new result whenever an entity the template reads changes, so the readout is live. Type the template in the editor's *Entity* field. A template that fails shows `⚠ template` and the reason in the console; templates are readouts even with `sensor_tiles: yes`.
 
 **Readouts in groups** (2.10). `break: yes` on a readout starts a new line after it, `break: rule` a thin divider and a new line, so a long room — a garage with the car, the house's energy, the freezer and the doors — reads as sections rather than one run. In the editor: *After this readout* under a sensor, binary sensor or template. On a phone, several lines fold to the first one with a chevron to open them (remembered per card in that browser); readouts and tiles scroll together.
+
+**A tile's status from a template** (2.10). `status:` on a control entity (a switch, light, media player…) is a Jinja template whose result replaces the tile's status line — `Playing · Kind of Blue · 18.6 W` under *Stereo* instead of *On* — while the tile keeps its toggle and controls. In the editor: *Status template* under the entity.
+
+```yaml
+- entity: switch.kauf_plug_16
+  name: Stereo
+  status: >-
+    {% set p = states('sensor.kauf_plug_power_16_r') | float(0) %}
+    {{ 'On' if is_state('switch.kauf_plug_16', 'on') else 'Off' }} · {{ p | round(1) }} W
+```
 
 **Reset view** (2.5). The camera button next to *Rooms* flies the camera back to the configured view; when the embedded card has saved views (`zoom_areas`) the button opens a list of them with Reset on top.
 

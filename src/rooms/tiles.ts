@@ -43,6 +43,8 @@ export interface TilesHost {
   showToast(text: string): void;
   entityConfig(id: string): RoomEntity | null;
   setConfirm(c: { entity: string; text: string } | null): void;
+  /** The rendered text of a template (a tile's `status`), '…' while pending, null when unknown. */
+  template(t: string): string | null;
 }
 
 export const CSS_TILES = `
@@ -97,7 +99,9 @@ export class Tiles {
     const dimmable = dimReady && (num(da.brightness) || (da.supported_color_modes || []).some((m: string) => m !== 'onoff'));
     const pct = dimmable ? (num(da.brightness) && isOn(ds) ? Math.max(1, Math.round(da.brightness / 2.55)) : 100) : null;
     const dimNote = e.dimmer && isOn(s) ? (!ds ? ' · bulb not found' : !available(ds) ? ' · bulb unavailable' : !isOn(ds) ? ' · bulb off' : pct ? ` · ${pct}%` : '') : '';
-    const stateText = !s ? 'Not found' : !available(s) ? 'Unavailable' : busy || (dimId && H.busy.has(dimId)) ? 'Changing…' : e.dimmer && isOn(s) ? `On${dimNote}` : this.stateText(s, e);
+    // `status`: a template rendered by Home Assistant replaces the tile's status line
+    const rendered = e.status && typeof e.status === 'string' ? H.template(e.status) : null;
+    const stateText = !s ? 'Not found' : !available(s) ? 'Unavailable' : busy || (dimId && H.busy.has(dimId)) ? 'Changing…' : rendered !== null ? rendered : e.dimmer && isOn(s) ? `On${dimNote}` : this.stateText(s, e);
     const on = isOn(s);
     const ro = e.read_only || READ_ONLY_DOMAINS.includes(d);
     const warn = d === 'cover' && e.top_entity && this.railPos(id) > 0 && this.railPos(e.top_entity) > 0;

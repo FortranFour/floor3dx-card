@@ -166,6 +166,7 @@ ${ents.map((e: any, j) => `<div class="ent"><label>Entity<input type="text" list
     if (/^cover\./.test(id)) html += f('top_entity', 'Top rail: makes this a top-down/bottom-up shade (optional)', 'f3r-covers', 'cover.…_top');
     if (/^(switch|input_boolean)\./.test(id) || e.dimmer) html += f('dimmer', 'Dimmer: the light behind this switch, for brightness (optional)', 'f3r-entities', 'light.…');
     if (/^media_player\./.test(id)) html += f('remote', 'TV remote, for channel and Info keys (optional)', 'f3r-remotes', 'remote.…');
+    if (id && !/\{\{|\{%/.test(id) && !/^(sensor|binary_sensor)\./.test(id)) html += f('status', 'Status template: a Jinja template Home Assistant renders as this tile\'s status line (optional)', '', "{{ states('sensor.…') }} W");
     html += `<label class="check small"><input type="checkbox" data-field="rooms.${i}.entities.${j}.guest_hidden" data-bool ${e.guest_hidden ? 'checked' : ''} data-key="rg${i}-${j}">Hide in guest mode</label>`;
     // readouts can be grouped: a new line or a hairline after this one (sensors, binary sensors, templates)
     if (/^(sensor|binary_sensor)\./.test(id) || /\{\{|\{%/.test(id)) {

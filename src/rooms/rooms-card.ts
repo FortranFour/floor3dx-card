@@ -236,6 +236,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
       call: (id, domain, service, data) => this._call(id, domain, service, data),
       showToast: (t) => this._showToast(t),
       entityConfig: (id) => this._entityConfig(id),
+      template: (t) => { const x = this._templates.get(t); return x ? x.text : null; },
       setConfirm: (c) => { this._confirm = c; clearTimeout(this._confirmTimer); if (c) this._confirmTimer = setTimeout(() => { this._confirm = null; this._request(); }, 3500); this._request(); },
     };
     this._tiles = new Tiles(host);
@@ -817,7 +818,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
     const conn = this._hass?.connection;
     if (!conn || !this._config) return;
     const wanted = new Set<string>();
-    (this._config.rooms || []).forEach((r: Room) => (r.entities || []).forEach((e: any) => { if (isTemplate(e.entity)) wanted.add(e.entity); }));
+    (this._config.rooms || []).forEach((r: Room) => (r.entities || []).forEach((e: any) => { if (isTemplate(e.entity)) wanted.add(e.entity); if (isTemplate(e.status)) wanted.add(e.status); }));
     this._templates.forEach((t, template) => { if (!wanted.has(template)) { this._templates.delete(template); t.unsub?.then((u) => u()).catch(() => undefined); } });
     wanted.forEach((template) => {
       if (this._templates.has(template)) return;

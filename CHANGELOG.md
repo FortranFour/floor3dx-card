@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.10.3
+
+### Added
+- Rooms card: `status:` on a control entity — a Jinja template rendered by Home Assistant that replaces the tile's status line (the stereo's power and what it is playing, under its own toggle). Editor: *Status template* under the entity.
+
 ## 2.10.2
 
 ### Changed
