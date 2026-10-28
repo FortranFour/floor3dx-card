@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.13.0
+
+### Fixed
+- **Spot lights with shadows lit nothing, or the wrong things.** three.js writes a logarithmic depth buffer's depth into a spot light's shadow map while the receiving surface compares a perspective depth, so with the card's logarithmic buffer any light with a `light_direction` / `light_target` and `shadow: 'yes'` was wrong (shadows on the floor, no light on the table under them; recessed cans lighting no wall). Point lights and the sun were fine. The renderer now uses a linear depth buffer whenever shadows or ambient occlusion are on (near plane 1); `depth_buffer: log | linear` overrides. Spot lights take `shadow.normalBias = 1` and no depth bias instead of `-0.0001`, which caused acne on lit walls; `light.shadow_bias` / `light.shadow_normal_bias` tune both kinds. Harness: `test_spot_shadow.py`.
+
+### Added
+- **Rendering effects**, an optional post-processing pipeline (three.js EffectComposer), off by default; editor section *Effects*. `ao: 'yes'`: ambient occlusion (GTAO) — contact shadows where surfaces meet — with `ao_strength`, `ao_quality` (`low`/`medium`/`high`) and `ao_radius` (blank: scaled to the model). `bokeh: 'yes'`: depth of field — the camera's target stays sharp and the model blurs with distance from it — with `bokeh_strength`, `bokeh_blur` and `bokeh_focus`. `smaa`: antialiasing for frames drawn through the pipeline, automatic with any effect (`yes` forces the pipeline, `no` leaves it out). A plain background colour comes through the pipeline as it was (the output pass tone-maps the whole frame; compensated). With `ao: 'yes'` the renderer is created with a linear depth buffer, which GTAO needs, and the near plane at 1. Harness: `test_effects.py`.
+
 ## 2.12.0
 
 ### Added

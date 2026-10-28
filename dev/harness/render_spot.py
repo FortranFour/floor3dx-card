@@ -32,6 +32,7 @@ JS = r"""async ([card, shot, w, h, hour]) => {
   const merge = (a, b) => { for (const k of Object.keys(b)) { if (b[k] && typeof b[k] === 'object' && !Array.isArray(b[k]) && a[k] && typeof a[k] === 'object') merge(a[k], b[k]); else if (b[k] === null) delete a[k]; else a[k] = b[k]; } return a; };
   if (shot.patch) cfg.entities.forEach(e => { const p = shot.patch[e.object_id]; if (p && (!p.type3d || p.type3d === e.type3d) && (p.type3d || e.type3d === 'light')) merge(e, p); });
   if (shot.light_rooms) cfg.light_rooms = shot.light_rooms;
+  if (shot.card) Object.assign(cfg, shot.card);
   const states = {};
   cfg.entities.forEach(e => { if (e.entity && (!states[e.entity] || e.entity_template)) states[e.entity] = (e.type3d === 'light' || e.type3d === 'color') && !e.entity_template ? {state: 'off', attributes: {}} : {state: '0', attributes: {}}; });
   (shot.on || []).forEach(id => { states[id] = {state: 'on', attributes: {brightness: 255}}; });

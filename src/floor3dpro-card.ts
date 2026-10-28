@@ -12,6 +12,7 @@ import './editor';
 import { HassEntity } from 'home-assistant-js-websocket';
 import { ImageFrame, ImageFit } from './image-frame';
 import { Daylight } from './daylight';
+import { Effects, effectSettings, effectsOn, effectsKey } from './post';
 import { Look, list as lookList } from './look';
 import { Transparency } from './transparency';
 import {
@@ -147,6 +148,25 @@ export class Floor3dCard extends LitElement {
   private _zoombar?: HTMLElement;
   private _selectionbar?: HTMLElement;
   private _controls?: OrbitControls;
+  private _fx?: Effects; // the post-processing pipeline, only with an effect on (post.ts)
+  private _fxKey = '';
+  private _fxRatio = 0;
+  private _fxW = 0;
+  private _fxH = 0;
+  private _fxBox: THREE.Box3 | null = null;
+  private _fxNote = false;
+  /** Linear depth buffer: forced by `depth_buffer`, else whenever shadows or ambient occlusion are on. */
+  private _linearDepth(): boolean {
+    const d = String((this._config as any).depth_buffer || '').toLowerCase();
+    if (d === 'linear') return true;
+    if (d === 'log' || d === 'logarithmic') return false;
+    return this._shadowsWanted() || effectSettings(this._config).ao;
+  }
+  /** The model's bounding box in world space, for the effects (AO radius, depth clip); computed once per model. */
+  private _modelBox(): THREE.Box3 | null {
+    if (!this._fxBox && this._bboxmodel && this._modelready) { const b = new THREE.Box3().setFromObject(this._bboxmodel); this._fxBox = b.isEmpty() ? null : b; }
+    return this._fxBox;
+  }
   private _hemiLight?: THREE.HemisphereLight;
   private _modelX?: number;
   private _modelY?: number;
@@ -375,6 +395,7 @@ export class Floor3dCard extends LitElement {
 
   public disconnectedCallback(): void {
     super.disconnectedCallback();
+    if (this._fx) { this._fx.dispose(); this._fx = undefined; }
     window.removeEventListener('resize', this._windowResizeListener);
     window.removeEventListener(EDITOR_EVENT, this._editorListener);
     // Faz-0 Engine Backbone: (Stabil.Patch.0.0)
@@ -736,7 +757,27 @@ export class Floor3dCard extends LitElement {
 
     // the shared room-mask uniforms point at this card's rooms (or are off) for this frame
     if (this._roomLight) this._roomLight.bind(this._camera); else RoomLight.unbind();
-    this._renderer.render(this._scene, this._camera);
+    const fx = effectSettings(this._config);
+    if (fx.ao && this._renderer.capabilities.logarithmicDepthBuffer) {
+      fx.ao = false; // switched on after the renderer was made: AO comes with the next load of the card
+      if (!this._fxNote) { this._fxNote = true; console.info('floor3dx: ambient occlusion takes effect when the card is next loaded (the depth buffer is set up with the renderer)'); }
+    }
+    if (effectsOn(fx) && this._camera.isPerspectiveCamera) {
+      try {
+        const key = effectsKey(fx);
+        if (this._fx && this._fxKey !== key) { this._fx.dispose(); this._fx = undefined; }
+        if (!this._fx) {
+          const stencil = !!((this._renderer.getContext().getContextAttributes() || {}) as any).stencil;
+          this._fx = new Effects(this._renderer, this._scene, this._camera, fx, stencil, this._modelBox());
+          this._fxKey = key; this._fxRatio = 0;
+        }
+        if (this._fxRatio !== ratio || this._fxW !== this._lastResizeW || this._fxH !== this._lastResizeH) { this._fx.setSize(this._lastResizeW || 1, this._lastResizeH || 1, ratio); this._fxRatio = ratio; this._fxW = this._lastResizeW || 0; this._fxH = this._lastResizeH || 0; }
+        this._fx.render(fx, this._controls ? this._camera.position.distanceTo(this._controls.target) : 1000, this._renderer, this._scene, this._modelBox());
+      } catch (e) { console.warn('floor3dx: rendering effects off (' + ((e as any)?.message || e) + ')'); this._fx?.dispose(); this._fx = undefined; (this._config as any).bokeh = 'no'; (this._config as any).ao = 'no'; (this._config as any).smaa = 'no'; this._renderer.render(this._scene, this._camera); }
+    } else {
+      if (this._fx) { this._fx.dispose(); this._fx = undefined; }
+      this._renderer.render(this._scene, this._camera);
+    }
 
     if (moving) {
       window.clearTimeout(this._settleTimeout);
@@ -2509,7 +2550,14 @@ export class Floor3dCard extends LitElement {
     this._allObjectNames = null;
     this._scene = new THREE.Scene();
 
-    this._camera = new THREE.PerspectiveCamera(45, 1, 0.1, 10000);
+    // The depth buffer. Logarithmic (the card's old default) gives thin walls room at 0.1 : 10 000, but
+    // three.js's shadow pass writes that logarithmic depth into a spot light's shadow map while the receiving
+    // surface compares a plain perspective depth, so every spot light with shadows lit nothing (point lights
+    // and the sun were fine: distance maps and an orthographic camera). Ambient occlusion reads the depth
+    // the same way. So with shadows or AO on the buffer is linear and the near plane at 1 (a 1 : 10 000
+    // range in 24 bits); `depth_buffer: log | linear` forces either.
+    const linearDepth = this._linearDepth();
+    this._camera = new THREE.PerspectiveCamera(45, 1, linearDepth ? 1 : 0.1, 10000);
 
     // create and initialize renderer
 
@@ -2517,7 +2565,7 @@ export class Floor3dCard extends LitElement {
     // Render quality: MSAA stays on unless the screen is dense enough (DPR >= 2) to hide the stair-stepping.
     this._renderer = new THREE.WebGLRenderer({
       antialias: this._useAntialias(),
-      logarithmicDepthBuffer: true,
+      logarithmicDepthBuffer: !linearDepth,
       alpha: true,
       powerPreference: 'high-performance',
       // a stencil buffer for hosts that draw masked overlays on the scene (the rooms card's tints);
@@ -2836,6 +2884,7 @@ export class Floor3dCard extends LitElement {
 
     if (this._content && this._renderer) {
       this._modelready = true;
+      this._fxBox = null; // a new model: the effects measure it afresh
       if (this.preview) this._toEditor({ objects: this._modelObjectNames() });
       console.log('Show canvas');
       this._levelbar = document.createElement('div');
@@ -3890,7 +3939,12 @@ export class Floor3dCard extends LitElement {
                     light.castShadow = false;
                     const wantsShadow = this._config.shadow == 'yes' && entity.light.shadow != 'no';
                     if (wantsShadow) {
-                      light.shadow.bias = -0.0001;
+                      // A spot light's map is a depth map: a negative bias puts acne on every lit surface, so
+                      // spots take no depth bias and a normal bias of one model unit (light.shadow_normal_bias,
+                      // light.shadow_bias override); point lights keep their distance-map bias.
+                      const nb = parseFloat(entity.light.shadow_normal_bias), b = parseFloat(entity.light.shadow_bias);
+                      if ((light as any).isSpotLight) { light.shadow.bias = Number.isFinite(b) ? b : 0; light.shadow.normalBias = Number.isFinite(nb) ? nb : 1; }
+                      else { light.shadow.bias = Number.isFinite(b) ? b : -0.0001; if (Number.isFinite(nb)) light.shadow.normalBias = nb; }
                       // light.shadow_map_size: resolution of this light's shadow map (default 512); crisp
                       // shadows of thin objects, slats or railings, need 1024 or 2048
                       const mapSize = parseInt(entity.light.shadow_map_size);
