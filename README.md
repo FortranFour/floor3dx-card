@@ -580,10 +580,15 @@ rooms:
 | `guest_mode`, `max_volume`, `temperature_range` | as in the snapshot card | `yes`, 0.6 in guest mode, none |
 | `height` | CSS height | the panel view's height; in the card editor the preview column (2.4.5); else `60vh` |
 | `accent` | `#rrggbb`, the overlay's accent | the theme's line colour |
+| `panel_theme` | a theme or palette name for the panel, switcher and buttons only; the model keeps `theme` (2.12) | the theme |
+| `panel_stage`, `panel_text` | `#rrggbb`: the panel's colour and its text colour; dark text brings the light-stage rules (2.12) | the panel theme's, text by contrast |
+| `panel_daylight` | `yes`: the panel takes the stage colour the model draws at this hour — pale with dark text by day, dark with light text at night — so it keeps its contrast through the day and the night switch (2.12) | `no` |
 
 The card's own options (`look`, `merge_static`, `daylight`, ...) are taken from `card:`; `look` is replaced by the theme unless the theme is `off`. The rooms' floors are kept out of `merge_static`. In the card editor's preview `merge_static` is off, so detection sees every floor.
 
 Entity-reference tokens (`[[entity:…]]`): see *Entity references* below.
+
+**The panel's own colours** (2.12). `theme` sets the model's look and the overlay's colours together. To colour the panel apart from the model, `panel_theme` names any theme or palette for the overlay alone (a *Paper* panel over a *Neon* house), `panel_stage` and `panel_text` set the two colours outright, and `panel_daylight: yes` lets the panel follow the model's daylight: it takes the stage colour the model draws at this hour and switches between dark text on a pale panel by day and light text on a dark one at night, so it never loses contrast when the day & night switch or the clock changes the model. All three are in the editor's *Theme* step.
 
 **Taps** (2.5). A tap on a floor, a wall or a piece of furniture selects the room. A tap on an object bound to a `light` or `gesture` row of the embedded card (a lampshade) runs that row's action — the lamp toggles, the room stays as it was — so a single tap and the card's double tap no longer collide (the double tap on such an object is swallowed). `object_tap: panel` opens the room's panel with that entity's tile highlighted instead; `object_tap: room` keeps the 2.4 behaviour. A room's floor is always the room, whatever is bound to it.
 

@@ -246,12 +246,15 @@ ${ents.map((e: any, j) => `<div class="ent"><label>Entity<input type="text" list
   }
 
   private _themeSection(): string {
-    const cur = this._config.theme || 'neon';
+    const c = this._config, cur = c.theme || 'neon';
     const groups: string[] = [];
     THEMES.forEach((t) => { if (!groups.includes(t.group)) groups.push(t.group); });
     return `<p class="note">The look of the model and the colours of the overlay. The first seven are floor3dx-card's looks; the rest are palettes of its custom theme, chosen to read well with lamps on.</p>
 ${groups.map((g) => `<label>${esc(g)}</label><div class="swatches">${THEMES.filter((t) => t.group === g).map((t) => `<button class="sw" data-act="theme" data-theme="${t.key}" aria-pressed="${t.key === cur}" title="${esc(t.label)}"><span class="c" style="background:${t.stage}"><i style="background:${t.edges}"></i></span><span class="l">${esc(t.label)}</span></button>`).join('')}</div>`).join('')}
-<div class="row"><label class="check"><input type="checkbox" data-field="room_colors" data-bool ${this._config.room_colors ? 'checked' : ''}>Tint every room's floor in its own pastel colour</label></div>`;
+<div class="row"><label class="check"><input type="checkbox" data-field="room_colors" data-bool ${this._config.room_colors ? 'checked' : ''}>Tint every room's floor in its own pastel colour</label></div>
+<p class="note">The panel and its text can take other colours than the model: a theme of their own, your own colours, or the stage colour the model draws at this hour.</p>
+<div class="row"><label>Panel theme<select data-field="panel_theme" data-key="tpt"><option value="" ${!c.panel_theme ? 'selected' : ''}>Same as the theme</option>${groups.map((g) => `<optgroup label="${esc(g)}">${THEMES.filter((t) => t.group === g && t.key !== 'off').map((t) => `<option value="${t.key}" ${c.panel_theme === t.key ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}</optgroup>`).join('')}</select></label><label>Panel colour (#rrggbb, blank: the panel theme's)<input type="text" data-field="panel_stage" value="${esc(c.panel_stage ?? '')}" placeholder="#1b2430" data-key="tps"></label><label>Text colour (#rrggbb, blank: by contrast)<input type="text" data-field="panel_text" value="${esc(c.panel_text ?? '')}" placeholder="#eef2f7" data-key="tpx"></label></div>
+<div class="row"><label class="check"><input type="checkbox" data-field="panel_daylight" data-bool ${c.panel_daylight === true || c.panel_daylight === 'yes' ? 'checked' : ''}>Panel follows day and night: it takes the stage colour the model draws at this hour, pale with dark text by day and dark with light text at night, so it keeps its contrast (a <code>daylight</code> block on the model)</label></div>`;
   }
   private _displaySection(): string {
     const c = this._config, many = this._models().length > 1;

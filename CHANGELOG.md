@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.12.0
+
+### Added
+- Rooms Card: the panel's colours apart from the model's. `panel_theme` (any theme or palette, for the overlay only), `panel_stage` / `panel_text` (`#rrggbb`), and `panel_daylight: yes`, with which the panel takes the stage colour the model draws at this hour and flips between dark-on-pale by day and light-on-dark at night to keep its contrast. Editor: *Theme* step. Harness: `test_panel_theme.py`.
+- Harness: `test_find_families.py` checks that the editor's *Find floor3d cards* offers adizanni's `floor3d-card`, `floor3dpro-card` and `floor3dx-card` alike (inside stacks and other dashboards) and leaves other 3D cards alone.
+
 ## 2.11.1
 
 ### Fixed

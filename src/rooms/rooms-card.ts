@@ -361,15 +361,29 @@ export class Floor3dxRoomsCard extends HTMLElement {
     }
     return false;
   }
+  /** The overlay's colours: `panel_theme` (any theme, for the panel only) else the theme; `panel_stage` /
+   *  `panel_text` override the panel and text colours; with `panel_daylight` the panel takes the stage
+   *  colour the model draws at this hour and flips between dark and light text to keep its contrast. */
   private _applyTheme(): void {
-    const t = this._theme;
-    this.classList.toggle('light', t.light);
-    this.classList.toggle('labels', this._config.labels === true || this._config.labels === 'yes');
-    this.style.setProperty('--f3r-stage', rgb(t.panel || t.stage));
-    // the accent is the theme's line colour when it contrasts with the stage; otherwise plain
+    const c = this._config;
+    const hex6 = (v: any): string | null => (typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v.trim()) ? v.trim().toLowerCase() : null);
     const lum = (h: string) => { const n = parseInt(h.slice(1), 16); return (0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255; };
-    const accent = t.accent || (Math.abs(lum(t.edges) - lum(t.stage)) > 0.3 ? t.edges : t.light ? '#1b2430' : '#eef2f7');
-    this.style.setProperty('--f3r-accent', rgb(this._config.accent || accent));
+    let t = c.panel_theme && String(c.panel_theme).toLowerCase() !== 'off' ? themeOf(c.panel_theme) : this._theme;
+    if (t !== this._theme && t.key === 'off') t = this._theme;
+    let stage = t.panel || t.stage, light = t.light;
+    const follow = c.panel_daylight === true || c.panel_daylight === 'yes';
+    if (follow && this._canvasHex) { stage = this._canvasHex; light = lum(stage) > 0.5; }
+    const own = hex6(c.panel_stage);
+    if (own) { stage = own; light = lum(own) > 0.5; }
+    const ink = hex6(c.panel_text);
+    if (ink) light = lum(ink) < 0.5; // dark text: the light-stage rules (lines, chips), and the reverse
+    this.classList.toggle('light', light);
+    this.classList.toggle('labels', c.labels === true || c.labels === 'yes');
+    this.style.setProperty('--f3r-stage', rgb(stage));
+    if (ink) { this.style.setProperty('--f3r-ink', ink); this.style.setProperty('--f3r-muted', `rgba(${rgb(ink)},.72)`); } else { this.style.removeProperty('--f3r-ink'); this.style.removeProperty('--f3r-muted'); }
+    // the accent is the theme's line colour when it contrasts with the stage; otherwise plain
+    const accent = t.accent || (Math.abs(lum(t.edges) - lum(stage)) > 0.3 ? t.edges : light ? '#1b2430' : '#eef2f7');
+    this.style.setProperty('--f3r-accent', rgb(c.accent || accent));
     const alpha = Number(this._config.panel_opacity);
     if (Number.isFinite(alpha) && alpha >= 0 && alpha <= 1) this.style.setProperty('--f3r-alpha', String(alpha)); else this.style.removeProperty('--f3r-alpha');
   }
@@ -480,6 +494,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
     const lum = 0.2126 * bg.r + 0.7152 * bg.g + 0.0722 * bg.b; // linear-ish, good enough to pick a side
     this.style.setProperty('--f3r-canvas', hex);
     this.style.setProperty('--f3r-divider', lum > 0.4 ? 'rgba(0,0,0,.22)' : 'rgba(255,255,255,.28)');
+    if (this._config.panel_daylight === true || this._config.panel_daylight === 'yes') this._applyTheme(); // the panel follows the stage
   }
   private _onModelReady(slot: Slot): void {
     const el = slot.el; if (!el || !el._scene) return;
