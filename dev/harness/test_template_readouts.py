@@ -38,7 +38,10 @@ JS = r"""async () => {
   // the configuration drops T2: unsubscribed
   el.setConfig({card, rooms: [{id: 'r', name: 'Utility', floors: ['room_0_1'], entities: [{entity: 'light.a'}, {entity: T1, name: 'Washer'}]}], title: 'T', height: '560px'});
   await sleep(300); out.unsubbed = unsubbed; out.subsAfter = subs.length;
-  d.remove(); await sleep(100); out.unsubbedAfterRemove = unsubbed;
+  // removed and put back within the grace period: the subscriptions are kept (HA re-attaches cards freely)
+  d.remove(); await sleep(300); out.unsubbedRightAfterRemove = unsubbed; document.body.appendChild(d); await sleep(1800); out.unsubbedAfterReattach = unsubbed; out.subsAfterReattach = subs.length;
+  // removed for good: dropped after the grace period
+  d.remove(); await sleep(100); out.unsubbedAfterRemove = unsubbed; await sleep(1800); out.unsubbedAfterGrace = unsubbed;
   return out;
 }"""
 
@@ -61,7 +64,9 @@ if __name__ == '__main__':
     check('templates are never tiles', r.get('tiles') == 1)
     check('break: rule and break: yes split the readouts into three lines with one hairline, in order', r.get('lines') == 3 and r.get('rules') == 1 and r.get('order') == ['p.readouts', 'hr.rule', 'p.readouts', 'p.readouts'])
     check('a template error shows a marker', r.get('alert') is True and any('⚠' in x for x in r.get('afterError', [])))
-    check('a template dropped from the configuration is unsubscribed; all on remove', r.get('unsubbed') == 2 and r.get('subsAfter') == 3 and r.get('unsubbedAfterRemove') == 3)
+    check('a template dropped from the configuration is unsubscribed', r.get('unsubbed') == 2 and r.get('subsAfter') == 3)
+    check('a card detached and re-attached within the grace period keeps its subscriptions (no resubscribe)', r.get('unsubbedRightAfterRemove') == 2 and r.get('unsubbedAfterReattach') == 2 and r.get('subsAfterReattach') == 3)
+    check('a card removed for good drops them after the grace period, not at once', r.get('unsubbedAfterRemove') == 2 and r.get('unsubbedAfterGrace') == 3)
     check('no page errors', not errors)
     for e in errors[:5]:
         print('  error:', e[:300])

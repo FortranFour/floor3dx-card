@@ -282,6 +282,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
   getGridOptions(): any { return { columns: 'full', rows: 'auto' }; }
 
   connectedCallback(): void {
+    clearTimeout(this._dropTimer); this._dropTimer = 0; // back before the grace period ran out: keep the subscriptions
     if (this._config && this._hass) this._syncTemplates();
     if (this._fresh && this._config) {
       // the editor's preview: a new element for every change of the configuration, so the room and
@@ -306,7 +307,13 @@ export class Floor3dxRoomsCard extends HTMLElement {
   }
   disconnectedCallback(): void {
     this._ro?.disconnect();
-    this._dropTemplates();
+    // Home Assistant detaches and re-attaches a card freely (edit mode, the preview, a view change).
+    // Unsubscribing at once races the server's first render event: the event then reaches the websocket
+    // library for a subscription it has forgotten, and its own unsubscribe of it rejects unhandled
+    // ("Uncaught (in promise)" in the console). So the templates are dropped after a short grace period,
+    // and not at all when the card is back by then.
+    clearTimeout(this._dropTimer);
+    this._dropTimer = window.setTimeout(() => { this._dropTimer = 0; if (!this.isConnected) this._dropTemplates(); }, 1500);
     this._slots.forEach((s) => clearInterval(s.poll));
     clearTimeout(this._pt); clearTimeout(this._toastTimer); clearTimeout(this._confirmTimer); clearTimeout(this._focusTimer);
     cancelAnimationFrame(this._pinFrame); this._pinFrame = 0;
@@ -894,24 +901,32 @@ export class Floor3dxRoomsCard extends HTMLElement {
     if (!conn || !this._config) return;
     const wanted = new Set<string>();
     (this._config.rooms || []).forEach((r: Room) => (r.entities || []).forEach((e: any) => { if (isTemplate(e.entity)) wanted.add(e.entity); if (isTemplate(e.status)) wanted.add(e.status); }));
-    this._templates.forEach((t, template) => { if (!wanted.has(template)) { this._templates.delete(template); t.unsub?.then((u) => u()).catch(() => undefined); } });
+    this._templates.forEach((t, template) => { if (!wanted.has(template)) { this._templates.delete(template); this._unsubTemplate(t); } });
     wanted.forEach((template) => {
       if (this._templates.has(template)) return;
       const entry = { text: '…', error: false, unsub: null as Promise<() => void> | null };
       this._templates.set(template, entry);
       try {
         entry.unsub = conn.subscribeMessage((msg: any) => {
-          if (msg && msg.error !== undefined && msg.result === undefined) { entry.error = true; entry.text = '⚠ template'; console.warn('floor3dx-rooms-card: template error: ' + (msg.error?.message || msg.error) + '\n' + template); }
-          else { entry.error = false; const r = msg?.result; entry.text = r === undefined || r === null ? '' : String(r); }
-          this._request();
+          try {
+            if (msg && msg.error !== undefined && msg.result === undefined) { entry.error = true; entry.text = '⚠ template'; console.warn('floor3dx-rooms-card: template error: ' + (msg.error?.message || msg.error) + '\n' + template); }
+            else { entry.error = false; const r = msg?.result; entry.text = r === undefined || r === null ? '' : String(r); }
+            this._request();
+          } catch (_) { /* a render error must not surface as a rejected promise */ }
         }, { type: 'render_template', template, timeout: 10, report_errors: true });
         entry.unsub.catch((err: any) => { entry.error = true; entry.text = '⚠ template'; console.warn('floor3dx-rooms-card: template rejected: ' + (err?.message || err)); this._request(); });
       } catch (err) { entry.error = true; entry.text = '⚠ template'; }
     });
   }
+  private _dropTimer = 0;
   private _dropTemplates(): void {
-    this._templates.forEach((t) => t.unsub?.then((u) => u()).catch(() => undefined));
+    this._templates.forEach((t) => this._unsubTemplate(t));
     this._templates.clear();
+  }
+  /** Unsubscribe once the subscription is established; a failure (the server already closed it) is nobody's concern. */
+  private _unsubTemplate(t: { unsub: Promise<() => void> | null }): void {
+    const p = t.unsub; if (!p) return;
+    p.then((u) => { try { const r: any = u(); if (r && typeof r.catch === 'function') r.catch(() => undefined); } catch (_) { /* already gone */ } }).catch(() => undefined);
   }
   private _sensorTiles(): boolean { return this._config.sensor_tiles === true || this._config.sensor_tiles === 'yes'; }
   /** The room's sensors as a line of readouts: "21 °C · 48 % · Window open". */

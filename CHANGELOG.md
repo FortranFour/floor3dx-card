@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.13.1
+
+### Fixed
+- Rooms Card: `Uncaught (in promise)` errors in the browser console, one per template readout or status template, when Home Assistant detached and re-attached the card (edit mode, the preview, a view change). The card unsubscribed its `render_template` subscriptions at once, which raced the server's first render event; the websocket library then unsubscribed a subscription it had already forgotten and that rejected unhandled. Subscriptions are now dropped after a 1.5 s grace period, and kept when the card is back by then; a failing unsubscribe is swallowed. Harness: `test_template_readouts.py`.
+
 ## 2.13.0
 
 ### Fixed
