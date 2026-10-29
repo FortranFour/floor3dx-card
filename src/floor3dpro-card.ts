@@ -13,6 +13,7 @@ import { HassEntity } from 'home-assistant-js-websocket';
 import { ImageFrame, ImageFit } from './image-frame';
 import { Daylight } from './daylight';
 import { Effects, effectSettings, effectsOn, effectsKey } from './post';
+import { projectionSettings, installTwoPoint, ProjectionSettings, Projection } from './projection';
 import { Look, list as lookList } from './look';
 import { Transparency } from './transparency';
 import {
@@ -155,6 +156,33 @@ export class Floor3dCard extends LitElement {
   private _fxH = 0;
   private _fxBox: THREE.Box3 | null = null;
   private _fxNote = false;
+  private _projection: ProjectionSettings | null = null; // the lens and perspective in force (config, or set at runtime)
+  private _twoPoint: { refresh: () => void; release: () => void } | null = null;
+  /** The lens and perspective in force. */
+  public projectionState(): ProjectionSettings { return this._projection || projectionSettings(this._config); }
+  /** Change the lens or the perspective at runtime (the Rooms Card's camera menu); the configuration is
+   *  untouched. A new field of view moves the camera along its line of sight so the framing stays. */
+  public setProjection(next: Partial<ProjectionSettings>): ProjectionSettings {
+    const cur = this.projectionState();
+    const fov = Number.isFinite(next.fov) && (next.fov as number) >= 10 && (next.fov as number) <= 120 ? (next.fov as number) : cur.fov;
+    const projection: Projection = next.projection === 'two_point' || next.projection === 'three_point' ? next.projection : cur.projection;
+    this._projection = { projection, fov };
+    if (!this._camera) return this._projection;
+    if (fov !== this._camera.fov) {
+      const target = this._controls ? this._controls.target : new THREE.Vector3();
+      const d = this._camera.position.clone().sub(target);
+      const k = Math.tan(THREE.MathUtils.degToRad(this._camera.fov / 2)) / Math.tan(THREE.MathUtils.degToRad(fov / 2));
+      this._camera.position.copy(target).add(d.multiplyScalar(k));
+      this._camera.fov = fov;
+      if (this._controls) this._controls.update();
+    }
+    if (projection === 'two_point' && !this._twoPoint) this._twoPoint = installTwoPoint(this._camera);
+    else if (projection !== 'two_point' && this._twoPoint) { this._twoPoint.release(); this._twoPoint = null; }
+    this._camera.updateProjectionMatrix();
+    if (this._twoPoint) this._twoPoint.refresh();
+    this._requestRender('projection');
+    return this._projection;
+  }
   /** Linear depth buffer: forced by `depth_buffer`, else whenever shadows or ambient occlusion are on. */
   private _linearDepth(): boolean {
     const d = String((this._config as any).depth_buffer || '').toLowerCase();
@@ -510,6 +538,9 @@ export class Floor3dCard extends LitElement {
     if (!config) {
       throw new Error(localize('common.invalid_configuration'));
     }
+    // the lens and perspective follow the configuration unless they were changed at runtime since
+    { const next = projectionSettings(config), prev = this._config ? projectionSettings(this._config) : null;
+      if (!prev || prev.fov !== next.fov || prev.projection !== next.projection) { this._projection = null; if (this._camera) this.setProjection(next); } }
 
     // The editor may write the short forms (true/false switches, group objects as plain ids).
     this._config = normalizeConfig(config);
@@ -755,6 +786,7 @@ export class Floor3dCard extends LitElement {
       this._renderer.setPixelRatio(ratio);
     }
 
+    if (this._twoPoint) this._twoPoint.refresh();
     // the shared room-mask uniforms point at this card's rooms (or are off) for this frame
     if (this._roomLight) this._roomLight.bind(this._camera); else RoomLight.unbind();
     const fx = effectSettings(this._config);
@@ -2557,7 +2589,10 @@ export class Floor3dCard extends LitElement {
     // the same way. So with shadows or AO on the buffer is linear and the near plane at 1 (a 1 : 10 000
     // range in 24 bits); `depth_buffer: log | linear` forces either.
     const linearDepth = this._linearDepth();
-    this._camera = new THREE.PerspectiveCamera(45, 1, linearDepth ? 1 : 0.1, 10000);
+    const proj = this._projection || (this._projection = projectionSettings(this._config));
+    this._camera = new THREE.PerspectiveCamera(proj.fov, 1, linearDepth ? 1 : 0.1, 10000);
+    this._twoPoint?.release(); this._twoPoint = null;
+    if (proj.projection === 'two_point') this._twoPoint = installTwoPoint(this._camera);
 
     // create and initialize renderer
 

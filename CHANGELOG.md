@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.14.0
+
+### Added
+- **Perspective and lens.** `camera_projection: two_point` keeps vertical lines vertical whatever the tilt of the view (a tilt-shift lens: a view-space shear folded into the projection matrix, recomputed as the camera turns, tapered off toward straight-down views); `three_point` (default) is the plain camera. `camera_fov` sets the lens (25 telephoto / 35 narrow / 45 normal, the default / 60 wide, or any number); changing it moves the camera along its line of sight so the framing stays. Both in the editor's *Camera* section, with `setProjection()` / `projectionState()` on the card for hosts.
+- Rooms Card: a long press on the camera button (*Reset view* / *Views*) opens a menu with **Straight verticals** and the lens (*Narrow · Normal · Wide*); the choice applies to every model and is kept per browser, as the day & night choice is.
+- Harness: `test_projection.py`; `render_spot.py` builds the card once per configuration and re-aims, re-times and re-projects it per shot (one model load per run instead of one per shot).
+
 ## 2.13.2
 
 ### Fixed

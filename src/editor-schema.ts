@@ -104,6 +104,8 @@ export const SECTIONS: Section[] = [
       [vector('camera_target')],
       [vector('camera_rotate')],
       'use_current_view',
+      'Lens and perspective',
+      [row(choice('camera_projection', [['', 'Three-point (a camera: verticals lean when tilted)'], ['two_point', 'Two-point (verticals stay vertical)']]), choice('camera_fov', [['', 'Normal (45°)'], ['25', 'Telephoto (25°)'], ['35', 'Narrow (35°)'], ['60', 'Wide (60°)']]))],
       [row(bool('lock_camera'), bool('hideLevelsMenu')), num('initialLevel', { step: 1 })],
       'North (orients the sun and daylight)',
       [vector('north', ['x', 'z'])],
@@ -777,6 +779,8 @@ const HELPERS: { [name: string]: string } = {
   ao_quality: 'Samples per pixel: more is smoother and slower. Default: medium',
   ao_radius: 'How far a surface looks for occluders, in the model\'s units; blank: about 2.5% of the model\'s longest side',
   smaa: 'Antialiasing for frames drawn through an effect, where multisampling is lost. Automatic whenever an effect is on; Always forces the pipeline on even without one',
+  camera_projection: 'Two-point keeps vertical lines vertical, as a tilt-shift lens does, whatever the tilt of the view; three-point is a plain camera. Default: three-point',
+  camera_fov: 'The lens: a narrower field of view flattens the perspective, a wider one exaggerates it. Changing it in the Rooms Card keeps the framing. Any number of degrees in YAML. Default 45',
   bokeh: 'Blurs what is nearer or farther than the point of focus, by default where the camera looks. A post-processing pass: one more full-frame render per frame. Default: off',
   bokeh_strength: 'How fast the blur grows away from the focus: at 10 the widest blur is reached a quarter of the focus distance away, at 1 ten times farther. Default 5',
   bokeh_blur: 'The widest blur, as a fraction of the frame width. Default 0.01',
@@ -845,6 +849,8 @@ export const computeHelper = (schema: Schema): string | undefined => schema.help
 
 export const HEADINGS: { [key: string]: string } = {
   camera_position: 'Camera position',
+  camera_projection: 'Perspective',
+  camera_fov: 'Lens (field of view)',
   camera_target: 'Camera target',
   camera_rotate: 'Camera rotation',
   'light.light_direction': 'Spot direction',

@@ -467,6 +467,25 @@ Animated GIFs are decoded in the card, so they animate in every browser and keep
 
 <p><img src="https://github.com/user-attachments/assets/99c383e7-6533-45f6-a700-f6298ab1d474" alt="Pictures on model objects" width="64%"> <img src="https://github.com/user-attachments/assets/cf826aa1-d8ad-40a6-aea2-342679830b51" alt="Recording: a video playing on a model object" width="24%"></p>
 
+### Perspective and lens (2.14)
+
+Two options in the editor's *Camera* section set how the camera draws the house; neither changes what you can do with it.
+
+**`camera_projection`.** Three-point perspective is what a camera does: tilt it down over the model and the walls lean inward toward the top of the frame. Two-point is the architectural photographer's tilt-shift lens — the lens stays level and shifts to frame the view — so vertical lines stay vertical whatever the tilt, while depth, size cues, lighting and the effects are untouched. The house from the same spot, three-point then two-point:
+
+![Three-point perspective: the walls lean inward](docs/floor3dx-perspective-three-point.jpg)
+![Two-point perspective: the walls stay vertical](docs/floor3dx-perspective-two-point.jpg)
+
+The correction is a shear folded into the projection matrix, recomputed as the camera turns; it fades out as the view goes straight down (nothing to straighten there). Picking, pins, shadows and the effects pipeline all go through the same matrix, so taps land where they look.
+
+**`camera_fov`.** The lens: a narrower field of view flattens the perspective, as a long lens does, a wider one exaggerates it. Changing it keeps the framing — the camera moves along its line of sight so the point it looks at stays the same size — so a saved `camera_position` keeps its meaning. The same view at 25°, 45° and 60°:
+
+![Telephoto, 25°](docs/floor3dx-lens-25.jpg)
+![Normal, 45°](docs/floor3dx-lens-45.jpg)
+![Wide, 60°](docs/floor3dx-lens-60.jpg)
+
+In the Rooms Card the viewer can switch both live: hold the camera button (*Reset view* / *Views*) for a menu with **Straight verticals** and the lens at *Narrow 35° · Normal 45° · Wide 60°*. The choice applies to every model of the card, is kept per browser (like the day & night choice), and the models' own `card:` settings are the starting point. Neither costs anything to render.
+
 ### Rendering effects (2.13)
 
 Three optional post-processing effects, all off by default, in the editor's *Effects* section. When any is on the frame is drawn through a composer (one render to a buffer, then the passes) instead of straight to the canvas, so each costs a little on a tablet; the mobile profile's adaptive resolution applies to them as to the plain frame, and a background colour comes through unchanged.
@@ -509,6 +528,8 @@ On a Home Assistant without `ha-form` the previous editor is shown instead. `day
 | `pixel_ratio` | `device`, `adaptive`, or a number | `device`; `adaptive` under `pro_skill: mobile` |
 | `antialias` | `yes`, `no` | `yes`; see the mobile profile above |
 | `anisotropy` | 1 to 16 | 8 |
+| `camera_projection` | `three_point` (a camera: verticals lean when the view tilts), `two_point` (verticals stay vertical) (2.14) | `three_point` |
+| `camera_fov` | the lens, degrees of vertical field of view: 25 telephoto, 35 narrow, 45 normal, 60 wide, or any number 10–120 (2.14) | 45 |
 | `light.light_object` | an object name | not set: one light per object in the group |
 | `light.follow_entity` | `yes`, `brightness`, `color`, `no` | `yes` |
 | `light.offset` | `{x, y, z}` in model units, added to the object's centre | 0 |
@@ -674,6 +695,8 @@ When all are shown, a gap (`models_gap`), a hairline (dark on a light stage, lig
 ### Edit 3D settings from the Rooms Card editor (2.11)
 
 The Rooms Card keeps a *copy* of each model's regular-card configuration (`card:` or `models[].card`), so once a Rooms Card is set up the regular card's lights, camera, shadows or weather entity used to be edited only in YAML. Each model in the Rooms Card editor now has an **Edit 3D settings** button that opens the regular card's own visual editor inline, under the model, working on that copy: the same tabs (Model, Camera, Lights, Daylight, Entities…), the same *Pick from model* flow — picks land in the model shown in the card preview, which switches to the model being edited and back when you press **Done with 3D settings**. Nothing changes until you edit a field; the write-back touches only what you changed. A top-level key or an entity row whose value is the same as before keeps its original text (`'60'` stays `'60'`, a `[[entity:…]]` token stays a token, row order is kept), so the YAML diff is the edit and nothing else, and a wrapper that maps rows back to references on save sees only the rows that changed. The regular editor is loaded the first time the button is pressed, not with the card, so a dashboard does not pay for it.
+
+**Perspective and lens from the card** (2.14). A long press on the camera button (*Reset view*, or *Views* when the model has views) opens a menu: **Straight verticals** (two-point perspective) and the lens, *Narrow 35° · Normal 45° · Wide 60°*. See [Perspective and lens](#perspective-and-lens-214) for what they do; the choice is the viewer's, kept per browser.
 
 ### Day & night switch (2.7)
 

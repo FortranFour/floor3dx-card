@@ -169,6 +169,9 @@ export class Floor3dxRoomsCard extends HTMLElement {
   private _dlMenu = false; // the compass's long-press menu
   private _dlPress = 0; // its timer
   private _dlLong = false; // the click after a long-press is swallowed
+  private _camMenu = false; // the camera button's long-press menu: perspective and lens
+  private _twoPoint: boolean | null = null; // the viewer's choice this browser (null: the models' own)
+  private _fov: number | null = null;
   private _needleQueued = false;
   private _focus: string | null = null; // an entity whose tile is highlighted (object_tap: panel)
   private _focusTimer: any;
@@ -219,9 +222,12 @@ export class Floor3dxRoomsCard extends HTMLElement {
       this._dlLong = false;
       // a long press on the compass opens its menu; the click that follows the release is swallowed
       clearTimeout(this._dlPress);
-      if ((e.target as HTMLElement).closest('button.dl') && this._daylightOn) this._dlPress = window.setTimeout(() => { this._dlLong = true; this._dlMenu = !this._dlMenu; this._listOpen = false; this._viewsOpen = false; this._release(); this._request(); }, 450);
+      if ((e.target as HTMLElement).closest('button.dl') && this._daylightOn) this._dlPress = window.setTimeout(() => { this._dlLong = true; this._dlMenu = !this._dlMenu; this._camMenu = false; this._listOpen = false; this._viewsOpen = false; this._release(); this._request(); }, 450);
+      // a long press on the camera button opens the perspective and lens menu
+      const camBtn = (e.target as HTMLElement).closest('.menu button[data-action="reset"], .menu button[data-action="views"]');
+      if (camBtn) this._dlPress = window.setTimeout(() => { this._dlLong = true; this._camMenu = !this._camMenu; this._dlMenu = false; this._listOpen = false; this._viewsOpen = false; this._release(); this._request(); }, 450);
     });
-    this._ui.addEventListener('contextmenu', (e) => { if ((e.target as HTMLElement).closest('button.dl')) e.preventDefault(); });
+    this._ui.addEventListener('contextmenu', (e) => { if ((e.target as HTMLElement).closest('button.dl, .menu button[data-action="reset"], .menu button[data-action="views"]')) e.preventDefault(); });
     this._ui.addEventListener('pointerup', () => { clearTimeout(this._dlPress); this._release(); });
     this._ui.addEventListener('pointercancel', () => { clearTimeout(this._dlPress); this._dlLong = false; this._release(); });
     this._ui.addEventListener('pointerleave', () => clearTimeout(this._dlPress));
@@ -264,7 +270,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
     }
     if (defs.length <= 1) this._active = ALL;
     this._fresh = !this._slots.length;
-    if (!this._slots.length) { try { this._daylightOn = localStorage.getItem(this._storeKey('daylight')) !== 'off'; this._weatherOn = localStorage.getItem(this._storeKey('weather')) !== 'off'; const f = localStorage.getItem(this._storeKey('readouts')); if (f === 'open' || f === 'closed') this._readoutsFold = f === 'open'; } catch (_) { /* private mode */ } }
+    if (!this._slots.length) { try { this._daylightOn = localStorage.getItem(this._storeKey('daylight')) !== 'off'; this._weatherOn = localStorage.getItem(this._storeKey('weather')) !== 'off'; const f = localStorage.getItem(this._storeKey('readouts')); if (f === 'open' || f === 'closed') this._readoutsFold = f === 'open'; const tp = localStorage.getItem(this._storeKey('two_point')); if (tp === 'on' || tp === 'off') this._twoPoint = tp === 'on'; const fv = Number(localStorage.getItem(this._storeKey('fov'))); if (fv >= 10 && fv <= 120) this._fov = fv; } catch (_) { /* private mode */ } }
     this._applyTheme();
     this._mountModels();
     this._syncTemplates();
@@ -511,6 +517,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
   }
   private _onModelReady(slot: Slot): void {
     const el = slot.el; if (!el || !el._scene) return;
+    this._applyProjection(slot);
     if (slot === this._slots[0]) this._syncCanvas(slot);
     this._buildIndex(slot);
     const controls = el._controls;
@@ -616,6 +623,40 @@ export class Floor3dxRoomsCard extends HTMLElement {
       `<button data-action="dl-weather" aria-pressed="${weather && this._weatherOn}"${weather ? '' : ' disabled title="No weather entity in daylight"'}>${chk(weather && this._weatherOn)}<span>Follow the weather</span></button>` +
       `<button data-action="dl-time" data-i="12" aria-pressed="${this._fixedHour === 12}">${chk(this._fixedHour === 12)}<span>Fix the time: noon</span></button>` +
       `<button data-action="dl-time" data-i="0" aria-pressed="${this._fixedHour === 0}">${chk(this._fixedHour === 0)}<span>Fix the time: midnight</span></button></div>`;
+  }
+  /** The camera button's long-press menu: straight verticals (two-point perspective) and the lens. */
+  private _cameraMenu(): string {
+    const cur = this._projectionNow();
+    const chk = (on: boolean) => `<span class="chk">${on ? '✓' : ''}</span>`;
+    const lens = [[35, 'Narrow'], [45, 'Normal'], [60, 'Wide']] as [number, string][];
+    return `<div class="list" role="menu"><div class="group">Camera</div>` +
+      `<button data-action="cam-two" aria-pressed="${cur.projection === 'two_point'}">${chk(cur.projection === 'two_point')}<span>Straight verticals</span></button>` +
+      `<div class="group">Lens</div>` +
+      lens.map(([f, l]) => `<button data-action="cam-fov" data-i="${f}" aria-pressed="${cur.fov === f}">${chk(cur.fov === f)}<span>${l} (${f}°)</span></button>`).join('') + `</div>`;
+  }
+  /** The perspective and lens in force: the viewer's choice, else the first model's configuration. */
+  private _projectionNow(): { projection: string; fov: number } {
+    const base = this._slots.find((s) => s.el?.projectionState)?.el.projectionState() || { projection: 'three_point', fov: 45 };
+    return { projection: this._twoPoint === null ? base.projection : this._twoPoint ? 'two_point' : 'three_point', fov: this._fov === null ? base.fov : this._fov };
+  }
+  private _applyProjection(slot: Slot): void {
+    if (!slot.el?.setProjection || (this._twoPoint === null && this._fov === null)) return;
+    const next: any = {};
+    if (this._twoPoint !== null) next.projection = this._twoPoint ? 'two_point' : 'three_point';
+    if (this._fov !== null) next.fov = this._fov;
+    slot.el.setProjection(next);
+  }
+  private _setTwoPoint(on: boolean): void {
+    this._twoPoint = on;
+    this._slots.forEach((s) => this._applyProjection(s));
+    try { localStorage.setItem(this._storeKey('two_point'), on ? 'on' : 'off'); } catch (_) { /* private mode */ }
+    this._needleSoon(); this._movePins(0); this._request();
+  }
+  private _setFov(fov: number): void {
+    this._fov = fov;
+    this._slots.forEach((s) => this._applyProjection(s));
+    try { localStorage.setItem(this._storeKey('fov'), String(fov)); } catch (_) { /* private mode */ }
+    this._movePins(0); this._request();
   }
   private _setWeather(on: boolean): void {
     this._weatherOn = on;
@@ -993,12 +1034,13 @@ export class Floor3dxRoomsCard extends HTMLElement {
     this.classList.toggle('models', many);
     const switcher = many ? `<div class="seg" role="group" aria-label="Model">${this._slots.map((s) => `<button data-action="model" data-model="${esc(s.id)}" aria-pressed="${this._active === s.id}">${esc(s.name)}</button>`).join('')}<button data-action="model" data-model="${ALL}" aria-pressed="${this._active === ALL}">${this._slots.length === 2 ? 'Both' : 'All'}</button></div>` : '';
     const views = this._views();
-    const reset = hasModel ? (views ? `<button data-action="views" aria-pressed="${this._viewsOpen}" aria-label="Views" title="Views">${icon('mdi:camera-outline')}</button>` : `<button data-action="reset" aria-label="Reset view" title="Reset view">${icon('mdi:camera-flip-outline')}</button>`) : '';
+    const reset = hasModel ? (views ? `<button data-action="views" aria-pressed="${this._viewsOpen}" aria-label="Views" title="Views · hold for perspective and lens">${icon('mdi:camera-outline')}</button>` : `<button data-action="reset" aria-label="Reset view" title="Reset view · hold for perspective and lens">${icon('mdi:camera-flip-outline')}</button>`) : '';
     const dl = this._daylightButton();
     const menu = rooms.length || hasModel ? `<div class="menu">${switcher}${dl}${reset}${rooms.length ? `<button data-action="list" aria-pressed="${this._listOpen}" aria-label="Rooms">${icon('mdi:floor-plan')}<span>Rooms</span></button>` : ''}</div>` : '';
     const roomButton = (r: Room) => { const n = this._activeCount(r); return `<button data-action="room" data-room="${esc(r.id)}" aria-pressed="${r.id === this._room}">${icon(r.icon || 'mdi:door-open')}<span>${esc(this._roomName(r))}</span><span class="n">${n ? `${n} on` : ''}</span></button>`; };
     const list = this._listOpen ? `<div class="list" role="menu">${this._slots.length > 1 ? this._slots.map((s) => { const rs = this._slotRooms(s); return rs.length ? `<div class="group">${esc(s.name)}</div>${rs.map(roomButton).join('')}` : ''; }).join('') : rooms.map(roomButton).join('')}</div>`
       : this._dlMenu ? this._daylightMenu()
+      : this._camMenu ? this._cameraMenu()
       : this._viewsOpen && views ? `<div class="list" role="menu"><button data-action="reset">${icon('mdi:camera-flip-outline')}<span>Reset view</span></button>${views.views.map((v, i) => `<button data-action="view" data-i="${i}">${icon('mdi:magnify-expand')}<span>${esc(String(v.name || `View ${i + 1}`))}</span></button>`).join('')}</div>` : '';
     const pins = c.pins !== false && c.pins !== 'no' ? `<div class="pins">${rooms.filter((r) => (r.floors || []).length).map((r) => { const n = this._activeCount(r); return `<button class="pin ${n ? 'on' : ''} ${r.id === this._hover ? 'hover' : ''}" hidden data-action="room" data-room="${esc(r.id)}" aria-pressed="${r.id === this._room}" aria-label="${esc(this._roomName(r))}${n ? `, ${n} on` : ''}">${icon(r.icon || 'mdi:door-open')}<span class="pn">${esc(this._roomName(r))}</span>${n ? `<span class="count" aria-hidden="true">${n}</span>` : ''}</button>`; }).join('')}</div>` : '';
     const panel = room ? this._panel(room) : '';
@@ -1073,9 +1115,12 @@ export class Floor3dxRoomsCard extends HTMLElement {
     if (action === 'close') { this._select(null); return; }
     if (action === 'readouts') { this._readoutsFold = !this._readoutsOpen(); try { localStorage.setItem(this._storeKey('readouts'), this._readoutsFold ? 'open' : 'closed'); } catch (_) { /* private mode */ } this._request(); return; }
     this._dlMenu = this._dlMenu && action !== 'list' && action !== 'views' && action !== 'reset' && action !== 'model' && action !== 'room';
+    this._camMenu = this._camMenu && action !== 'list' && action !== 'daylight' && action !== 'model' && action !== 'room';
     if (action === 'list') { this._listOpen = !this._listOpen; this._viewsOpen = false; if (this._listOpen && this._room) { this._room = null; this._confirm = null; this._paintTints(); } this._request(); return; }
-    if (action === 'views') { this._viewsOpen = !this._viewsOpen; this._listOpen = false; this._request(); return; }
-    if (action === 'reset') { this._viewsOpen = false; this._resetView(); this._request(); return; }
+    if (action === 'views') { if (this._dlLong) { this._dlLong = false; return; } this._camMenu = false; this._viewsOpen = !this._viewsOpen; this._listOpen = false; this._request(); return; }
+    if (action === 'reset') { if (this._dlLong) { this._dlLong = false; return; } this._camMenu = false; this._viewsOpen = false; this._resetView(); this._request(); return; }
+    if (action === 'cam-two') { this._setTwoPoint(this._projectionNow().projection !== 'two_point'); return; }
+    if (action === 'cam-fov') { this._setFov(Number(i)); return; }
     if (action === 'daylight') { if (this._dlLong) { this._dlLong = false; return; } this._dlMenu = false; this._setDaylight(!this._daylightOn); return; }
     if (action === 'dl-weather') { this._setWeather(!this._weatherOn); return; }
     if (action === 'dl-time') { const h = Number(i); this._setFixedHour(this._fixedHour === h ? null : h); return; }
