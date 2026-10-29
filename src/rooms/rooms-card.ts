@@ -479,7 +479,13 @@ export class Floor3dxRoomsCard extends HTMLElement {
       if (!d || Math.abs(e.clientX - d.x) > 8 || Math.abs(e.clientY - d.y) > 8 || Date.now() - d.t > 500) return;
       if (slot.el?._pickMode) return; // the regular editor is picking an object on this model
       this._tap(e, slot);
+      // the window for the compatibility click starts when the panel the tap opened is on screen
+      this._tappedAt = Date.now(); requestAnimationFrame(() => { this._tappedAt = Date.now(); });
     });
+    // iOS synthesises mousedown/mouseup/click a moment after a touch ends. By then the panel the tap
+    // opened is on screen, and if it opened under the finger the click lands on its first tile and
+    // toggles that light. A handled tap keeps its compatibility mouse events to itself.
+    host.addEventListener('touchend', (e) => { if (Date.now() - this._tappedAt < 400 && e.cancelable) e.preventDefault(); }, { passive: false });
     host.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse' && !this._down) this._hoverAt(e, slot); });
     host.addEventListener('pointerleave', () => this._setHover(null));
     host.addEventListener('wheel', () => this._movePins(600), { passive: true });
@@ -1056,9 +1062,12 @@ export class Floor3dxRoomsCard extends HTMLElement {
     this._toastTimer = setTimeout(() => { this._toast = ''; this._request(); }, 5000);
     this._request();
   }
+  private _tappedAt = 0;
   private _click(ev: Event): void {
     const b = (ev.target as HTMLElement).closest('button[data-action]') as HTMLButtonElement | null;
     if (!b || b.disabled) return;
+    // a click that arrives right after a tap on the model is that tap's compatibility event, not a choice
+    if (Date.now() - this._tappedAt < 400) return;
     const { action, entity: id = '', room, model, i } = b.dataset as any;
     if (action === 'room') { this._listOpen = false; this._select(room === this._room ? null : room); return; }
     if (action === 'close') { this._select(null); return; }

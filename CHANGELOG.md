@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.13.2
+
+### Fixed
+- Rooms Card on iOS: a tap on a room that opened its panel under the finger also pressed the panel's first tile (the dining room's ceiling bulbs, the kitchen's sink light came on). Safari fires the compatibility mouse click after the touch, when the panel is already on screen. A handled tap now cancels its compatibility events, and a panel click that follows a tap at once is ignored. Harness: `test_touch_tap.py`.
+
 ## 2.13.1
 
 ### Fixed
