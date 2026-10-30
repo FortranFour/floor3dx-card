@@ -160,14 +160,51 @@ export class Floor3dCard extends LitElement {
   private _twoPoint: { refresh: () => void; release: () => void } | null = null;
   /** The lens and perspective in force. */
   public projectionState(): ProjectionSettings { return this._projection || projectionSettings(this._config); }
+  private _orthoHalf = 500; // the orthographic frustum's half height at zoom 1 (model units)
+  /** Orthographic: the frustum follows the canvas's aspect; the scale is the half height times the zoom. */
+  private _syncOrtho(): void {
+    const cam: any = this._camera; if (!cam || !cam.isOrthographicCamera) return;
+    const aspect = this._renderer && this._renderer.domElement.parentElement ? Math.max(0.1, this._renderer.domElement.parentElement.clientWidth / Math.max(1, this._renderer.domElement.parentElement.clientHeight)) : 1;
+    cam.top = this._orthoHalf; cam.bottom = -this._orthoHalf; cam.left = -this._orthoHalf * aspect; cam.right = this._orthoHalf * aspect;
+    cam.updateProjectionMatrix();
+  }
+  /** Replace the camera with one of the other kind at the same place, framing the same view: orthographic
+   *  takes the perspective's visible half height at the target as its own; perspective moves to the distance
+   *  that shows the orthographic frame at its zoom. The controls, lights and effects follow. */
+  private _swapCamera(toOrtho: boolean, fov: number): void {
+    const old: any = this._camera; if (!old) return;
+    const target = this._controls ? this._controls.target.clone() : new THREE.Vector3();
+    const d = old.position.distanceTo(target);
+    let cam: any;
+    if (toOrtho) {
+      this._orthoHalf = d * Math.tan(THREE.MathUtils.degToRad((old.fov || fov) / 2));
+      cam = new THREE.OrthographicCamera(-1, 1, 1, -1, old.near, old.far);
+    } else {
+      cam = new THREE.PerspectiveCamera(fov, 1, old.near, old.far);
+      // the orthographic frame at its zoom, seen from the distance a lens of this fov needs
+      const half = this._orthoHalf / (old.zoom || 1);
+      const dist = half / Math.tan(THREE.MathUtils.degToRad(fov / 2));
+      const dir = old.position.clone().sub(target).normalize();
+      old.position.copy(target).add(dir.multiplyScalar(dist));
+    }
+    cam.position.copy(old.position); cam.quaternion.copy(old.quaternion); cam.up.copy(old.up);
+    this._twoPoint?.release(); this._twoPoint = null;
+    this._camera = cam;
+    if (this._controls) { (this._controls as any).object = cam; this._controls.update(); }
+    if (this._fx) { this._fx.dispose(); this._fx = undefined; } // the pipeline holds the camera
+    if (cam.isPerspectiveCamera) { cam.aspect = this._lastResizeW && this._lastResizeH ? this._lastResizeW / this._lastResizeH : 1; cam.updateProjectionMatrix(); } else this._syncOrtho();
+  }
   /** Change the lens or the perspective at runtime (the Rooms Card's camera menu); the configuration is
    *  untouched. A new field of view moves the camera along its line of sight so the framing stays. */
   public setProjection(next: Partial<ProjectionSettings>): ProjectionSettings {
     const cur = this.projectionState();
     const fov = Number.isFinite(next.fov) && (next.fov as number) >= 10 && (next.fov as number) <= 120 ? (next.fov as number) : cur.fov;
-    const projection: Projection = next.projection === 'two_point' || next.projection === 'three_point' ? next.projection : cur.projection;
+    const projection: Projection = next.projection === 'two_point' || next.projection === 'three_point' || next.projection === 'orthographic' ? next.projection : cur.projection;
     this._projection = { projection, fov };
     if (!this._camera) return this._projection;
+    const isOrtho = !!(this._camera as any).isOrthographicCamera;
+    if ((projection === 'orthographic') !== isOrtho) this._swapCamera(projection === 'orthographic', fov);
+    if ((this._camera as any).isOrthographicCamera) { this._twoPoint?.release(); this._twoPoint = null; this._syncOrtho(); this._requestRender('projection'); return this._projection; }
     if (fov !== this._camera.fov) {
       const target = this._controls ? this._controls.target : new THREE.Vector3();
       const d = this._camera.position.clone().sub(target);
@@ -1539,8 +1576,7 @@ export class Floor3dCard extends LitElement {
     this._lastResizeW = w;
     this._lastResizeH = h;
 
-    this._camera.aspect = w / h;
-    this._camera.updateProjectionMatrix();
+    if ((this._camera as any).isOrthographicCamera) this._syncOrtho(); else { this._camera.aspect = w / h; this._camera.updateProjectionMatrix(); }
     this._renderer.setSize(
       w,
       h,
@@ -2590,7 +2626,7 @@ export class Floor3dCard extends LitElement {
     // range in 24 bits); `depth_buffer: log | linear` forces either.
     const linearDepth = this._linearDepth();
     const proj = this._projection || (this._projection = projectionSettings(this._config));
-    this._camera = new THREE.PerspectiveCamera(proj.fov, 1, linearDepth ? 1 : 0.1, 10000);
+    this._camera = proj.projection === 'orthographic' ? (new THREE.OrthographicCamera(-1, 1, 1, -1, linearDepth ? 1 : 0.1, 10000) as any) : new THREE.PerspectiveCamera(proj.fov, 1, linearDepth ? 1 : 0.1, 10000);
     this._twoPoint?.release(); this._twoPoint = null;
     if (proj.projection === 'two_point') this._twoPoint = installTwoPoint(this._camera);
 
@@ -3550,6 +3586,12 @@ export class Floor3dCard extends LitElement {
       );
     } else {
       this._camera.lookAt(box.max.multiplyScalar(0.5));
+    }
+    if ((this._camera as any).isOrthographicCamera) {
+      // the frame an orthographic camera shows: what a normal lens would see at this distance
+      const target = this._controls ? this._controls.target : box.max.clone().multiplyScalar(0.5);
+      this._orthoHalf = this._camera.position.distanceTo(target) * Math.tan(THREE.MathUtils.degToRad(this.projectionState().fov / 2));
+      this._syncOrtho();
     }
     this._camera.updateProjectionMatrix();
   }

@@ -1,5 +1,7 @@
 // The camera's projection: the lens (field of view) and, with two-point perspective, straight verticals.
 //
+// Orthographic is the plan view: no perspective at all, parallel lines stay parallel and every room is
+// the same scale; zoom is a change of scale, not of distance.
 // Three-point perspective is what a camera does: tilt it down and the walls lean inward toward the top
 // of the frame. Two-point is the architectural photographer's tilt-shift lens: the lens stays level
 // and shifts down to frame the view, so vertical lines stay vertical while depth, lighting and size
@@ -7,7 +9,7 @@
 // matrix after three.js builds it, sized so that a world-vertical direction loses its depth component.
 import * as THREE from 'three';
 
-export type Projection = 'three_point' | 'two_point';
+export type Projection = 'three_point' | 'two_point' | 'orthographic';
 
 export interface ProjectionSettings {
   projection: Projection;
@@ -25,7 +27,8 @@ export const FOV_STEPS: { fov: number; label: string }[] = [
 export function projectionSettings(config: any): ProjectionSettings {
   const p = String(config?.camera_projection || '').toLowerCase().replace(/-/g, '_');
   const f = Number(config?.camera_fov);
-  return { projection: p === 'two_point' || p === 'two' || p === '2' ? 'two_point' : 'three_point', fov: Number.isFinite(f) && f >= 10 && f <= 120 ? f : FOV_DEFAULT };
+  const projection: Projection = p === 'two_point' || p === 'two' || p === '2' ? 'two_point' : p === 'orthographic' || p === 'ortho' || p === 'flat' ? 'orthographic' : 'three_point';
+  return { projection, fov: Number.isFinite(f) && f >= 10 && f <= 120 ? f : FOV_DEFAULT };
 }
 
 const shear = new THREE.Matrix4();

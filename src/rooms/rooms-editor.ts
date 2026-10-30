@@ -9,6 +9,7 @@ import { ROOMS_EDITOR_EVENT, ROOMS_PREVIEW_EVENT } from './rooms-card';
 import { tokenRoles } from './references';
 import { scanDashboards, FoundCard } from './scan';
 import { normalizeConfig, cleanConfig } from '../config';
+import { loadHaYamlEditor } from '../helpers';
 
 const clone = (v: any) => JSON.parse(JSON.stringify(v ?? null));
 const ENTITY_DOMAINS = /^(light|switch|fan|cover|climate|media_player|lock|input_boolean|scene|script|sensor|binary_sensor|remote|button|input_button|vacuum|humidifier|valve|water_heater|alarm_control_panel)\./;
@@ -81,6 +82,8 @@ class Floor3dxRoomsCardEditor extends HTMLElement {
   private _editing: number | null = null; // the model whose 3D settings are open in the regular card's editor, inline
   private _inline: any = null; // that editor element (kept across re-renders)
   private _inlineHeld = ''; // the JSON it last emitted, so its own change is not fed back
+  private _inlineCode = false; // the inline editor shows the YAML code editor instead of the form
+  private _inlineYaml: any = null; // that ha-yaml-editor element
   private _busy: string | null = null;
   private _msg: Record<string, [string, string]> = {};
   private _objects = new Map<string, { floors: string[]; all: string[] }>(); // by model id
@@ -163,6 +166,9 @@ ${this._section('display', '4 · Display', '', '', this._displaySection())}`;
     const i = this._editing, host = i === null ? null : (this.shadowRoot!.querySelector(`[data-inline="${i}"]`) as HTMLElement | null);
     if (i === null || !host) { if (this._inline) { this._inline.remove(); this._inline = null; } window.dispatchEvent(new CustomEvent(ROOMS_EDITOR_EVENT, { detail: { request: 'edit-model', model: null } })); return; }
     const m = this._models()[i]; if (!m?.card) return;
+    const slot = (host.querySelector('.inlinehost') as HTMLElement) || host;
+    if (this._inlineCode) { this._mountInlineYaml(i, m, slot); window.dispatchEvent(new CustomEvent(ROOMS_EDITOR_EVENT, { detail: { request: 'edit-model', model: m.id } })); return; }
+    if (this._inlineYaml) { this._inlineYaml.remove(); this._inlineYaml = null; }
     if (!customElements.get('floor3dpro-card-editor')) {
       // the regular editor is a lazy chunk, loaded when a regular card's editor opens; load it now
       host.innerHTML += '<p class="note">Loading the editor…</p>';
@@ -185,8 +191,33 @@ ${this._section('display', '4 · Display', '', '', this._displaySection())}`;
     if (this._hass) this._inline.hass = this._hass;
     const withType = { type: 'custom:floor3dx-card', ...m.card };
     if (JSON.stringify(withType) !== this._inlineHeld) { this._inlineHeld = ''; this._inline.setConfig(withType); }
-    if (this._inline.parentElement !== host) host.appendChild(this._inline);
+    if (this._inline.parentElement !== slot) slot.appendChild(this._inline);
     window.dispatchEvent(new CustomEvent(ROOMS_EDITOR_EVENT, { detail: { request: 'edit-model', model: m.id } }));
+  }
+  /** The code view of the inline editor: Home Assistant's YAML editor on the model's block, written back
+   *  through the same minimal write as the form, so a hand edit touches only the keys it changed. */
+  private _mountInlineYaml(i: number, m: any, slot: HTMLElement): void {
+    if (this._inline) { this._inline.remove(); this._inline = null; }
+    if (!customElements.get('ha-yaml-editor')) {
+      slot.innerHTML = '<p class="note">Loading the code editor…</p>';
+      loadHaYamlEditor().then(() => { if (this._editing === i && this._inlineCode) this._mountInline(); }).catch(() => { slot.innerHTML = '<p class="note warn">The code editor could not be loaded.</p>'; });
+      return;
+    }
+    if (!this._inlineYaml) {
+      const el: any = document.createElement('ha-yaml-editor');
+      el.addEventListener('value-changed', (ev: Event) => {
+        ev.stopPropagation();
+        const d = (ev as CustomEvent).detail || {}; if (!d.isValid || !d.value || typeof d.value !== 'object') return;
+        const list = this._models(); if (!list[i]) return;
+        const card = { ...d.value }; delete card.type;
+        this._inlineHeld = JSON.stringify(card);
+        list[i].card = minimalWrite(list[i].card, card); this._setModels(list); this._emit();
+      });
+      this._inlineYaml = el;
+    }
+    if (this._hass) this._inlineYaml.hass = this._hass;
+    if (JSON.stringify(m.card) !== this._inlineHeld) { this._inlineHeld = ''; this._inlineYaml.defaultValue = m.card; }
+    if (this._inlineYaml.parentElement !== slot) { slot.innerHTML = ''; slot.appendChild(this._inlineYaml); }
   }
   private _section(id: string, title: string, badge: string, badgeClass: string, body: string): string {
     return `<details data-section="${id}" ${this._open[id] ? 'open' : ''}><summary>${title}<span class="badge ${badgeClass}">${esc(badge)}</span></summary><div class="body">${body}</div></details>`;
@@ -196,7 +227,7 @@ ${this._section('display', '4 · Display', '', '', this._displaySection())}`;
     const target = models[Math.min(this._target, models.length - 1)];
     const modelItem = (m: ModelItem, i: number) => `<div class="item">
 ${many ? `<div class="row"><label>Name<input type="text" data-model-field="name" data-i="${i}" value="${esc(m.name)}" data-key="mn${i}"></label><label>Width share (blank: equal)<input type="number" min="1" max="99" data-model-field="width" data-i="${i}" value="${esc(m.width ?? '')}" placeholder="50" data-key="mw${i}"></label></div>` : ''}
-<div class="row">${m.card?.objfile ? `<span class="note" style="flex:1">Model: <code>${esc((m.card.path || '') + m.card.objfile)}</code> · ${(m.card.entities || []).length} entity rows${tokenRoles(m.card).length ? ` · ${tokenRoles(m.card).length} reference token${tokenRoles(m.card).length === 1 ? '' : 's'}` : ''}</span>` : `<span class="note warn" style="flex:1">No card yet: find one below and press Use.</span>`}${m.card?.objfile ? `<button data-act="model-edit" data-i="${i}" aria-pressed="${this._editing === i}">${this._editing === i ? 'Done with 3D settings' : 'Edit 3D settings'}</button>` : ''}${many ? `<button class="icon" data-act="model-remove" data-i="${i}">Remove</button>` : ''}</div>${this._editing === i ? `<div class="inline" data-inline="${i}"><p class="note">The regular floor3dx card's editor, on this model's block: lamps, daylight, doors, text panels, the look. The preview is this model in the rooms card; <em>pick</em> an object by tapping it there.</p></div>` : ''}</div>`;
+<div class="row">${m.card?.objfile ? `<span class="note" style="flex:1">Model: <code>${esc((m.card.path || '') + m.card.objfile)}</code> · ${(m.card.entities || []).length} entity rows${tokenRoles(m.card).length ? ` · ${tokenRoles(m.card).length} reference token${tokenRoles(m.card).length === 1 ? '' : 's'}` : ''}</span>` : `<span class="note warn" style="flex:1">No card yet: find one below and press Use.</span>`}${m.card?.objfile ? `<button data-act="model-edit" data-i="${i}" aria-pressed="${this._editing === i}">${this._editing === i ? 'Done with 3D settings' : 'Edit 3D settings'}</button>` : ''}${many ? `<button class="icon" data-act="model-remove" data-i="${i}">Remove</button>` : ''}</div>${this._editing === i ? `<div class="inline" data-inline="${i}"><div class="row" style="justify-content:space-between;align-items:center"><p class="note" style="flex:1;margin:0">The regular floor3dx card's editor, on this model's block: lamps, daylight, doors, text panels, the look. The preview is this model in the rooms card; <em>pick</em> an object by tapping it there.</p><button class="icon" data-act="model-code" data-i="${i}" aria-pressed="${this._inlineCode}">${this._inlineCode ? 'Show visual editor' : 'Show code editor'}</button></div><div class="inlinehost"></div></div>` : ''}</div>`;
     return `<p class="note">The rooms card shows the live 3D model of an existing floor3dx-card (or floor3d-card / floor3dpro-card), with all of that card's lights, text frames, pictures, doors and shades. Pick the card; its configuration is copied in here and the two cards stay independent afterwards. A second model (a garage) gets its own view and a switcher on the card.</p>
 ${models.map(modelItem).join('')}
 <div class="row"><button data-act="scan" ${this._scanning ? 'disabled' : ''}>${this._scanning ? 'Searching dashboards…' : 'Find floor3d cards in my dashboards'}</button><button data-act="model-add">Add another model</button>${many ? `<label>Found cards go to<select id="model-target" data-key="mt">${models.map((m, i) => `<option value="${i}" ${i === this._target ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}</select></label>` : ''}</div>
@@ -339,6 +370,7 @@ ${many ? `<div class="row">${sel('default_model', 'Opens on', [['', esc(this._mo
       return;
     }
     if (act === 'model-edit') { this._editing = this._editing === i ? null : i; this._render(); return; }
+    if (act === 'model-code') { this._inlineCode = !this._inlineCode; this._inlineHeld = ''; this._render(); return; }
     if (act === 'model-add') {
       const list = this._models(); const n = list.length + 1;
       list.push({ id: slug(`model-${n}`, new Set(list.map((m) => m.id))), name: `Model ${n}`, card: undefined });

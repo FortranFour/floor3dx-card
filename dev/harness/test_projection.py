@@ -31,7 +31,20 @@ JS = r"""async () => {
   const p = centre.clone().project(c._camera); const W = c._content.clientWidth, H = c._content.clientHeight;
   const hits = c._getintersect({offsetX: (p.x + 1) / 2 * W, offsetY: (1 - p.y) / 2 * H});
   out.pick = {want: mesh.name, got: hits[0]?.object?.name, n: hits.length};
-  c.setProjection({projection: 'three_point'});
+  // orthographic: parallel edges stay parallel, equal lengths stay equal whatever the depth; picking works; back to perspective keeps the frame
+  c.setProjection({projection: 'orthographic'}); c._render();
+  out.ortho = {isOrtho: !!c._camera.isOrthographicCamera, state: c.projectionState()};
+  const P = (v) => v.clone().project(c._camera);
+  const sz = c._renderer.domElement;
+  const near = P(lo), nearTop = P(hi); // the tall edge
+  const far = lo.clone(); far.x += 600; const farTop = hi.clone(); farTop.x += 600; const a2 = P(far), b2 = P(farTop); // an equal vertical far from it
+  out.ortho.lenNear = Math.hypot((nearTop.x - near.x) * sz.width / 2, (nearTop.y - near.y) * sz.height / 2);
+  out.ortho.lenFar = Math.hypot((b2.x - a2.x) * sz.width / 2, (b2.y - a2.y) * sz.height / 2);
+  const pO = centre.clone().project(c._camera); const hitsO = c._getintersect({offsetX: (pO.x + 1) / 2 * W, offsetY: (1 - pO.y) / 2 * H});
+  out.ortho.pick = hitsO[0]?.object?.name;
+  const spanO = len();
+  c.setProjection({projection: 'three_point'}); c._render();
+  out.ortho.back = {isPersp: !!c._camera.isPerspectiveCamera, span: +len().toFixed(1), spanOrtho: +spanO.toFixed(1)};
   // the Rooms Card: the camera menu applies to both models and is remembered
   const card = Object.assign({}, c._config, {entities: [], object_groups: []}); delete card.style; delete card.type; delete card.look; delete card.daylight;
   const hass = {states: {}, language: 'en', themes: {}, config: {}, user: {}, callService() { return Promise.resolve(); }};
@@ -43,9 +56,13 @@ JS = r"""async () => {
   el.shadowRoot.querySelector('button[data-action="cam-two"]').click(); await sleep(100);
   el.shadowRoot.querySelector('button[data-action="cam-fov"][data-i="35"]').click(); await sleep(100);
   out.applied = el._slots.map(s => s.el.projectionState());
+  el.shadowRoot.querySelector('button[data-action="cam-flat"]').click(); await sleep(150);
+  out.flat = el._slots.map(s => ({p: s.el.projectionState().projection, ortho: !!s.el._camera.isOrthographicCamera}));
+  out.lensDisabled = el.shadowRoot.querySelector('button[data-action="cam-fov"]').disabled;
+  el.shadowRoot.querySelector('button[data-action="cam-two"]').click(); await sleep(150);
   d.remove();
   ({el, d} = await mk()); out.remembered = el._slots.map(s => s.el.projectionState()); d.remove();
-  try { localStorage.removeItem(el._storeKey('two_point')); localStorage.removeItem(el._storeKey('fov')); } catch (_) {}
+  try { localStorage.removeItem(el._storeKey('projection')); localStorage.removeItem(el._storeKey('two_point')); localStorage.removeItem(el._storeKey('fov')); } catch (_) {}
   return out;
 }"""
 
@@ -67,8 +84,13 @@ if __name__ == '__main__':
     check('a lens change keeps the framing: a span at the target keeps its screen size within 3%', abs(L.get('l25', 0) - L.get('l45', 1)) < 0.03 * L.get('l45', 1) and abs(L.get('l60', 0) - L.get('l45', 1)) < 0.03 * L.get('l45', 1))
     check('a narrower lens moved the camera back, a wider one forward', L.get('d25', 0) > L.get('d60', 1))
     check('picking under two-point hits what is under the pointer', r.get('pick', {}).get('got') == r.get('pick', {}).get('want'))
+    O = r.get('ortho', {})
+    check('orthographic: the camera is orthographic and equal verticals near and far have the same screen length', O.get('isOrtho') and O.get('state', {}).get('projection') == 'orthographic' and abs(O.get('lenNear', 0) - O.get('lenFar', 1)) < 0.02 * max(1, O.get('lenNear', 1)))
+    check('orthographic: picking hits what is under the pointer', O.get('pick') == r.get('pick', {}).get('want'))
+    check('back to perspective: a perspective camera again, the span at the target kept within 5%', O.get('back', {}).get('isPersp') and abs(O.get('back', {}).get('span', 0) - O.get('back', {}).get('spanOrtho', 1)) < 0.05 * O.get('back', {}).get('spanOrtho', 1))
     check('long press on the camera button opens the menu', r.get('menu') is True)
     check('the menu applies two-point and the 35° lens to every model', all(p.get('projection') == 'two_point' and p.get('fov') == 35 for p in r.get('applied', [])) and len(r.get('applied', [])) == 2)
+    check('Flat view makes every model orthographic and greys the lens rows', all(x.get('p') == 'orthographic' and x.get('ortho') for x in r.get('flat', [])) and r.get('lensDisabled') is True)
     check('the choice is remembered by a new card in this browser', all(p.get('projection') == 'two_point' and p.get('fov') == 35 for p in r.get('remembered', [])))
     check('no page errors', not errors)
     for e in errors[:5]: print('  error:', e[:300])

@@ -170,7 +170,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
   private _dlPress = 0; // its timer
   private _dlLong = false; // the click after a long-press is swallowed
   private _camMenu = false; // the camera button's long-press menu: perspective and lens
-  private _twoPoint: boolean | null = null; // the viewer's choice this browser (null: the models' own)
+  private _proj: string | null = null; // the viewer's perspective choice this browser (null: the models' own)
   private _fov: number | null = null;
   private _needleQueued = false;
   private _focus: string | null = null; // an entity whose tile is highlighted (object_tap: panel)
@@ -270,7 +270,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
     }
     if (defs.length <= 1) this._active = ALL;
     this._fresh = !this._slots.length;
-    if (!this._slots.length) { try { this._daylightOn = localStorage.getItem(this._storeKey('daylight')) !== 'off'; this._weatherOn = localStorage.getItem(this._storeKey('weather')) !== 'off'; const f = localStorage.getItem(this._storeKey('readouts')); if (f === 'open' || f === 'closed') this._readoutsFold = f === 'open'; const tp = localStorage.getItem(this._storeKey('two_point')); if (tp === 'on' || tp === 'off') this._twoPoint = tp === 'on'; const fv = Number(localStorage.getItem(this._storeKey('fov'))); if (fv >= 10 && fv <= 120) this._fov = fv; } catch (_) { /* private mode */ } }
+    if (!this._slots.length) { try { this._daylightOn = localStorage.getItem(this._storeKey('daylight')) !== 'off'; this._weatherOn = localStorage.getItem(this._storeKey('weather')) !== 'off'; const f = localStorage.getItem(this._storeKey('readouts')); if (f === 'open' || f === 'closed') this._readoutsFold = f === 'open'; const pj = localStorage.getItem(this._storeKey('projection')) || ({ on: 'two_point', off: 'three_point' } as any)[localStorage.getItem(this._storeKey('two_point')) || '']; if (pj === 'three_point' || pj === 'two_point' || pj === 'orthographic') this._proj = pj; const fv = Number(localStorage.getItem(this._storeKey('fov'))); if (fv >= 10 && fv <= 120) this._fov = fv; } catch (_) { /* private mode */ } }
     this._applyTheme();
     this._mountModels();
     this._syncTemplates();
@@ -629,27 +629,29 @@ export class Floor3dxRoomsCard extends HTMLElement {
     const cur = this._projectionNow();
     const chk = (on: boolean) => `<span class="chk">${on ? '✓' : ''}</span>`;
     const lens = [[35, 'Narrow'], [45, 'Normal'], [60, 'Wide']] as [number, string][];
+    const flat = cur.projection === 'orthographic';
     return `<div class="list" role="menu"><div class="group">Camera</div>` +
       `<button data-action="cam-two" aria-pressed="${cur.projection === 'two_point'}">${chk(cur.projection === 'two_point')}<span>Straight verticals</span></button>` +
+      `<button data-action="cam-flat" aria-pressed="${flat}">${chk(flat)}<span>Flat view (no perspective)</span></button>` +
       `<div class="group">Lens</div>` +
-      lens.map(([f, l]) => `<button data-action="cam-fov" data-i="${f}" aria-pressed="${cur.fov === f}">${chk(cur.fov === f)}<span>${l} (${f}°)</span></button>`).join('') + `</div>`;
+      lens.map(([f, l]) => `<button data-action="cam-fov" data-i="${f}" aria-pressed="${!flat && cur.fov === f}"${flat ? ' disabled title="No lens in the flat view"' : ''}>${chk(!flat && cur.fov === f)}<span>${l} (${f}°)</span></button>`).join('') + `</div>`;
   }
   /** The perspective and lens in force: the viewer's choice, else the first model's configuration. */
   private _projectionNow(): { projection: string; fov: number } {
     const base = this._slots.find((s) => s.el?.projectionState)?.el.projectionState() || { projection: 'three_point', fov: 45 };
-    return { projection: this._twoPoint === null ? base.projection : this._twoPoint ? 'two_point' : 'three_point', fov: this._fov === null ? base.fov : this._fov };
+    return { projection: this._proj === null ? base.projection : this._proj, fov: this._fov === null ? base.fov : this._fov };
   }
   private _applyProjection(slot: Slot): void {
-    if (!slot.el?.setProjection || (this._twoPoint === null && this._fov === null)) return;
+    if (!slot.el?.setProjection || (this._proj === null && this._fov === null)) return;
     const next: any = {};
-    if (this._twoPoint !== null) next.projection = this._twoPoint ? 'two_point' : 'three_point';
+    if (this._proj !== null) next.projection = this._proj;
     if (this._fov !== null) next.fov = this._fov;
     slot.el.setProjection(next);
   }
-  private _setTwoPoint(on: boolean): void {
-    this._twoPoint = on;
+  private _setProjection(p: string): void {
+    this._proj = p;
     this._slots.forEach((s) => this._applyProjection(s));
-    try { localStorage.setItem(this._storeKey('two_point'), on ? 'on' : 'off'); } catch (_) { /* private mode */ }
+    try { localStorage.setItem(this._storeKey('projection'), p); localStorage.removeItem(this._storeKey('two_point')); } catch (_) { /* private mode */ }
     this._needleSoon(); this._movePins(0); this._request();
   }
   private _setFov(fov: number): void {
@@ -1119,7 +1121,8 @@ export class Floor3dxRoomsCard extends HTMLElement {
     if (action === 'list') { this._listOpen = !this._listOpen; this._viewsOpen = false; if (this._listOpen && this._room) { this._room = null; this._confirm = null; this._paintTints(); } this._request(); return; }
     if (action === 'views') { if (this._dlLong) { this._dlLong = false; return; } this._camMenu = false; this._viewsOpen = !this._viewsOpen; this._listOpen = false; this._request(); return; }
     if (action === 'reset') { if (this._dlLong) { this._dlLong = false; return; } this._camMenu = false; this._viewsOpen = false; this._resetView(); this._request(); return; }
-    if (action === 'cam-two') { this._setTwoPoint(this._projectionNow().projection !== 'two_point'); return; }
+    if (action === 'cam-two') { this._setProjection(this._projectionNow().projection === 'two_point' ? 'three_point' : 'two_point'); return; }
+    if (action === 'cam-flat') { this._setProjection(this._projectionNow().projection === 'orthographic' ? 'three_point' : 'orthographic'); return; }
     if (action === 'cam-fov') { this._setFov(Number(i)); return; }
     if (action === 'daylight') { if (this._dlLong) { this._dlLong = false; return; } this._dlMenu = false; this._setDaylight(!this._daylightOn); return; }
     if (action === 'dl-weather') { this._setWeather(!this._weatherOn); return; }

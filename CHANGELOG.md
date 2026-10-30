@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.15.0
+
+### Added
+- `camera_projection: orthographic` — the plan view: no perspective, parallel walls stay parallel, every room the same scale; zoom is a change of scale. Switching at runtime keeps the framing both ways (the orthographic frame is what the lens saw at that distance). The lens and the rendering effects do not apply to it. Rooms Card: **Flat view** in the camera button's long-press menu, kept per browser with the other choices; the lens rows grey out in the flat view.
+- Rooms Card editor: the inline *Edit 3D settings* editor has **Show code editor** / **Show visual editor** — Home Assistant's YAML editor on the model's block, written back through the same minimal write as the form. Harness: `test_projection.py` (orthographic), `test_inline_editor.py` (code view).
+
 ## 2.14.0
 
 ### Added

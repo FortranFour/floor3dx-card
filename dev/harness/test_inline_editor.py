@@ -44,6 +44,23 @@ JS = r"""async () => {
   out.emitted = emitted.length; out.written = last ? {glp: last.models[1].card.globalLightPower, hasType: 'type' in last.models[1].card, houseUntouched: last.models[0].card.globalLightPower === card.globalLightPower, title: last.title} : null;
   // the inline editor survives the re-render and is the same element
   out.sameElement = root.querySelector('[data-inline="1"] floor3dx-card-editor') === inline;
+  // the code view: a stand-in for Home Assistant's ha-yaml-editor (defaultValue in, value-changed out)
+  if (!customElements.get('ha-yaml-editor')) customElements.define('ha-yaml-editor', class extends HTMLElement { set defaultValue(v) { this._v = v; this.textContent = JSON.stringify(v).slice(0, 40); } get defaultValue() { return this._v; } });
+  root.querySelector('[data-act="model-code"]').click(); await sleep(300);
+  const yamlEd = root.querySelector('[data-inline="1"] ha-yaml-editor');
+  out.code = {shown: !!yamlEd, formGone: !root.querySelector('[data-inline="1"] floor3dx-card-editor'), hasBlock: !!(yamlEd && yamlEd.defaultValue && yamlEd.defaultValue.objfile), noType: !!(yamlEd && yamlEd.defaultValue && !('type' in yamlEd.defaultValue))};
+  // a hand edit in the code view: only the changed key is written, the rest keeps its text
+  const edited = Object.assign({}, yamlEd.defaultValue, {globalLightPower: 0.33, name: 'Edited'});
+  yamlEd.dispatchEvent(new CustomEvent('value-changed', {detail: {value: edited, isValid: true}, bubbles: true, composed: true})); await sleep(300);
+  const last2 = emitted[emitted.length - 1];
+  out.code.written = last2 ? {glp: last2.models[1].card.globalLightPower, name: last2.models[1].card.name, rows: last2.models[1].card.entities.length === card.entities.length} : null;
+  // an invalid edit is ignored
+  yamlEd.dispatchEvent(new CustomEvent('value-changed', {detail: {value: undefined, isValid: false}, bubbles: true, composed: true})); await sleep(200);
+  out.code.invalidIgnored = emitted.length === (last2 ? emitted.indexOf(last2) + 1 : 0);
+  // back to the form, with the edit in it
+  root.querySelector('[data-act="model-code"]').click(); await sleep(400);
+  const form = root.querySelector('[data-inline="1"] floor3dx-card-editor');
+  out.code.backToForm = !!form && !root.querySelector('[data-inline="1"] ha-yaml-editor') && form._config && form._config.name === 'Edited';
   // done: the inline editor goes, the preview is released
   root.querySelectorAll('[data-act="model-edit"]')[1].click(); await sleep(300);
   out.closed = !root.querySelector('floor3dx-card-editor'); out.previewAfter = el._slots.map(s => !!s.el.preview);
@@ -69,6 +86,11 @@ if __name__ == '__main__':
     check("a change lands in models[1].card without type, the other model untouched, emitted as the rooms card's config", (r.get('written') or {}).get('glp') == 0.42 and (r.get('written') or {}).get('hasType') is False and (r.get('written') or {}).get('houseUntouched') is True and (r.get('written') or {}).get('title') == 'Inline')
     check('the inline editor survives the re-render', r.get('sameElement') is True)
     check('Done closes it and releases the preview', r.get('closed') is True and r.get('previewAfter') == [False, False])
+    C = r.get('code') or {}
+    check('Show code editor swaps the form for the YAML editor on the model block (no type)', C.get('shown') and C.get('formGone') and C.get('hasBlock') and C.get('noType'))
+    check('a code edit writes only its changes and keeps the rows', (C.get('written') or {}).get('glp') == 0.33 and (C.get('written') or {}).get('name') == 'Edited' and (C.get('written') or {}).get('rows') is True)
+    check('an invalid edit is ignored', C.get('invalidIgnored') is True)
+    check('Show visual editor brings the form back with the edit in it', C.get('backToForm') is True)
     check('no page errors', not errors)
     for e in errors[:5]:
         print('  error:', e[:300])

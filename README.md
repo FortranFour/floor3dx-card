@@ -478,13 +478,18 @@ Two options in the editor's *Camera* section set how the camera draws the house;
 
 The correction is a shear folded into the projection matrix, recomputed as the camera turns; it fades out as the view goes straight down (nothing to straighten there). Picking, pins, shadows and the effects pipeline all go through the same matrix, so taps land where they look.
 
+**Orthographic** (2.15) drops perspective altogether: parallel walls stay parallel, every room is the same scale whatever its distance, pins and text panels keep one size — the floor plan as an architect draws it. Orbiting still turns the model; zooming changes the scale instead of the distance, so nothing ever clips through a wall when you come close. Switching keeps the framing (the orthographic frame is what a normal lens saw at that distance, and back again), and a saved `camera_position` still sets the view. The lens does not apply, and neither do the rendering effects (depth of field and ambient occlusion need a perspective camera; they return when you switch back). The same spot as above, orthographic, and the plan view from straight overhead:
+
+![Orthographic: parallel walls, one scale](docs/floor3dx-perspective-orthographic.jpg)
+![Orthographic from straight overhead: the floor plan](docs/floor3dx-perspective-plan.jpg)
+
 **`camera_fov`.** The lens: a narrower field of view flattens the perspective, as a long lens does, a wider one exaggerates it. Changing it keeps the framing — the camera moves along its line of sight so the point it looks at stays the same size — so a saved `camera_position` keeps its meaning. The same view at 25°, 45° and 60°:
 
 ![Telephoto, 25°](docs/floor3dx-lens-25.jpg)
 ![Normal, 45°](docs/floor3dx-lens-45.jpg)
 ![Wide, 60°](docs/floor3dx-lens-60.jpg)
 
-In the Rooms Card the viewer can switch both live: hold the camera button (*Reset view* / *Views*) for a menu with **Straight verticals** and the lens at *Narrow 35° · Normal 45° · Wide 60°*. The choice applies to every model of the card, is kept per browser (like the day & night choice), and the models' own `card:` settings are the starting point. Neither costs anything to render.
+In the Rooms Card the viewer can switch all of this live: hold the camera button (*Reset view* / *Views*) for a menu with **Straight verticals**, **Flat view** (orthographic) and the lens at *Narrow 35° · Normal 45° · Wide 60°* (greyed in the flat view). The choice applies to every model of the card, is kept per browser (like the day & night choice), and the models' own `card:` settings are the starting point. Neither costs anything to render.
 
 ### Rendering effects (2.13)
 
@@ -528,7 +533,7 @@ On a Home Assistant without `ha-form` the previous editor is shown instead. `day
 | `pixel_ratio` | `device`, `adaptive`, or a number | `device`; `adaptive` under `pro_skill: mobile` |
 | `antialias` | `yes`, `no` | `yes`; see the mobile profile above |
 | `anisotropy` | 1 to 16 | 8 |
-| `camera_projection` | `three_point` (a camera: verticals lean when the view tilts), `two_point` (verticals stay vertical) (2.14) | `three_point` |
+| `camera_projection` | `three_point` (a camera: verticals lean when the view tilts), `two_point` (verticals stay vertical) (2.14), `orthographic` (the plan view: no perspective, zoom is a change of scale) (2.15) | `three_point` |
 | `camera_fov` | the lens, degrees of vertical field of view: 25 telephoto, 35 narrow, 45 normal, 60 wide, or any number 10–120 (2.14) | 45 |
 | `light.light_object` | an object name | not set: one light per object in the group |
 | `light.follow_entity` | `yes`, `brightness`, `color`, `no` | `yes` |
@@ -694,9 +699,9 @@ When all are shown, a gap (`models_gap`), a hairline (dark on a light stage, lig
 
 ### Edit 3D settings from the Rooms Card editor (2.11)
 
-The Rooms Card keeps a *copy* of each model's regular-card configuration (`card:` or `models[].card`), so once a Rooms Card is set up the regular card's lights, camera, shadows or weather entity used to be edited only in YAML. Each model in the Rooms Card editor now has an **Edit 3D settings** button that opens the regular card's own visual editor inline, under the model, working on that copy: the same tabs (Model, Camera, Lights, Daylight, Entities…), the same *Pick from model* flow — picks land in the model shown in the card preview, which switches to the model being edited and back when you press **Done with 3D settings**. Nothing changes until you edit a field; the write-back touches only what you changed. A top-level key or an entity row whose value is the same as before keeps its original text (`'60'` stays `'60'`, a `[[entity:…]]` token stays a token, row order is kept), so the YAML diff is the edit and nothing else, and a wrapper that maps rows back to references on save sees only the rows that changed. The regular editor is loaded the first time the button is pressed, not with the card, so a dashboard does not pay for it.
+The Rooms Card keeps a *copy* of each model's regular-card configuration (`card:` or `models[].card`), so once a Rooms Card is set up the regular card's lights, camera, shadows or weather entity used to be edited only in YAML. Each model in the Rooms Card editor now has an **Edit 3D settings** button that opens the regular card's own visual editor inline, under the model, working on that copy: the same tabs (Model, Camera, Lights, Daylight, Entities…), the same *Pick from model* flow — picks land in the model shown in the card preview, which switches to the model being edited and back when you press **Done with 3D settings**. Nothing changes until you edit a field; the write-back touches only what you changed. **Show code editor** (2.15) swaps the form for Home Assistant's YAML editor on the model's block alone — the same minimal write-back applies, so a hand edit touches only the keys it changed — and **Show visual editor** brings the form back with the edit in it. A top-level key or an entity row whose value is the same as before keeps its original text (`'60'` stays `'60'`, a `[[entity:…]]` token stays a token, row order is kept), so the YAML diff is the edit and nothing else, and a wrapper that maps rows back to references on save sees only the rows that changed. The regular editor is loaded the first time the button is pressed, not with the card, so a dashboard does not pay for it.
 
-**Perspective and lens from the card** (2.14). A long press on the camera button (*Reset view*, or *Views* when the model has views) opens a menu: **Straight verticals** (two-point perspective) and the lens, *Narrow 35° · Normal 45° · Wide 60°*. See [Perspective and lens](#perspective-and-lens-214) for what they do; the choice is the viewer's, kept per browser.
+**Perspective and lens from the card** (2.14). A long press on the camera button (*Reset view*, or *Views* when the model has views) opens a menu: **Straight verticals** (two-point perspective), **Flat view** (orthographic, 2.15) and the lens, *Narrow 35° · Normal 45° · Wide 60°*. See [Perspective and lens](#perspective-and-lens-214) for what they do; the choice is the viewer's, kept per browser.
 
 ### Day & night switch (2.7)
 
