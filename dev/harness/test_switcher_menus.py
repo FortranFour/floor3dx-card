@@ -37,7 +37,7 @@ JS = r"""async (width) => {
     // tap cycles House -> Garage -> Both -> House; hold lists
     const label = () => q(el, 'button.modelbtn').textContent.trim();
     out.cycle = [label()]; for (let i = 0; i < 3; i++) { tap(q(el, 'button.modelbtn')); await sleep(200); out.cycle.push(label()); }
-    await hold('button.modelbtn'); out.modelMenu = [...el.shadowRoot.querySelectorAll('.list.modelmenu button[data-action="model"] span:last-child')].map(s => s.textContent);
+    await hold('button.modelbtn'); { const r = q(el, '.list.modelmenu').getBoundingClientRect(), h = el.getBoundingClientRect(); out.menuBox = {h: r.height, top: r.top - h.top, bottom: h.bottom - r.bottom}; } out.modelMenu = [...el.shadowRoot.querySelectorAll('.list.modelmenu button[data-action="model"] span:last-child')].map(s => s.textContent);
     el.shadowRoot.querySelector('.list.modelmenu button[data-model]:nth-of-type(2)') && el.shadowRoot.querySelectorAll('.list.modelmenu button[data-action="model"]')[1].click(); await sleep(200);
     out.chosen = label(); out.menuGone = !q(el, '.list.modelmenu');
   }
@@ -68,6 +68,7 @@ if __name__ == '__main__':
     check('… and when a room opens', p.get('camClosedByRoom') and w.get('camClosedByRoom'))
     check('… and when another menu (Rooms) opens', p.get('camClosedByList') and w.get('camClosedByList'))
     check('compact: a tap cycles House → Garage → Both → House', p.get('cycle') == ['House', 'Garage', 'Both', 'House'])
+    check('compact: the model menu is a short list above the button, not a column the height of the card', (p.get('menuBox') or {}).get('h', 999) < 200 and (p.get('menuBox') or {}).get('bottom', 0) > 40)
     check('compact: a hold lists the models and Both; choosing applies and closes', p.get('modelMenu') == ['House', 'Garage', 'Both'] and p.get('chosen') == 'Garage' and p.get('menuGone') is True)
     check('models_menu: segments / compact force either form', p.get('forcedSegments') is True and p.get('forcedCompact') is True)
     check('no page errors', not errors)

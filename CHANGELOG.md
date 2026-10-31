@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.17.2
+
+### Fixed
+- Rooms Card: the compact model button's menu stretched from under the title bar to the button on a phone (the narrow-card rule for the *Rooms* list won over its own placement). It is now a short list sitting above the button.
+
 ## 2.17.1
 
 ### Fixed

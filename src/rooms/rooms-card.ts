@@ -46,7 +46,7 @@ const STYLE = `
 :host(.compact) .stage > .models.many > .model > .caption{left:auto;right:12px}
 .modelbtn{position:absolute;z-index:3;left:12px;bottom:12px;display:inline-flex;align-items:center;gap:4px;min-height:34px;padding:0 8px 0 12px;border-radius:12px;border:1px solid var(--f3r-line);background:var(--f3r-panel);-webkit-backdrop-filter:blur(var(--f3r-blur));backdrop-filter:blur(var(--f3r-blur));font-size:13px;font-weight:500}.modelbtn ha-icon{display:flex;align-items:center;justify-content:center;width:16px;height:16px;--mdc-icon-size:16px;opacity:.7}
 :host(.narrow.open) .modelbtn{display:none}
-.list.modelmenu{right:auto;top:auto;left:12px;bottom:54px}
+.list.modelmenu,:host(.narrow.models) .list.modelmenu{right:auto;top:auto;left:12px;bottom:54px;max-height:min(60%,320px)}
 :host(.narrow.open) .stage > .models > .model > .caption{display:none}
 .stage > .models > .model ::part(card),.stage > .models > .model floor3dpro-card{display:block;width:100%;height:100%}
 .ui{position:absolute;inset:0;pointer-events:none}
