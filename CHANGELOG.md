@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.18.0
+
+### Added
+- Rooms Card: **icons in place of readout bullets.** A readout's `icon` — an `mdi:` name or a Jinja template Home Assistant renders to one, subscribed like a template readout — replaces its `·`, scaled to the text (1.25 em) and taking its colour; a result that is not an icon name falls back to the bullet. `readout_icons: yes` on the card uses each entity's own `icon` attribute where none is set. Editor: an icon field under readout entities, a box in *Display*. Harness: `test_readout_icons.py`.
+- Rooms Card: the card's **`title`, `subtitle` and `icon` take Jinja templates**, and `subtitle` may be a list of readouts (`entity` or `text`, `name`, `icon`, `break`) shown under the title with icons in place of bullets, over several lines. Harness: `test_title_readouts.py`.
+
 ## 2.17.2
 
 ### Fixed

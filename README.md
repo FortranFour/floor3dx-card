@@ -623,8 +623,10 @@ rooms:
 | `object_tap` | what a single tap on an object bound to a `light` or `gesture` row does (2.5): `action` runs it (toggle the lamp) and leaves the room alone; `panel` opens the room's panel with that entity's tile highlighted; `room` selects the room, double-tap for the action | `action` |
 | `color_control` | `swatches`, `slider` (a hue slider, white beside it unless the light has a Warmth slider), `both` (2.5); per entity, `controls: [brightness, white, slider]` | `swatches` |
 | `sensor_tiles` | `yes`: sensors and binary sensors as tiles; otherwise they are a line of readouts under the room's name (2.5) | `no` |
+| `readout_icons` | `yes`: readouts without an `icon` of their own show the entity's icon in place of the bullet (2.18) | `no` |
+| `title`, `subtitle`, `icon` | the card's title bar; each may be a Jinja template; `subtitle` may be a list of readouts (`entity` or `text`, `name`, `icon`, `break`) (2.18) | |
 | `rooms[].floors` | floor object names; a room without one is reached from the Rooms menu | |
-| `rooms[].entities[]` | `entity` (an id, or a Jinja template — see below), `name`, `icon`, `read_only`, `guest_hidden`, `break` (`yes`: a new line of readouts after this one; `rule`: a divider first), `status` (a Jinja template for a control tile's status line), `summary_only` (a door, lock or window only in the subtitle); `top_entity` (a top-down/bottom-up shade's top rail), `dimmer` (the light behind a switch), `remote`, `remote_commands`, `sources`, `controls` (`brightness`, `white`, `color`), as in the snapshot card | |
+| `rooms[].entities[]` | `entity` (an id, or a Jinja template — see below), `name`, `icon` (a tile's icon; on a readout, the icon in place of its bullet — a name or a Jinja template, 2.18), `read_only`, `guest_hidden`, `break` (`yes`: a new line of readouts after this one; `rule`: a divider first), `status` (a Jinja template for a control tile's status line), `summary_only` (a door, lock or window only in the subtitle); `top_entity` (a top-down/bottom-up shade's top rail), `dimmer` (the light behind a switch), `remote`, `remote_commands`, `sources`, `controls` (`brightness`, `white`, `color`), as in the snapshot card | |
 | `pins` | `yes`, `no`: a pin per room, following the camera | `yes` |
 | `panel_lines` | `yes`: the theme's lines are drawn on text and picture panels too (2.4.2) | `no` |
 | `edge_skip` | the look's `edge_skip` list, replacing the default | `seams, floors, ceilings, texts, images` |
@@ -667,6 +669,37 @@ Entity-reference tokens (`[[entity:…]]`): see *Entity references* below.
 Home Assistant pushes a new result whenever an entity the template reads changes, so the readout is live. Type the template in the editor's *Entity* field. A template that fails shows `⚠ template` and the reason in the console; templates are readouts even with `sensor_tiles: yes`.
 
 **Readouts in groups** (2.10). `break: yes` on a readout starts a new line after it, `break: rule` a thin divider and a new line, so a long room — a garage with the car, the house's energy, the freezer and the doors — reads as sections rather than one run. In the editor: *After this readout* under a sensor, binary sensor or template. On a phone, several lines fold to the first one with a chevron to open them (remembered per card in that browser); readouts and tiles scroll together.
+
+**Title, subtitle and icon from templates; readouts in the subtitle** (2.18). The card's `title`, `subtitle` and `icon` take Jinja templates, rendered live by Home Assistant like template readouts. The subtitle can also be a *list* of readouts — the same items as a room's: an `entity` (a sensor, a binary sensor or a template) or a plain `text`, with `name`, `icon` and `break` — shown as lines of readouts under the title with icons in place of bullets, running to as many lines as `break: yes` makes:
+
+```yaml
+title: Banks House
+icon: "{{ 'mdi:home-flood' if is_state('binary_sensor.water_valve', 'on') else 'mdi:home' }}"
+subtitle:
+  - entity: sensor.outside_temperature
+    icon: mdi:thermometer
+  - entity: sensor.outside_humidity
+    icon: mdi:water-percent
+    break: 'yes'
+  - entity: "{{ 'Valve open' if is_state('binary_sensor.water_valve', 'on') else 'Valve shut' }}"
+    icon: "{{ 'mdi:valve-open' if is_state('binary_sensor.water_valve', 'on') else 'mdi:valve-closed' }}"
+  - text: Guests welcome
+    icon: mdi:account-group
+```
+
+On a phone the title line itself still shortens with an ellipsis; the readout lines wrap. The visual editor edits a string title and subtitle; a list subtitle is edited in YAML.
+
+**Icons in place of bullets** (2.18). A readout — a sensor, a binary sensor or a template readout — takes an `icon`: an `mdi:` name, or a Jinja template Home Assistant renders to one, and the icon stands where the `·` bullet was, scaled to the text and coloured with it (an open door's alert colour includes its icon). With `readout_icons: yes` on the card, readouts without an `icon` show the entity's own icon (its `icon` attribute, when it has one); the rest keep their bullet. Editor: the *Icon in place of the bullet* field under a readout entity, and the *Readouts show each entity's own icon* box in *Display*.
+
+```yaml
+- entity: sensor.hall_temperature
+  icon: mdi:thermometer
+- entity: binary_sensor.side_door
+  icon: "{{ 'mdi:door-open' if is_state('binary_sensor.side_door', 'on') else 'mdi:door-closed' }}"
+- entity: "{{ states('sensor.hall_humidity') }} % rh"
+  name: Air
+  icon: mdi:weather-windy
+```
 
 **A tile's status from a template** (2.10). `status:` on a control entity (a switch, light, media player…) is a Jinja template whose result replaces the tile's status line — `Playing · Kind of Blue · 18.6 W` under *Stereo* instead of *On* — while the tile keeps its toggle and controls. In the editor: *Status template* under the entity.
 

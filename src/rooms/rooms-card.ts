@@ -53,7 +53,7 @@ const STYLE = `
 .ui > div{pointer-events:none}
 .ui .title,.ui .menu,.ui .list,.ui .pin,.ui .panel,.ui .toast,.ui .modelbtn{pointer-events:auto}
 .title{position:absolute;left:14px;top:12px;display:flex;align-items:center;gap:10px;padding:8px 14px 8px 12px;border-radius:14px;background:var(--f3r-panel);-webkit-backdrop-filter:blur(var(--f3r-blur));backdrop-filter:blur(var(--f3r-blur));border:1px solid var(--f3r-line);font-size:15px;font-weight:500;letter-spacing:-.2px}
-.title small{color:var(--f3r-muted);font-weight:400;font-size:12px}
+.title small{color:var(--f3r-muted);font-weight:400;font-size:12px}.title .tt{display:flex;flex-direction:column;min-width:0}.title .readouts.sub{padding:0;margin:0;font-size:12px;font-weight:400;line-height:1.45;max-width:min(60vw,420px)}.title .readouts.sub span:first-child:before{content:none;margin:0}.title .readouts.sub span.ic:first-child{margin-left:0}.title .rule{margin:3px 0}
 .menu{position:absolute;right:14px;top:12px;display:flex;gap:8px;align-items:flex-start}
 .menu button,.panelhead .close{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:38px;min-width:38px;padding:0 10px;border-radius:12px;border:1px solid var(--f3r-line);background:var(--f3r-panel);-webkit-backdrop-filter:blur(var(--f3r-blur));backdrop-filter:blur(var(--f3r-blur));font-size:13px}
 .menu button[aria-pressed=true]{border-color:rgba(var(--f3r-accent),.6);color:rgb(var(--f3r-accent))}
@@ -81,7 +81,7 @@ const STYLE = `
 :host(.narrow) .panel{top:auto;left:10px;right:10px;bottom:10px;width:auto;max-height:58%;animation-name:f3r-up}
 .panel.still{animation:none}
 /* phones: the title keeps to half the width; the buttons (icons only) take the first row on the right, the model switcher the second */
-:host(.narrow) .title{max-width:48%}:host(.narrow) .title span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+:host(.narrow) .title{max-width:48%}:host(.narrow) .title .t,:host(.narrow) .title small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}:host(.narrow) .title .readouts.sub{max-width:none}
 :host(.narrow) .menu{flex-wrap:wrap;justify-content:flex-end;max-width:calc(52% - 14px)}
 :host(.narrow) .menu > button span{display:none}:host(.narrow) .menu > button{padding:0 8px}
 :host(.narrow) .menu::before{content:"";order:1;flex-basis:100%;height:0}
@@ -103,7 +103,7 @@ const STYLE = `
 .panelhead{flex:none;display:flex;gap:12px;align-items:center;padding:14px 14px 10px}.roomicon{display:grid;place-items:center;width:42px;height:42px;border-radius:13px;background:rgba(var(--f3r-accent),.16);color:rgb(var(--f3r-accent))}
 .panelhead h3{margin:0 0 2px;font-size:18px;font-weight:500}.panelhead p{margin:0;color:var(--f3r-muted);font-size:12px}.panelhead .grow{flex:1;min-width:0}
 .readouts.more{padding-top:0}.rule{flex:none;border:0;border-top:1px solid var(--f3r-line);margin:0 14px 8px}
-.readouts{flex:none;margin:0;padding:0 14px 10px;color:var(--f3r-ink);font-size:12px;display:flex;flex-wrap:wrap;gap:2px 0;line-height:1.5}.readouts em{font-style:normal;color:var(--f3r-muted)}.readouts span:before{content:"·";margin:0 6px 0 0;color:var(--f3r-muted)}.readouts span+span:before{margin:0 6px}.readouts .alert{color:rgb(var(--f3r-on))}
+.readouts{flex:none;margin:0;padding:0 14px 10px;color:var(--f3r-ink);font-size:12px;display:flex;flex-wrap:wrap;gap:2px 0;line-height:1.5}.readouts em{font-style:normal;color:var(--f3r-muted)}.readouts span:before{content:"·";margin:0 6px 0 0;color:var(--f3r-muted)}.readouts span+span:before{margin:0 6px}.readouts .alert{color:rgb(var(--f3r-on))}.readouts span.ic:before{content:none;margin:0}.readouts span+span.ic{margin-left:8px}.readouts .ri{--mdc-icon-size:1.25em;width:1.25em;height:1.25em;display:inline-flex;align-items:center;vertical-align:-0.3em;margin-right:4px;color:var(--f3r-muted)}.readouts .alert .ri{color:inherit}
 .body{display:flex;flex-direction:column;overflow:auto;flex:0 1 auto;min-height:0}
 .readoutbox{position:relative;flex:none;padding-right:34px}.readoutbox .fold{position:absolute;right:10px;top:-2px;width:28px;height:28px;padding:0;border:0;border-radius:8px;background:transparent;color:var(--f3r-muted);display:grid;place-items:center}.readoutbox .fold ha-icon{--mdc-icon-size:20px}
 .readoutbox:not(.open) .readouts.more,.readoutbox:not(.open) .rule{display:none}.readoutbox:not(.open) .readouts{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
@@ -989,7 +989,11 @@ export class Floor3dxRoomsCard extends HTMLElement {
     const conn = this._hass?.connection;
     if (!conn || !this._config) return;
     const wanted = new Set<string>();
-    (this._config.rooms || []).forEach((r: Room) => (r.entities || []).forEach((e: any) => { if (isTemplate(e.entity)) wanted.add(e.entity); if (isTemplate(e.status)) wanted.add(e.status); }));
+    const want = (e: any) => { if (!e || typeof e !== 'object') return; if (isTemplate(e.entity)) wanted.add(e.entity); if (isTemplate(e.status)) wanted.add(e.status); if (isTemplate(e.icon)) wanted.add(e.icon); };
+    (this._config.rooms || []).forEach((r: Room) => (r.entities || []).forEach(want));
+    // the card's title, icon and subtitle (2.18): templates, or a list of readouts
+    const c = this._config; if (isTemplate(c.title)) wanted.add(c.title); if (isTemplate(c.icon)) wanted.add(c.icon);
+    if (isTemplate(c.subtitle)) wanted.add(c.subtitle); else if (Array.isArray(c.subtitle)) c.subtitle.forEach(want);
     this._templates.forEach((t, template) => { if (!wanted.has(template)) { this._templates.delete(template); this._unsubTemplate(t); } });
     wanted.forEach((template) => {
       if (this._templates.has(template)) return;
@@ -1022,22 +1026,61 @@ export class Floor3dxRoomsCard extends HTMLElement {
   /** The room's sensors as a line of labelled readouts: "Temperature 21.4°C · Humidity 48% · Side door closed". */
   private _readoutsFold: boolean | null = null; // the user's choice this session (null: narrow folds, wide opens)
   private _readoutsOpen(): boolean { if (this._readoutsFold !== null) return this._readoutsFold; return !this.classList.contains('narrow'); }
+  /** A configured string, or the rendered result of a Jinja template Home Assistant renders (2.18). */
+  private _text(v: any): string { if (!isTemplate(v)) return v === undefined || v === null ? '' : String(v); const t = this._templates.get(v); return t ? (t.error ? '⚠ template' : t.text) : '…'; }
+  private _titleIcon(): string { const name = this._text(this._config.icon).trim(); return /^[a-z][a-z0-9-]*:[a-z0-9-]+$/i.test(name) ? icon(name) : ''; }
+  /** The subtitle: a string (a template too), or a list of readouts - `{entity | text, name, icon, break}`
+   *  as in a room - as lines of readouts with their icons; it may run to several lines. */
+  private _subtitle(): string {
+    const sub = this._config.subtitle;
+    if (sub === undefined || sub === null || sub === '') return '';
+    if (!Array.isArray(sub)) { const text = this._text(sub); return text ? `<small>${esc(text)}</small>` : ''; }
+    const filled = this._readoutGroups(sub, '');
+    return filled.map((x, i) => `${i > 0 && x.rule ? '<hr class="rule">' : ''}<p class="readouts sub">${x.g.join('')}</p>`).join('');
+  }
   private _readouts(room: Room): string {
+    const filled = this._readoutGroups(room.entities || [], room.name || room.id);
+    if (!filled.length) return '';
+    const lines = filled.map((x, i) => `${i > 0 && x.rule ? '<hr class="rule">' : ''}<p class="readouts${i > 0 ? ' more' : ''}">${x.g.join('')}</p>`).join('');
+    if (filled.length < 2) return lines;
+    // several lines: on a phone they fold to the first one, a chevron opens them (remembered per card)
+    const open = this._readoutsOpen();
+    return `<div class="readoutbox${open ? ' open' : ''}"><button class="fold" data-action="readouts" aria-expanded="${open}" aria-label="${open ? 'Fewer readings' : 'All readings'}" title="${open ? 'Fewer readings' : 'All readings'}">${icon(open ? 'mdi:chevron-up' : 'mdi:chevron-down')}</button>${lines}</div>`;
+  }
+  /** The readout spans of a list of entities, in groups (lines): sensors, binary sensors and template
+   *  readouts, each with its label, value and - in place of its bullet - its icon. Used by the room panel
+   *  and by the card's subtitle (2.18), which takes the same list. */
+  private _readoutGroups(entities: any[], roomName: string): { g: string[]; rule: boolean }[] {
     // `break: yes` after an entity starts a new line of readouts; `break: rule` puts a hairline between
     const groups: string[][] = [[]], rules: boolean[] = [];
     const cur = () => groups[groups.length - 1];
     const breakAfter = (e: any) => { const b = String(e.break ?? '').toLowerCase(); if (!b || b === 'no' || b === 'false') return; rules.push(b === 'rule' || b === 'line' || b === 'divider'); groups.push([]); };
-    const roomName = room.name || room.id;
     // the label: the entity's label or friendly name, without the room's own name in front of it
-    const labelOf = (e: any) => { const n = this._tiles.name(e, roomName); return n.replace(new RegExp('^' + roomName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s+', 'i'), '') || n; };
-    for (const e of room.entities || []) {
-      if (this._tiles.hidden(e) || e.summary_only === true || e.summary_only === 'yes') continue;
+    const labelOf = (e: any) => { const n = this._tiles.name(e, roomName); return roomName ? n.replace(new RegExp('^' + roomName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s+', 'i'), '') || n : n; };
+    // the readout's icon in place of its bullet (2.18): the entity's `icon` - a name, or a Jinja template
+    // Home Assistant renders to one - or, with readout_icons: yes on the card, the entity's own icon
+    const ri = String(this._config.readout_icons ?? '').toLowerCase(), iconsOn = ri === 'yes' || ri === 'true' || ri === 'entity';
+    const iconOf = (e: any): string => {
+      let name = '';
+      if (isTemplate(e.icon)) { const t = this._templates.get(e.icon); name = t && !t.error ? t.text.trim() : ''; }
+      else if (typeof e.icon === 'string' && e.icon) name = e.icon.trim();
+      else if (iconsOn && !isTemplate(e.entity)) name = this._s(e.entity)?.attributes?.icon || '';
+      return /^[a-z][a-z0-9-]*:[a-z0-9-]+$/i.test(name) ? `<ha-icon class="ri" icon="${esc(name)}" aria-hidden="true"></ha-icon>` : '';
+    };
+    const span = (cls: string, e: any, body: string) => { const ic = iconOf(e); return `<span class="${[cls, ic ? 'ic' : ''].filter(Boolean).join(' ')}">${ic}${body}</span>`; };
+    for (const e of entities) {
+      if (!e || typeof e !== 'object' || this._tiles.hidden(e) || e.summary_only === true || e.summary_only === 'yes') continue;
+      if (e.text !== undefined && e.entity === undefined) {
+        // a plain text item (the subtitle): shown as it is, with its icon
+        const text = String(e.text ?? ''); if (text === '') continue;
+        cur().push(span('', e, `${e.name ? `<em>${esc(e.name)}</em> ` : ''}${esc(text)}`)); breakAfter(e); continue;
+      }
       if (isTemplate(e.entity)) {
         // a template readout: Home Assistant renders it and pushes every change (see _syncTemplates)
         const t = this._templates.get(e.entity);
         const text = t ? t.text : '…';
         if (text === '') continue;
-        cur().push(`<span${t?.error ? ' class="alert"' : ''}>${e.name ? `<em>${esc(e.name)}</em> ` : ''}${esc(text)}</span>`);
+        cur().push(span(t?.error ? 'alert' : '', e, `${e.name ? `<em>${esc(e.name)}</em> ` : ''}${esc(text)}`));
         breakAfter(e);
         continue;
       }
@@ -1047,22 +1090,16 @@ export class Floor3dxRoomsCard extends HTMLElement {
       if (domainOf(e.entity) === 'sensor') {
         const n = Number(s.state), unit = a.unit_of_measurement || '';
         const val = Number.isFinite(n) ? (Math.abs(n) >= 100 ? Math.round(n) : Math.round(n * 10) / 10) : titleCase(String(s.state).replace(/_/g, ' '));
-        cur().push(`<span><em>${esc(label)}</em> ${esc(String(val))}${unit ? (unit.startsWith('°') || unit === '%' ? '' : ' ') + esc(unit) : ''}</span>`);
+        cur().push(span('', e, `<em>${esc(label)}</em> ${esc(String(val))}${unit ? (unit.startsWith('°') || unit === '%' ? '' : ' ') + esc(unit) : ''}`));
         breakAfter(e);
       } else {
         const on = isOn(s);
         const word = /door|window|garage|opening/.test(dc) ? (on ? 'open' : 'closed') : /motion|occupancy|presence/.test(dc) ? (on ? 'motion' : 'clear') : /moisture/.test(dc) ? (on ? 'wet' : 'dry') : /smoke|gas|carbon_monoxide|safety|problem/.test(dc) ? (on ? 'alert' : 'ok') : /lock/.test(dc) ? (on ? 'unlocked' : 'locked') : /battery/.test(dc) ? (on ? 'low' : 'ok') : /connectivity/.test(dc) ? (on ? 'connected' : 'disconnected') : (on ? 'on' : 'off');
-        cur().push(`<span class="${on && /door|window|garage|opening|moisture|smoke|gas|carbon_monoxide|safety|problem|lock|battery/.test(dc) ? 'alert' : ''}"><em>${esc(label)}</em> ${word}</span>`);
+        cur().push(span(on && /door|window|garage|opening|moisture|smoke|gas|carbon_monoxide|safety|problem|lock|battery/.test(dc) ? 'alert' : '', e, `<em>${esc(label)}</em> ${word}`));
         breakAfter(e);
       }
     }
-    const filled = groups.map((g, i) => ({ g, rule: i > 0 && rules[i - 1] })).filter((x) => x.g.length);
-    if (!filled.length) return '';
-    const lines = filled.map((x, i) => `${i > 0 && x.rule ? '<hr class="rule">' : ''}<p class="readouts${i > 0 ? ' more' : ''}">${x.g.join('')}</p>`).join('');
-    if (filled.length < 2) return lines;
-    // several lines: on a phone they fold to the first one, a chevron opens them (remembered per card)
-    const open = this._readoutsOpen();
-    return `<div class="readoutbox${open ? ' open' : ''}"><button class="fold" data-action="readouts" aria-expanded="${open}" aria-label="${open ? 'Fewer readings' : 'All readings'}" title="${open ? 'Fewer readings' : 'All readings'}">${icon(open ? 'mdi:chevron-up' : 'mdi:chevron-down')}</button>${lines}</div>`;
+    return groups.map((g, i) => ({ g, rule: i > 0 && rules[i - 1] })).filter((x) => x.g.length);
   }
 
   private _render(): void {
@@ -1071,7 +1108,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
     const scroll = (this._ui.querySelector('.body') as HTMLElement | null)?.scrollTop || 0;
     const room = this._roomOf(this._room);
     const hasModel = this._slots.some((s) => s.el);
-    const title = c.title ? `<div class="title">${c.icon ? icon(c.icon) : ''}<span>${esc(c.title)}${c.subtitle ? `<br><small>${esc(c.subtitle)}</small>` : ''}</span></div>` : '';
+    const title = c.title ? `<div class="title">${this._titleIcon()}<div class="tt"><span class="t">${esc(this._text(c.title))}</span>${this._subtitle()}</div></div>` : '';
     const mode = this._switcherMode(), many = mode !== 'none';
     this.classList.toggle('models', many); this.classList.toggle('compact', mode === 'compact');
     const allLabel = this._slots.length === 2 ? 'Both' : 'All';
