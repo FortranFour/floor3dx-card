@@ -1575,6 +1575,8 @@ export class Floor3dCard extends LitElement {
 
     this._lastResizeW = w;
     this._lastResizeH = h;
+    // in the dashboard's edit mode a vertical finger drag scrolls the page (to the Edit bar under the card)
+    try { if (!this._inPreview()) this._renderer.domElement.style.touchAction = getLovelace()?.editMode ? 'pan-y' : 'none'; } catch (_) { /* no dashboard */ }
 
     if ((this._camera as any).isOrthographicCamera) this._syncOrtho(); else { this._camera.aspect = w / h; this._camera.updateProjectionMatrix(); }
     this._renderer.setSize(
@@ -5388,7 +5390,9 @@ export class Floor3dCard extends LitElement {
     // height is set from the window instead (_previewHeight, on every resize).
     let htmlHeight: string;
     const preview = this._inPreview();
-    if (!preview && this._ispanel()) htmlHeight = 'calc(100vh - var(--header-height))';
+    // the dashboard's edit mode puts its Edit bar under the card: leave it room on a panel view
+    let editing = false; try { editing = !!getLovelace()?.editMode; } catch (_) { /* no dashboard */ }
+    if (!preview && this._ispanel()) htmlHeight = editing ? 'calc(100vh - var(--header-height) - 110px)' : 'calc(100vh - var(--header-height))';
     else htmlHeight = preview ? '240px' : 'auto';
 
     return html`

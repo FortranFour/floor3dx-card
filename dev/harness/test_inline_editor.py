@@ -37,10 +37,18 @@ JS = r"""async () => {
   window.removeEventListener('floor3dx-card-preview', onP);
   out.objectAnswers = got.filter(x => x.objects).length; out.objectsCount = (got.find(x => x.objects) || {objects: []}).objects.length;
   // a change from the inline editor: lands in models[1].card, type stripped, emitted as the rooms card's config
-  const changed = Object.assign({}, inline._config, {globalLightPower: 0.42});
+  // (2.16) the rooms editor's HTML is not rebuilt for it, and HA's echo of the same config is absorbed
+  let renders = 0; const origRender = ed._render.bind(ed); ed._render = () => { renders++; origRender(); };
+    const changed = Object.assign({}, inline._config, {globalLightPower: 0.42});
   inline.dispatchEvent(new CustomEvent('config-changed', {detail: {config: changed}, bubbles: true, composed: true}));
   await sleep(300);
   const last = emitted[emitted.length - 1];
+  if (last) ed.setConfig(JSON.parse(JSON.stringify(last)));
+  await sleep(100);
+  out.quiet = {renders, connected: inline.isConnected, cfgGlp: ed._config.models[1].card.globalLightPower};
+  // a change made elsewhere in the rooms editor still re-renders
+  ed.setConfig(Object.assign(JSON.parse(JSON.stringify(last)), {title: 'Other'})); await sleep(100); out.quiet.rendersAfterOther = renders;
+  ed._render = origRender;
   out.emitted = emitted.length; out.written = last ? {glp: last.models[1].card.globalLightPower, hasType: 'type' in last.models[1].card, houseUntouched: last.models[0].card.globalLightPower === card.globalLightPower, title: last.title} : null;
   // the inline editor survives the re-render and is the same element
   out.sameElement = root.querySelector('[data-inline="1"] floor3dx-card-editor') === inline;
@@ -85,6 +93,8 @@ if __name__ == '__main__':
     check('it answers the object request, once', r.get('objectAnswers') == 1 and r.get('objectsCount', 0) > 10)
     check("a change lands in models[1].card without type, the other model untouched, emitted as the rooms card's config", (r.get('written') or {}).get('glp') == 0.42 and (r.get('written') or {}).get('hasType') is False and (r.get('written') or {}).get('houseUntouched') is True and (r.get('written') or {}).get('title') == 'Inline')
     check('the inline editor survives the re-render', r.get('sameElement') is True)
+    Q = r.get('quiet') or {}
+    check('an inline change does not rebuild the rooms editor (the inline element stays put); the HA echo is absorbed; other changes still render', Q.get('renders') == 0 and Q.get('connected') is True and Q.get('cfgGlp') == 0.42 and Q.get('rendersAfterOther') == 1)
     check('Done closes it and releases the preview', r.get('closed') is True and r.get('previewAfter') == [False, False])
     C = r.get('code') or {}
     check('Show code editor swaps the form for the YAML editor on the model block (no type)', C.get('shown') and C.get('formGone') and C.get('hasBlock') and C.get('noType'))

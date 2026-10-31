@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.16.0
+
+### Added
+- Rooms Card: **compact model switcher**. On a phone-width card (under 700 px) the House / Garage / Both segmented control becomes one corner button naming the model shown; a tap shows the next, a hold lists them; the model captions move to the right in *Both*. `models_menu: auto` (default) | `segments` | `compact` | `no`. Harness: `test_switcher_menus.py`.
+
+### Changed
+- Rooms Card: the long-press menus (daylight, camera, model) and the *Rooms* / *Views* lists close on a tap anywhere else and when a room panel or another menu opens (a menu used to stay open over the panel's close button until a second long press).
+- Rooms Card editor: a change in the inline *Edit 3D settings* editor no longer rebuilds the Rooms Card editor's HTML (which detached and re-attached the inline editor on every keystroke: the field lost focus, the page scrolled and the open section had to be found again). The change goes to Home Assistant and its echo is absorbed; only the model badge is refreshed. Harness: `test_inline_editor.py`.
+- Edit mode: the card is 110 px shorter while the dashboard is being edited so Home Assistant's edit bar is reachable on a phone, and a vertical drag over the model scrolls the page (`touch-action: pan-y`) instead of tilting the view. Both cards; nothing changes outside edit mode.
+
 ## 2.15.0
 
 ### Added

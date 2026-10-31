@@ -82,6 +82,8 @@ class Floor3dxRoomsCardEditor extends HTMLElement {
   private _editing: number | null = null; // the model whose 3D settings are open in the regular card's editor, inline
   private _inline: any = null; // that editor element (kept across re-renders)
   private _inlineHeld = ''; // the JSON it last emitted, so its own change is not fed back
+  /** The JSON of the config the inline editor last sent, so HA's echo of it is recognised in setConfig. */
+  private _echo = '';
   private _inlineCode = false; // the inline editor shows the YAML code editor instead of the form
   private _inlineYaml: any = null; // that ha-yaml-editor element
   private _busy: string | null = null;
@@ -103,8 +105,12 @@ class Floor3dxRoomsCardEditor extends HTMLElement {
   }
   disconnectedCallback(): void { window.removeEventListener(ROOMS_PREVIEW_EVENT, this._onPreview); clearTimeout(this._detectTimer); if (this._editing !== null) window.dispatchEvent(new CustomEvent(ROOMS_EDITOR_EVENT, { detail: { request: 'edit-model', model: null } })); }
   setConfig(config: any): void {
+    // Home Assistant echoes every config-changed back here; one that is exactly what the inline 3D editor
+    // just sent is taken without a re-render, so the inline editor keeps its focus, scroll and open section
+    const echo = this._echo && JSON.stringify(config) === this._echo; this._echo = '';
     this._config = clone(config) || {};
     this._config.rooms ||= [];
+    if (echo) return;
     if (!this._found && this._models().some((m) => m.card && tokenRoles(m.card).length)) this._keep = true;
     this._render();
   }
@@ -114,6 +120,16 @@ class Floor3dxRoomsCardEditor extends HTMLElement {
     const config = clone(this._config);
     this.dispatchEvent(new CustomEvent('config-changed', { detail: { config }, bubbles: true, composed: true }));
     this._render();
+  }
+  /** A change made in the inline 3D editor: sent to Home Assistant, but this editor's HTML is not rebuilt
+   *  (rebuilding it detaches and re-attaches the inline editor, which loses the field being typed in, the
+   *  scroll position and the open section; the HA echo is absorbed in setConfig). Only the badges change. */
+  private _emitInline(): void {
+    const config = clone(this._config);
+    this._echo = JSON.stringify(config);
+    this.dispatchEvent(new CustomEvent('config-changed', { detail: { config }, bubbles: true, composed: true }));
+    const models = this._models(), badge = this.shadowRoot!.querySelector('details[data-section="model"] > summary .badge');
+    if (badge) badge.textContent = models.length > 1 ? `${models.length} models` : models[0].card?.objfile ? String(models[0].card.objfile) : 'None';
   }
 
   // ---- models --------------------------------------------------------------------------------
@@ -184,7 +200,7 @@ ${this._section('display', '4 · Display', '', '', this._displaySection())}`;
         this._inlineHeld = JSON.stringify(cfg);
         const list = this._models(); if (!list[i]) return;
         const card = { ...cfg }; delete card.type;
-        list[i].card = minimalWrite(list[i].card, card); this._setModels(list); this._emit();
+        list[i].card = minimalWrite(list[i].card, card); this._setModels(list); this._emitInline();
       });
       this._inline = el;
     }
@@ -211,7 +227,7 @@ ${this._section('display', '4 · Display', '', '', this._displaySection())}`;
         const list = this._models(); if (!list[i]) return;
         const card = { ...d.value }; delete card.type;
         this._inlineHeld = JSON.stringify(card);
-        list[i].card = minimalWrite(list[i].card, card); this._setModels(list); this._emit();
+        list[i].card = minimalWrite(list[i].card, card); this._setModels(list); this._emitInline();
       });
       this._inlineYaml = el;
     }

@@ -43,6 +43,10 @@ const STYLE = `
 .stage > .models.many.column > .model + .model:not([hidden])::before{left:8%;right:8%;top:calc(var(--f3r-gap,14px) / -2);bottom:auto;border-left:0;border-top:1px solid var(--f3r-divider,var(--f3r-line))}
 .stage > .models > .model > .caption{position:absolute;z-index:2;left:12px;bottom:10px;padding:3px 9px;border-radius:9px;background:var(--f3r-panel);color:var(--f3r-muted);font-size:12px;pointer-events:none;display:none}
 .stage > .models.many > .model > .caption{display:block}
+:host(.compact) .stage > .models.many > .model > .caption{left:auto;right:12px}
+.modelbtn{position:absolute;z-index:3;left:12px;bottom:12px;display:inline-flex;align-items:center;gap:4px;min-height:34px;padding:0 8px 0 12px;border-radius:12px;border:1px solid var(--f3r-line);background:var(--f3r-panel);-webkit-backdrop-filter:blur(var(--f3r-blur));backdrop-filter:blur(var(--f3r-blur));font-size:13px;font-weight:500}.modelbtn ha-icon{width:16px;height:16px;--mdc-icon-size:16px;opacity:.7}
+:host(.narrow.open) .modelbtn{display:none}
+.list.modelmenu{right:auto;top:auto;left:12px;bottom:54px}
 :host(.narrow.open) .stage > .models > .model > .caption{display:none}
 .stage > .models > .model ::part(card),.stage > .models > .model floor3dpro-card{display:block;width:100%;height:100%}
 .ui{position:absolute;inset:0;pointer-events:none}
@@ -170,6 +174,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
   private _dlPress = 0; // its timer
   private _dlLong = false; // the click after a long-press is swallowed
   private _camMenu = false; // the camera button's long-press menu: perspective and lens
+  private _modelMenu = false; // the compact model button's long-press menu
   private _proj: string | null = null; // the viewer's perspective choice this browser (null: the models' own)
   private _fov: number | null = null;
   private _needleQueued = false;
@@ -222,12 +227,17 @@ export class Floor3dxRoomsCard extends HTMLElement {
       this._dlLong = false;
       // a long press on the compass opens its menu; the click that follows the release is swallowed
       clearTimeout(this._dlPress);
-      if ((e.target as HTMLElement).closest('button.dl') && this._daylightOn) this._dlPress = window.setTimeout(() => { this._dlLong = true; this._dlMenu = !this._dlMenu; this._camMenu = false; this._listOpen = false; this._viewsOpen = false; this._release(); this._request(); }, 450);
+      if ((e.target as HTMLElement).closest('button.dl') && this._daylightOn) this._dlPress = window.setTimeout(() => { this._dlLong = true; const was = this._dlMenu; this._closeMenus(); this._dlMenu = !was; this._release(); this._request(); }, 450);
       // a long press on the camera button opens the perspective and lens menu
       const camBtn = (e.target as HTMLElement).closest('.menu button[data-action="reset"], .menu button[data-action="views"]');
-      if (camBtn) this._dlPress = window.setTimeout(() => { this._dlLong = true; this._camMenu = !this._camMenu; this._dlMenu = false; this._listOpen = false; this._viewsOpen = false; this._release(); this._request(); }, 450);
+      if (camBtn) this._dlPress = window.setTimeout(() => { this._dlLong = true; const was = this._camMenu; this._closeMenus(); this._camMenu = !was; this._release(); this._request(); }, 450);
+      // a long press on the compact model button lists the models
+      const modelBtn = (e.target as HTMLElement).closest('button.modelbtn');
+      if (modelBtn) this._dlPress = window.setTimeout(() => { this._dlLong = true; const was = this._modelMenu; this._closeMenus(); this._modelMenu = !was; this._release(); this._request(); }, 450);
+      // a tap anywhere but inside an open menu closes the menus (the tap itself still does its job)
+      if (!(e.target as HTMLElement).closest('.list') && this._closeMenus()) this._request();
     });
-    this._ui.addEventListener('contextmenu', (e) => { if ((e.target as HTMLElement).closest('button.dl, .menu button[data-action="reset"], .menu button[data-action="views"]')) e.preventDefault(); });
+    this._ui.addEventListener('contextmenu', (e) => { if ((e.target as HTMLElement).closest('button.dl, button.modelbtn, .menu button[data-action="reset"], .menu button[data-action="views"]')) e.preventDefault(); });
     this._ui.addEventListener('pointerup', () => { clearTimeout(this._dlPress); this._release(); });
     this._ui.addEventListener('pointercancel', () => { clearTimeout(this._dlPress); this._dlLong = false; this._release(); });
     this._ui.addEventListener('pointerleave', () => clearTimeout(this._dlPress));
@@ -346,7 +356,10 @@ export class Floor3dxRoomsCard extends HTMLElement {
       // what is left of the window below the card's top: 100vh counts the space behind a phone's
       // bars and HA's header, and left the card a little taller than the view, with a scroll
       const top = Math.min(Math.max(0, rect.top), window.innerHeight / 2);
-      this.style.setProperty('--f3r-height', `calc(${Math.round(window.innerHeight - top)}px - env(safe-area-inset-bottom, 0px))`);
+      // the dashboard's edit mode puts its Edit bar under the card: leave it room, or it is off screen
+      // on a phone with nothing to scroll by (the model takes the drags)
+      const edit = this._editMode() ? 110 : 0;
+      this.style.setProperty('--f3r-height', `calc(${Math.round(window.innerHeight - top - edit)}px - env(safe-area-inset-bottom, 0px))`);
     } else this.style.setProperty('--f3r-height', this._isPreview() && this._wideEditor() ? PREVIEW_HEIGHT : '60vh');
     // every model, side by side or stacked: as configured, else by the card's shape
     const layout = this._config?.layout;
@@ -357,6 +370,9 @@ export class Floor3dxRoomsCard extends HTMLElement {
     // the hairline belongs to a theme; with the model as it is, the gap alone separates the views
     const gap = Number(this._config?.models_gap);
     if (Number.isFinite(gap) && gap >= 0) this._modelsHost.style.setProperty('--f3r-gap', gap + 'px'); else this._modelsHost.style.removeProperty('--f3r-gap');
+    // in edit mode a vertical finger drag on the model scrolls the page (to the Edit bar); otherwise the model has every drag
+    const pan = this._editMode() && !this._isPreview();
+    this._slots.forEach((s) => { const cv = s.el?._renderer?.domElement; if (cv) cv.style.touchAction = pan ? 'pan-y' : 'none'; });
     this._slots.forEach((s) => {
       const shown = this._active === ALL || s.id === this._active;
       if (s.host.hidden !== !shown) s.host.hidden = !shown;
@@ -365,6 +381,13 @@ export class Floor3dxRoomsCard extends HTMLElement {
   }
   /** The card editor puts the preview beside the editor from 1000px; below that it sits above it. */
   private _wideEditor(): boolean { return typeof window !== 'undefined' && window.innerWidth >= 1000; }
+  /** The dashboard's edit mode (not the card editor's preview). */
+  private _editMode(): boolean {
+    try { const ll: any = (document.querySelector('home-assistant') as any)?.shadowRoot?.querySelector('home-assistant-main')?.shadowRoot?.querySelector('ha-drawer partial-panel-resolver, partial-panel-resolver')?.querySelector('ha-panel-lovelace'); const l = ll?.lovelace; if (l && typeof l.editMode === 'boolean') return l.editMode; } catch (_) { /* no dashboard */ }
+    let node: any = this;
+    for (let i = 0; i < 20 && node; i++) { if (node.tagName === 'HUI-CARD-OPTIONS') return true; node = node.parentElement || (node.getRootNode && (node.getRootNode() as any).host); }
+    return false;
+  }
   private _inPanel(): boolean {
     let node: any = this;
     for (let i = 0; i < 20 && node; i++) {
@@ -479,7 +502,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
   private _listen(slot: Slot): void {
     const host = slot.host;
     // taps on the model: a short press that did not move is a tap (OrbitControls gets the drags)
-    host.addEventListener('pointerdown', (e) => { this._down = { x: e.clientX, y: e.clientY, t: Date.now() }; this._movePins(1200); });
+    host.addEventListener('pointerdown', (e) => { this._down = { x: e.clientX, y: e.clientY, t: Date.now() }; this._movePins(1200); if (this._closeMenus()) this._request(); });
     host.addEventListener('pointerup', (e) => {
       const d = this._down; this._down = null;
       if (!d || Math.abs(e.clientX - d.x) > 8 || Math.abs(e.clientY - d.y) > 8 || Date.now() - d.t > 500) return;
@@ -835,6 +858,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
   private _remember(): void { if (this._config) RECENT.set(this._storeKey('view'), { room: this._room, active: this._active, at: Date.now() }); }
   private _select(id: string | null): void {
     this._room = id;
+    if (id) this._closeMenus();
     this._remember();
     this._confirm = null;
     if (id !== this._focus) this._focus = null;
@@ -843,6 +867,22 @@ export class Floor3dxRoomsCard extends HTMLElement {
     if (slot && this._active !== ALL && this._active !== slot.id) this._showModel(slot.id);
     this._paintTints();
     this._request();
+  }
+  /** How the model switcher is shown: the segmented control, the compact corner button, or not at all. */
+  private _switcherMode(): 'segments' | 'compact' | 'none' {
+    const v = this._config?.models_menu;
+    if (this._slots.length < 2 || v === false || v === 'no') return 'none';
+    if (v === 'compact' || v === 'button') return 'compact';
+    if (v === 'segments' || v === 'seg' || v === true || v === 'yes') return 'segments';
+    return this.classList.contains('narrow') ? 'compact' : 'segments'; // auto: compact on a phone
+  }
+  private _modelOrder(): string[] { return [...this._slots.map((s) => s.id), ALL]; }
+  private _nextModel(): string { const o = this._modelOrder(); return o[(o.indexOf(this._active) + 1) % o.length]; }
+  /** Every pop-up menu shut (a tap elsewhere, a room opening, another menu opening). Returns whether one was open. */
+  private _closeMenus(): boolean {
+    const open = this._dlMenu || this._camMenu || this._modelMenu || this._listOpen || this._viewsOpen;
+    this._dlMenu = this._camMenu = this._modelMenu = this._listOpen = this._viewsOpen = false;
+    return open;
   }
   private _showModel(id: string): void {
     if (id !== ALL && !this._slots.some((s) => s.id === id)) return;
@@ -1032,9 +1072,13 @@ export class Floor3dxRoomsCard extends HTMLElement {
     const room = this._roomOf(this._room);
     const hasModel = this._slots.some((s) => s.el);
     const title = c.title ? `<div class="title">${c.icon ? icon(c.icon) : ''}<span>${esc(c.title)}${c.subtitle ? `<br><small>${esc(c.subtitle)}</small>` : ''}</span></div>` : '';
-    const many = this._slots.length > 1 && c.models_menu !== false && c.models_menu !== 'no';
-    this.classList.toggle('models', many);
-    const switcher = many ? `<div class="seg" role="group" aria-label="Model">${this._slots.map((s) => `<button data-action="model" data-model="${esc(s.id)}" aria-pressed="${this._active === s.id}">${esc(s.name)}</button>`).join('')}<button data-action="model" data-model="${ALL}" aria-pressed="${this._active === ALL}">${this._slots.length === 2 ? 'Both' : 'All'}</button></div>` : '';
+    const mode = this._switcherMode(), many = mode !== 'none';
+    this.classList.toggle('models', many); this.classList.toggle('compact', mode === 'compact');
+    const allLabel = this._slots.length === 2 ? 'Both' : 'All';
+    const switcher = mode === 'segments' ? `<div class="seg" role="group" aria-label="Model">${this._slots.map((s) => `<button data-action="model" data-model="${esc(s.id)}" aria-pressed="${this._active === s.id}">${esc(s.name)}</button>`).join('')}<button data-action="model" data-model="${ALL}" aria-pressed="${this._active === ALL}">${allLabel}</button></div>` : '';
+    const current = this._active === ALL ? allLabel : (this._slots.find((s) => s.id === this._active)?.name || this._slots[0]?.name || '');
+    const modelBtn = mode === 'compact' ? `<button class="modelbtn" data-action="model-cycle" aria-label="Model: ${esc(current)} · tap for the next, hold to choose" title="Model: ${esc(current)} · tap for the next, hold to choose">${esc(current)}${icon('mdi:chevron-right')}</button>` : '';
+    const modelMenu = this._modelMenu && mode === 'compact' ? `<div class="list modelmenu" role="menu"><div class="group">Model</div>${this._slots.map((s) => `<button data-action="model" data-model="${esc(s.id)}" aria-pressed="${this._active === s.id}"><span class="chk">${this._active === s.id ? '✓' : ''}</span><span>${esc(s.name)}</span></button>`).join('')}<button data-action="model" data-model="${ALL}" aria-pressed="${this._active === ALL}"><span class="chk">${this._active === ALL ? '✓' : ''}</span><span>${allLabel}</span></button></div>` : '';
     const views = this._views();
     const reset = hasModel ? (views ? `<button data-action="views" aria-pressed="${this._viewsOpen}" aria-label="Views" title="Views · hold for perspective and lens">${icon('mdi:camera-outline')}</button>` : `<button data-action="reset" aria-label="Reset view" title="Reset view · hold for perspective and lens">${icon('mdi:camera-flip-outline')}</button>`) : '';
     const dl = this._daylightButton();
@@ -1052,7 +1096,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
     const hint = !hasModel ? `<div class="hint">Open the card editor to choose a floor3d card and detect its rooms.</div>` : !rooms.length ? `<div class="hint">No rooms yet: detect them in the card editor.</div>` : tokens ? `<div class="hint">${tokens} entity reference${tokens === 1 ? '' : 's'} ([[entity:…]]) unresolved: this card must sit inside a dashboard-entity-reference wrapper.</div>` : '';
     // three regions, each replaced only when its markup changed: a state update that touches one
     // tile no longer rebuilds the whole overlay (which replayed the panel's entrance and blinked)
-    this._region('chrome', `${title}${menu}${list}${pins}`);
+    this._region('chrome', `${title}${menu}${list}${modelBtn}${modelMenu}${pins}`);
     this._region('panelhost', panel);
     this._region('notes', `${hint}${this._toast ? `<div class="toast" role="status">${esc(this._toast)}</div>` : ''}`);
     if (focus) (this._root.querySelector(`[data-focus="${CSS.escape(focus)}"]`) as HTMLElement | null)?.focus({ preventScroll: true });
@@ -1116,8 +1160,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
     if (action === 'room') { this._listOpen = false; this._select(room === this._room ? null : room); return; }
     if (action === 'close') { this._select(null); return; }
     if (action === 'readouts') { this._readoutsFold = !this._readoutsOpen(); try { localStorage.setItem(this._storeKey('readouts'), this._readoutsFold ? 'open' : 'closed'); } catch (_) { /* private mode */ } this._request(); return; }
-    this._dlMenu = this._dlMenu && action !== 'list' && action !== 'views' && action !== 'reset' && action !== 'model' && action !== 'room';
-    this._camMenu = this._camMenu && action !== 'list' && action !== 'daylight' && action !== 'model' && action !== 'room';
+    if (['list', 'views', 'reset', 'daylight', 'model', 'model-cycle', 'room'].includes(action)) { const keepDl = action === 'daylight' && this._dlMenu, keepCam = (action === 'reset' || action === 'views') && this._camMenu; this._closeMenus(); this._dlMenu = keepDl; this._camMenu = keepCam; }
     if (action === 'list') { this._listOpen = !this._listOpen; this._viewsOpen = false; if (this._listOpen && this._room) { this._room = null; this._confirm = null; this._paintTints(); } this._request(); return; }
     if (action === 'views') { if (this._dlLong) { this._dlLong = false; return; } this._camMenu = false; this._viewsOpen = !this._viewsOpen; this._listOpen = false; this._request(); return; }
     if (action === 'reset') { if (this._dlLong) { this._dlLong = false; return; } this._camMenu = false; this._viewsOpen = false; this._resetView(); this._request(); return; }
@@ -1128,7 +1171,8 @@ export class Floor3dxRoomsCard extends HTMLElement {
     if (action === 'dl-weather') { this._setWeather(!this._weatherOn); return; }
     if (action === 'dl-time') { const h = Number(i); this._setFixedHour(this._fixedHour === h ? null : h); return; }
     if (action === 'view') { this._viewsOpen = false; this._gotoView(Number(i)); this._request(); return; }
-    if (action === 'model') { this._listOpen = false; this._viewsOpen = false; this._showModel(model); return; }
+    if (action === 'model') { this._closeMenus(); this._showModel(model); return; }
+    if (action === 'model-cycle') { if (this._dlLong) { this._dlLong = false; return; } this._closeMenus(); this._showModel(this._nextModel()); return; }
     if (action === 'room-off') {
       for (const e of this._roomOf(this._room)?.entities || []) if (OFFABLE.includes(domainOf(e.entity)) && !e.read_only && isOn(this._s(e.entity))) this._call(e.entity, domainOf(e.entity), 'turn_off');
       return;
