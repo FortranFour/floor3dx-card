@@ -984,7 +984,7 @@ export class Floor3dCard extends LitElement {
   // Faz-0 Engine Backbone: (Stabil.Patch.0.0) Functions Starts
   private _canRender(): boolean {
     if (!this._isConnected) return false;
-    if (!this._modelready) return false;
+    if (!this._modelready || this._compiling) return false;
     if (!this._renderer || !this._scene || !this._camera) return false;
     if (!this._renderer.domElement) return false;
 
@@ -2604,6 +2604,9 @@ export class Floor3dCard extends LitElement {
 
     console.log('Start Build Renderer');
     this._modelready = false;
+    this._compiling = false;
+    this._loadSeq++;
+    this._loadT0 = performance.now();
 
     //create and initialize scene and camera
 
@@ -2833,6 +2836,13 @@ export class Floor3dCard extends LitElement {
   // and the megabytes (megabytes alone when the server does not say the size). Replaces the bare
   // 'Loading x: 45%' line; cleared when the canvas is shown.
   private _loadingUi: { box: HTMLDivElement; label: HTMLDivElement; fill: HTMLDivElement; detail: HTMLDivElement } | null = null;
+  /** Load bookkeeping: a counter that a new load bumps (the staged set-up of an older load then stops), the
+   *  load's start time and the moment the model arrived, for the timing line; `_compiling` holds the first
+   *  frame while the shaders compile in the background. */
+  private _loadSeq = 0;
+  private _loadT0 = 0;
+  private _loadTModel = 0;
+  private _compiling = false;
   private _showLoading(step: string, loaded?: number, total?: number): void {
     if (!this._content) return;
     if (!this._loadingUi || !this._content.contains(this._loadingUi.box)) {
@@ -2892,11 +2902,24 @@ export class Floor3dCard extends LitElement {
     this._onLoaded3DModel(gltf.scene);
   }
 
-  private _onLoaded3DModel(object: Object3D): void {
+  /** The scene is set up in stages with the event loop released between them, so the browser paints the
+   *  progress label, handles input and does not declare the page unresponsive while a big model is
+   *  prepared; a load that is superseded (setConfig during the set-up) stops at the next stage. The
+   *  shaders are then compiled in the background (KHR_parallel_shader_compile, where the browser has it)
+   *  before the first frame: on a desktop GPU driver that compile is the longest step of all and used to
+   *  freeze the page on the first frame. One console line reports where the time went. */
+  private async _onLoaded3DModel(object: Object3D): Promise<void> {
     // Object Loaded Event: last root object passed to the function
 
     console.log('Object loaded start');
-    this._showLoading('preparing the 3D scene');
+    const seq = this._loadSeq;
+    this._loadTModel = performance.now();
+    const stage = async (label: string): Promise<boolean> => {
+      this._showLoading(label);
+      await new Promise((r) => setTimeout(r, 0));
+      return seq === this._loadSeq && !!this._content;
+    };
+    if (!(await stage('preparing the 3D scene'))) return;
 
     // Render quality: anisotropic filtering keeps floor/wall textures sharp at shallow angles.
     // Must run before _initobjects, which re-parents every node out of this root.
@@ -2940,7 +2963,9 @@ export class Floor3dCard extends LitElement {
     this._sealWalls(); // geometry first: the look's edge lines and the lights' shadows follow it
     this._initRoomLight(); // the room map from the floors, before merging takes their names
     this._applyLook(); // materials only: colour-condition clones made in _add3dObjects are then themed
+    if (!(await stage('placing lights and objects'))) return;
     this._add3dObjects();
+    if (!(await stage('finishing the scene'))) return;
     // edge lines last: door, shade and rotate setup re-centres geometry on its pivot and moves the
     // mesh, so lines built earlier would sit offset by the pivot
     if (this._look && this._look.active) {
@@ -2956,7 +2981,8 @@ export class Floor3dCard extends LitElement {
     console.log('Object loaded end');
 
     if (this._content && this._renderer) {
-      this._modelready = true;
+      // _modelready is set once the shaders are compiled, below: hosts (the Rooms Card, the harness) take
+      // it as "the first frame can be drawn now"
       this._fxBox = null; // a new model: the effects measure it afresh
       if (this.preview) this._toEditor({ objects: this._modelObjectNames() });
       console.log('Show canvas');
@@ -3049,8 +3075,24 @@ export class Floor3dCard extends LitElement {
       this._resizeObserver.observe(this._content);
       this._watchDevicePixelRatio();
 
-      // Faz-0 Engine Backbone: (Upgraded) Wake frame: model just became ready -> draw once deterministically
-      this._requestRender('model_loaded');
+      // the shaders: compiled before the first frame, in the background where the browser allows, with the
+      // progress label kept over the canvas meanwhile; the first frame follows
+      this._compiling = true;
+      const tScene = performance.now();
+      const box = this._loadingUi?.box;
+      if (box) { this._loadingUi!.label.textContent = this._modelLabel() + ' — compiling shaders'; this._content.appendChild(box); }
+      let compiled: Promise<unknown>;
+      try { compiled = this._renderer.compileAsync(this._scene, this._camera); } catch (_) { compiled = Promise.resolve(); }
+      compiled.catch(() => undefined).then(() => {
+        if (seq !== this._loadSeq) return;
+        this._compiling = false;
+        this._modelready = true;
+        box?.remove();
+        const t = performance.now(), sec = (ms: number) => (ms / 1000).toFixed(1) + ' s';
+        console.info(`floor3dx ${this._modelLabel()}: model ${sec(this._loadTModel - this._loadT0)} · scene ${sec(tScene - this._loadTModel)} · shaders ${sec(t - tScene)} (${this._renderer.info.programs?.length ?? '?'} programs) · ready ${sec(t - this._loadT0)} after start`);
+        // Faz-0 Engine Backbone: (Upgraded) Wake frame: model just became ready -> draw once deterministically
+        this._requestRender('model_loaded');
+      });
     }
   }
 

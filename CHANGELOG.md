@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.17.0
+
+### Fixed
+- **The page froze after the model loaded** (desktop browsers; Chrome offered to close the unresponsive page). The scene set-up — levels, wall seals, lights, static merge — and the compile of every shader program ran in one task on the first frame; on a desktop GPU driver the shader compile alone can take many seconds. The set-up now runs in stages with the event loop released between them (the progress box reports *preparing the 3D scene · placing lights and objects · finishing the scene · compiling shaders*), and the shaders are compiled before the first frame with `renderer.compileAsync` (in the background where the browser has `KHR_parallel_shader_compile`). `_modelready` is now set when the first frame can be drawn. A reload during the set-up stops the older one. One console line reports the timing: `floor3dx <model>: model … · scene … · shaders … (N programs) · ready … after start`. Harness: `test_load_stages.py`; `run.py` waits for the compiled card.
+
 ## 2.16.0
 
 ### Added

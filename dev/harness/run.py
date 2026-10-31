@@ -35,7 +35,7 @@ def run(query='', after=None, dpr=1, timeout_ms=120000):
         page.on('pageerror', lambda e: errors.append(str(e)))
         page.on('console', lambda m: errors.append(m.text) if m.type == 'error' else None)
         page.goto(f'http://127.0.0.1:{PORT}/dev/harness/index.html?{query}')
-        page.wait_for_function('window.card && window.card._modelready === true', timeout=timeout_ms)
+        page.wait_for_function('window.card && window.card._modelready === true && !window.card._compiling', timeout=timeout_ms)
         result = after(page) if after else None
         browser.close()
         return result, errors

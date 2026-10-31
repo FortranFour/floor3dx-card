@@ -502,6 +502,18 @@ Three optional post-processing effects, all off by default, in the editor's *Eff
 
 Inside a Rooms Card these options live in the model's `card:` block (*Edit 3D settings*).
 
+### Loading without freezing the page (2.17)
+
+Once the model file has arrived, the card has a lot to do before the first frame: sort the objects into levels, seal the walls, place the lights, merge the static geometry — and then the GPU driver compiles a shader program for every distinct material-and-lighting combination in the scene. On a phone that last step is quick; on a desktop (Windows in particular, where WebGL shaders are translated to Direct3D) it can take many seconds, and until 2.17 it all ran in one go on the first frame, so the browser froze and offered to close the "unresponsive" page.
+
+The set-up now runs in stages with the browser given the chance to paint and respond between them — the progress box says *preparing the 3D scene · placing lights and objects · finishing the scene · compiling shaders* — and the shaders are compiled before the first frame, in the background where the browser supports it (`KHR_parallel_shader_compile`: Chrome, Edge, Firefox; Safari compiles on demand, which is fast there). The page stays responsive throughout, and the card draws its first frame only when everything is ready. One line in the browser console then says where the time went:
+
+```
+floor3dx house.glb: model 1.8 s · scene 0.6 s · shaders 7.2 s (41 programs) · ready 9.6 s after start
+```
+
+*model* is the download and decode, *scene* the set-up above, *shaders* the compile. A large *shaders* figure comes from many distinct materials and lights: fewer material variants in the model, or fewer shadow-casting lights, bring it down; it is paid once per page load (the browser caches compiled shaders between loads of the same version).
+
 ### Unused readout panels (`hide_spare_panels`)
 
 A model often carries a stack of flat panels for readouts, a row of label frames on a car roof, a display board, of which the card binds only some as `type3d: text` or `type3d: image`; the rest sit there as blank frames. `hide_spare_panels: 'yes'` hides them: flat objects of the same name family and size as a bound panel, within a few panel widths of it, that no row binds (`1_14` beside a bound `1_13`, `Frame5_1` beside `Frame4_1`). A whole unused item goes too: Sweet Home 3D names an item's parts `<item>_<part>` and a copy's `<item>_<copy>_<part>` (`Frame7_1_9`), and an item of a bound family none of whose parts is bound, about the size of a bound item and near it, is hidden with its frame pieces, while the bound item keeps its frame. Bound panels and everything else stay. The console lists what was hidden, and names flat objects of a bound family nearby that were another size, so you can list those by hand. Off by default. The Floor3D Snapshot Card applies the same rule to its snapshots.
@@ -833,6 +845,7 @@ WebP textures need a current browser. Safari before version 14 shows them blank.
 ## Troubleshooting
 
 - **The card still behaves like an older version.** Check the build id in the console banner. If it has not changed, the browser is running a cached file: change the `?v=` number on the resource (manual installs) and reload with the cache cleared.
+- **The page freezes after the model loads, or the browser calls it unresponsive.** See [Loading without freezing the page](#loading-without-freezing-the-page-217); the console timing line says which step is slow.
 - **`light_object <name> not found in the model`.** The name in `light.light_object` does not match any object.
 - **`object <name> moved by (...) during door/pivot setup and was put back`.** The safety check described above caught a displaced part and corrected it. Please open an issue with the line.
 
