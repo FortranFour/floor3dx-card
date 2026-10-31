@@ -17,6 +17,8 @@ JS = r"""async (width) => {
   const out = {width};
   let {el, d} = await mk();
   out.compact = !!q(el, 'button.modelbtn'); out.segments = !!q(el, '.menu .seg');
+  // the button is actually hit by a finger (its container passes pointer events through; 2.17.1)
+  if (out.compact) { const r = q(el, 'button.modelbtn').getBoundingClientRect(); const hit = el.shadowRoot.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); out.hit = !!(hit && hit.closest('button.modelbtn')); const ic = q(el, 'button.modelbtn ha-icon'); out.iconStyle = getComputedStyle(ic).display; }
   // camera menu: open by a hold, closed by a tap on the chrome elsewhere
   const cam = '.menu button[data-action="reset"], .menu button[data-action="views"]';
   await hold(cam); out.camOpen = !!q(el, 'button[data-action="cam-two"]');
@@ -59,6 +61,7 @@ if __name__ == '__main__':
         print(('PASS ' if ok else 'FAIL ') + name)
         if not ok: fails += 1
     check('phone width: the compact model button, no segmented control', p.get('compact') is True and p.get('segments') is False)
+    check('the compact button is hit at its centre (pointer events reach it); the chevron is a flex box', p.get('hit') is True and p.get('iconStyle') == 'flex')
     check('desktop width: the segmented control, no compact button', w.get('segments') is True and w.get('compact') is False)
     check('a long-press menu closes on a tap elsewhere on the chrome', p.get('camOpen') and p.get('camClosedByTap') and w.get('camClosedByTap'))
     check('… and on a tap on the model', p.get('camClosedByModel') and w.get('camClosedByModel'))

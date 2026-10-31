@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.17.1
+
+### Fixed
+- **Every shader program compiled twice.** The card asked for `PCFSoftShadowMap`, which three r186 has removed: the shadow pass fell back to `PCFShadowMap` on the first frame and, the filter being part of every program's cache key, every program was compiled again. The card now asks for PCF from the start (the picture is unchanged); the shader time of a first load halves. `shadow_map: pcf | basic | vsm` chooses the filter (`pcf_soft` is taken as `pcf`); the timing line now also gives the shadow-casting light count and the filter. Harness: `test_shadow_map.py`.
+- Rooms Card: the compact model button did not answer taps or holds on a phone — its container passes pointer events through and the button was not on the list of elements that take them (the harness drove it with synthetic events, which do not hit-test; it now checks `elementFromPoint`). The chevron now sits on the label's centre line.
+
 ## 2.17.0
 
 ### Fixed

@@ -2950,9 +2950,14 @@ export class Floor3dCard extends LitElement {
       console.log('Shadow On');
       this._renderer.shadowMap.enabled = true;
       // Faz-1 PRO Skill: MOBILE optimization
-      this._renderer.shadowMap.type = this._proSkillEnabled('mobile')
-        ? THREE.BasicShadowMap
-        : THREE.PCFSoftShadowMap;
+      // shadow_map: the filter every shadow is sampled with. pcf (the default) is the filtered edge;
+      // basic is a hard edge and the cheapest shader; vsm blurs (and blurs every shadow map per frame).
+      // The card used to ask for PCFSoftShadowMap, which three r186 no longer has: the shadow pass fell
+      // back to PCF on the first frame, and since the filter is part of every program's cache key, every
+      // program compiled a second time - on a desktop D3D driver that doubled a slow first load.
+      const wanted = String((this._config as any).shadow_map || '').toLowerCase().replace(/[-\s]/g, '_');
+      const types: Record<string, THREE.ShadowMapType> = { basic: THREE.BasicShadowMap, pcf: THREE.PCFShadowMap, pcf_soft: THREE.PCFShadowMap, soft: THREE.PCFShadowMap, vsm: THREE.VSMShadowMap };
+      this._renderer.shadowMap.type = types[wanted] ?? (this._proSkillEnabled('mobile') ? THREE.BasicShadowMap : THREE.PCFShadowMap);
       this._renderer.shadowMap.autoUpdate = false;
     } else {
       console.log('Shadow Off');
@@ -3089,7 +3094,9 @@ export class Floor3dCard extends LitElement {
         this._modelready = true;
         box?.remove();
         const t = performance.now(), sec = (ms: number) => (ms / 1000).toFixed(1) + ' s';
-        console.info(`floor3dx ${this._modelLabel()}: model ${sec(this._loadTModel - this._loadT0)} · scene ${sec(tScene - this._loadTModel)} · shaders ${sec(t - tScene)} (${this._renderer.info.programs?.length ?? '?'} programs) · ready ${sec(t - this._loadT0)} after start`);
+        const shadowLights = (this._shadowCandidates || []).filter((c) => c.light.castShadow).length;
+        const filter = ({ [THREE.BasicShadowMap]: 'basic', [THREE.PCFShadowMap]: 'pcf', [THREE.VSMShadowMap]: 'vsm' } as Record<number, string>)[this._renderer.shadowMap.type] || '?';
+        console.info(`floor3dx ${this._modelLabel()}: model ${sec(this._loadTModel - this._loadT0)} · scene ${sec(tScene - this._loadTModel)} · shaders ${sec(t - tScene)} (${this._renderer.info.programs?.length ?? '?'} programs, ${shadowLights} shadow-casting lights, ${this._renderer.shadowMap.enabled ? filter : 'no'} shadows) · ready ${sec(t - this._loadT0)} after start`);
         // Faz-0 Engine Backbone: (Upgraded) Wake frame: model just became ready -> draw once deterministically
         this._requestRender('model_loaded');
       });

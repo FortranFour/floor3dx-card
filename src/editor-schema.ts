@@ -116,7 +116,7 @@ export const SECTIONS: Section[] = [
     title: 'Light and shadows',
     icon: 'mdi:lightbulb-on-outline',
     content: () => [
-      [text('globalLightPower'), row(bool('shadow'), bool('extralightmode')), row(num('shadow_budget', { min: 1, max: 32, step: 1 }), bool('sky')), row(bool('light_rooms'), num('wall_seal', { min: 0, max: 10, step: 0.1 }))],
+      [text('globalLightPower'), row(bool('shadow'), bool('extralightmode')), row(num('shadow_budget', { min: 1, max: 32, step: 1 }), bool('sky')), row(bool('light_rooms'), num('wall_seal', { min: 0, max: 10, step: 0.1 })), choice('shadow_map', [['', 'Filtered edge (pcf, default)'], ['basic', 'Hard edge (basic: the cheapest shader)'], ['vsm', 'Blurred (vsm)']])],
       'Render model (2.0; leave as is to keep the 1.x picture)',
       [
         row(
@@ -584,6 +584,7 @@ const LABELS: { [name: string]: string } = {
   walls: 'Wall object prefixes',
   floors: 'Floor object prefixes',
   shadow_budget: 'Shadow-casting lights (max)',
+  shadow_map: 'Shadow filter',
   lights: 'Light model',
   color_management: 'Colour management',
   wall_seal: 'Seal wall joints (model units)',
@@ -771,6 +772,7 @@ const HELPERS: { [name: string]: string } = {
   walls: 'Comma separated. Default wall',
   floors: 'Comma separated. Default room, floor',
   shadow_budget: 'Default: from the GPU. Lights past it shine without a shadow',
+  shadow_map: 'How shadow edges are sampled. Hard edge compiles the smallest shaders',
   lights: 'Physical: inverse-square lamps, matched to legacy halfway along their reach. Default legacy',
   color_management: 'Managed: sRGB colours and output; textures as authored, the rest kept close to legacy. Default legacy',
   light_rooms: 'Each lamp lights only the room its floor belongs to (from the room_N_1 floors), so no light leaks through walls and no shadow maps are needed. Light no longer spills through doorways. Default: off',

@@ -44,14 +44,14 @@ const STYLE = `
 .stage > .models > .model > .caption{position:absolute;z-index:2;left:12px;bottom:10px;padding:3px 9px;border-radius:9px;background:var(--f3r-panel);color:var(--f3r-muted);font-size:12px;pointer-events:none;display:none}
 .stage > .models.many > .model > .caption{display:block}
 :host(.compact) .stage > .models.many > .model > .caption{left:auto;right:12px}
-.modelbtn{position:absolute;z-index:3;left:12px;bottom:12px;display:inline-flex;align-items:center;gap:4px;min-height:34px;padding:0 8px 0 12px;border-radius:12px;border:1px solid var(--f3r-line);background:var(--f3r-panel);-webkit-backdrop-filter:blur(var(--f3r-blur));backdrop-filter:blur(var(--f3r-blur));font-size:13px;font-weight:500}.modelbtn ha-icon{width:16px;height:16px;--mdc-icon-size:16px;opacity:.7}
+.modelbtn{position:absolute;z-index:3;left:12px;bottom:12px;display:inline-flex;align-items:center;gap:4px;min-height:34px;padding:0 8px 0 12px;border-radius:12px;border:1px solid var(--f3r-line);background:var(--f3r-panel);-webkit-backdrop-filter:blur(var(--f3r-blur));backdrop-filter:blur(var(--f3r-blur));font-size:13px;font-weight:500}.modelbtn ha-icon{display:flex;align-items:center;justify-content:center;width:16px;height:16px;--mdc-icon-size:16px;opacity:.7}
 :host(.narrow.open) .modelbtn{display:none}
 .list.modelmenu{right:auto;top:auto;left:12px;bottom:54px}
 :host(.narrow.open) .stage > .models > .model > .caption{display:none}
 .stage > .models > .model ::part(card),.stage > .models > .model floor3dpro-card{display:block;width:100%;height:100%}
 .ui{position:absolute;inset:0;pointer-events:none}
 .ui > div{pointer-events:none}
-.ui .title,.ui .menu,.ui .list,.ui .pin,.ui .panel,.ui .toast{pointer-events:auto}
+.ui .title,.ui .menu,.ui .list,.ui .pin,.ui .panel,.ui .toast,.ui .modelbtn{pointer-events:auto}
 .title{position:absolute;left:14px;top:12px;display:flex;align-items:center;gap:10px;padding:8px 14px 8px 12px;border-radius:14px;background:var(--f3r-panel);-webkit-backdrop-filter:blur(var(--f3r-blur));backdrop-filter:blur(var(--f3r-blur));border:1px solid var(--f3r-line);font-size:15px;font-weight:500;letter-spacing:-.2px}
 .title small{color:var(--f3r-muted);font-weight:400;font-size:12px}
 .menu{position:absolute;right:14px;top:12px;display:flex;gap:8px;align-items:flex-start}

@@ -512,7 +512,9 @@ The set-up now runs in stages with the browser given the chance to paint and res
 floor3dx house.glb: model 1.8 s · scene 0.6 s · shaders 7.2 s (41 programs) · ready 9.6 s after start
 ```
 
-*model* is the download and decode, *scene* the set-up above, *shaders* the compile. A large *shaders* figure comes from many distinct materials and lights: fewer material variants in the model, or fewer shadow-casting lights, bring it down; it is paid once per page load (the browser caches compiled shaders between loads of the same version).
+*model* is the download and decode, *scene* the set-up above, *shaders* the compile; the line also counts the shadow-casting lights and names the shadow filter. A large *shaders* figure comes from the shadow-casting lights above all — every one of them adds its shadow map and sampling code to every program — and then from the number of distinct materials: `shadow: 'no'` on the lights whose shadow you do not notice, or fewer material variants in the model, bring it down. It is paid once per page load (the browser caches compiled shaders between loads of the same version).
+
+Until 2.17.1 the card asked three.js for its *soft* shadow filter, which three r186 no longer has; the shadow pass fell back to the plain filter on the first frame and, because the filter is part of every program's identity, **every program compiled twice**. The card now asks for the plain filter from the start (the picture is unchanged, since that is what was drawn anyway), which halves the shader time. `shadow_map: basic` (hard-edged shadows) compiles the smallest shaders of all; `vsm` gives blurred shadows at a per-frame cost.
 
 ### Unused readout panels (`hide_spare_panels`)
 
@@ -565,6 +567,7 @@ On a Home Assistant without `ha-form` the previous editor is shown instead. `day
 | `transparent` | card-level list of `{objects, transparency}` rules; see above | off |
 | `type3d: transparent` | `transparent.transparency`, `transparent.transparency_off`, `transparent.state`, `transparent.invert` | |
 | `shadow_budget` | number of shadow-casting lights | from the GPU's texture units |
+| `shadow_map` | the shadow filter: `pcf` (filtered edge), `basic` (hard edge, the smallest shaders), `vsm` (blurred) (2.17.1) | `pcf` |
 | `wall_seal` | model units each wall is stretched at each end | off |
 | `light_rooms` | `yes`: lamps light only their own room; or `{margin, floors, join}` | off |
 | `ao` | `yes`: ambient occlusion, contact shadows where surfaces meet (2.13); `ao_strength` (0.1–3), `ao_quality` `low`/`medium`/`high`, `ao_radius` (model units) | `no`; `1.5`, `medium`, 2.5 % of the model |
