@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.19.3
+
+### Added
+- Rooms Card: `hide_title_narrow: yes` hides the title bar (title, icon, subtitle) on a card under 700 px wide. Editor: *Hide the title bar on a narrow card* under the title fields.
+
+### Fixed
+- Rooms Card editor: the Display section's options row held five controls on one line, so labels wrapped to slivers (a stray `icon` fragment beside the readout-icons box). Two per row now, the switcher style on its own.
+
 ## 2.19.2
 
 ### Added

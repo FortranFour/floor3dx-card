@@ -1184,7 +1184,8 @@ export class Floor3dxRoomsCard extends HTMLElement {
     const scroll = (this._ui.querySelector('.body') as HTMLElement | null)?.scrollTop || 0;
     const room = this._roomOf(this._room);
     const hasModel = this._slots.some((s) => s.el);
-    const title = c.title ? `<div class="title">${this._titleIcon()}<div class="tt"><span class="t">${esc(this._text(c.title))}</span>${this._subtitle()}</div></div>` : '';
+    const hideTitle = (c.hide_title_narrow === true || /^(yes|true)$/i.test(String(c.hide_title_narrow ?? ''))) && this.classList.contains('narrow');
+    const title = c.title && !hideTitle ? `<div class="title">${this._titleIcon()}<div class="tt"><span class="t">${esc(this._text(c.title))}</span>${this._subtitle()}</div></div>` : '';
     const mode = this._switcherMode(), many = mode !== 'none';
     this.classList.toggle('models', many); this.classList.toggle('compact', mode === 'compact');
     const allLabel = this._slots.length === 2 ? 'Both' : 'All';

@@ -37,6 +37,7 @@ JS = r"""async (width) => {
   d.remove(); subs.length = 0;
   // 3. nothing configured: no title box; a plain string subtitle still works
   ({el, d} = await mk({title: 'Plain', subtitle: 'Just words'})); out.three = {sub: el._ui.querySelector('.title small')?.textContent, subs: subs.length}; d.remove();
+  ({el, d} = await mk({title: 'Plain', hide_title_narrow: 'yes'})); out.hidden = !el._ui.querySelector('.title'); d.remove();
   return out;
 }"""
 
@@ -61,6 +62,7 @@ if __name__ == '__main__':
     check('a change of state flips the readout and its icon', (t.get('after') or {}).get('icon') == 'mdi:valve-closed' and (t.get('after') or {}).get('text') == 'Valve shut')
     check('the title box stays inside the card, wide and at phone width', (t.get('box') or {}).get('inside') is True and ((p.get('two') or {}).get('box') or {}).get('inside') is True and ((p.get('two') or {}).get('lines')) == 2)
     th = w.get('three') or {}
+    check('hide_title_narrow: no title bar at phone width, kept wide', p.get('hidden') is True and w.get('hidden') is False)
     check('a plain string subtitle is unchanged and subscribes to nothing', th.get('sub') == 'Just words' and th.get('subs') == 0)
     check('no page errors', not errors)
     for e in errors[:5]: print('  error:', e[:300])
