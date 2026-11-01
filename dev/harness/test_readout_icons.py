@@ -9,13 +9,13 @@ JS = r"""async () => {
   const card = Object.assign({}, base._config, {entities: [], object_groups: []}); delete card.style; delete card.type; delete card.look; delete card.daylight;
   const subs = []; const connection = { subscribeMessage(cb, msg) { subs.push({cb, msg}); return Promise.resolve(() => {}); } };
   const TLI = "{{ 'mdi:lightbulb-on' if is_state('light.l','on') else 'mdi:lightbulb-outline' }}", TLC = "{{ 'gold' if is_state('light.l','on') else 'grey' }}";
-  const states = {'light.l': {state: 'on', attributes: {friendly_name: 'Lamp'}}, 'switch.w': {state: 'off', attributes: {friendly_name: 'Valve', icon: 'mdi:valve'}}, 'sensor.t': {state: '21.4', attributes: {unit_of_measurement: '°C', friendly_name: 'Temperature', icon: 'mdi:thermometer'}}, 'sensor.h': {state: '48', attributes: {unit_of_measurement: '%', friendly_name: 'Humidity'}}, 'binary_sensor.d': {state: 'on', attributes: {device_class: 'door', friendly_name: 'Side door'}}};
+  const states = {'light.m': {state: 'off', attributes: {}}, 'light.o': {state: 'on', attributes: {}}, 'light.l': {state: 'on', attributes: {friendly_name: 'Lamp'}}, 'switch.w': {state: 'off', attributes: {friendly_name: 'Valve', icon: 'mdi:valve'}}, 'sensor.t': {state: '21.4', attributes: {unit_of_measurement: '°C', friendly_name: 'Temperature', icon: 'mdi:thermometer'}}, 'sensor.h': {state: '48', attributes: {unit_of_measurement: '%', friendly_name: 'Humidity'}}, 'binary_sensor.d': {state: 'on', attributes: {device_class: 'door', friendly_name: 'Side door'}}};
   const hass = {states, connection, language: 'en', themes: {}, config: {}, user: {}, callService() { return Promise.resolve(); }};
   const TI = "{{ 'mdi:door-open' if is_state('binary_sensor.d','on') else 'mdi:door-closed' }}";
   const TR = "{{ states('sensor.h') }} % rh";
   const TC = "{{ 'red' if is_state('binary_sensor.d','on') else 'gray' }}";
   const mk = async (extra) => {
-    const rooms = [{id: 'r', name: 'Hall', floors: ['room_0_1'], entities: [{entity: 'light.l', icon: TLI, icon_color: TLC}, {entity: 'switch.w', icon_color: 'teal'}, {entity: 'sensor.t'}, {entity: 'sensor.h', icon: 'mdi:water-percent', icon_color: '#2196f3'}, {entity: 'binary_sensor.d', icon: TI, icon_color: TC}, {entity: TR, name: 'Air', icon: 'mdi:weather-windy', icon_color: 'url(javascript:1)'}]}];
+    const rooms = [{id: 'r', name: 'Hall', floors: ['room_0_1'], entities: [{entity: 'light.l', icon: TLI, icon_color: TLC}, {entity: 'switch.w', icon_color: 'teal'}, {entity: 'light.m', icon_color: 'muted'}, {entity: 'light.o', icon_color: 'on'}, {entity: 'sensor.t'}, {entity: 'sensor.h', icon: 'mdi:water-percent', icon_color: '#2196f3'}, {entity: 'binary_sensor.d', icon: TI, icon_color: TC}, {entity: TR, name: 'Air', icon: 'mdi:weather-windy', icon_color: 'url(javascript:1)'}]}];
     const el = document.createElement('floor3dx-rooms-card'); el.setConfig(Object.assign({card, rooms, title: 'T', height: '560px'}, extra || {})); el.hass = hass;
     const d = document.createElement('div'); d.style.cssText = 'position:fixed;left:0;top:0;width:900px;height:560px;z-index:99'; document.body.appendChild(d); d.appendChild(el);
     const t = performance.now(); while (!(el._slots.length && el._slots.every(s => s.el && s.el._modelready)) && performance.now() - t < 240000) await sleep(200);
@@ -52,7 +52,8 @@ if __name__ == '__main__':
         if not ok: fails += 1
     R = r.get('rows') or []
     check('an icon template is subscribed like a readout template', sorted(x for x in (r.get('subs') or []) if x != '?') == ['icon', 'readout'])
-    check('tiles (2.19): an icon template and a colour template on a light; the entity icon kept with a plain colour on a switch', r.get('tiles') == [{'icon': 'mdi:lightbulb-on', 'color': 'gold'}, {'icon': 'mdi:valve', 'color': 'teal'}])
+    check('tiles (2.19): an icon template and a colour template on a light; the entity icon kept with a plain colour on a switch', (r.get('tiles') or [])[:2] == [{'icon': 'mdi:lightbulb-on', 'color': 'gold'}, {'icon': 'mdi:valve', 'color': 'teal'}])
+    check('icon_color: muted / on name the theme colours', [t['color'] for t in (r.get('tiles') or [])[2:4]] == ['var(--f3r-muted)', 'rgb(var(--f3r-on))'])
     check('icon_color: a CSS colour, a template rendering to one; a non-colour is ignored', r.get('colors') == ['rgb(33, 150, 243)', 'red', ''])
     check('a plain readout keeps its bullet; one with icon: shows the icon and no bullet', len(R) == 4 and R[0]['ic'] is False and R[0]['icon'] is None and R[1]['ic'] is True and R[1]['icon'] == 'mdi:water-percent' and R[1]['bullet'] == 'none')
     check('a Jinja icon template renders to the icon, on a sensor and on a template readout', R[2]['icon'] == 'mdi:door-open' and R[3]['icon'] == 'mdi:weather-windy' and R[3]['text'].startswith('Air'))

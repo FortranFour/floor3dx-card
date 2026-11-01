@@ -1055,6 +1055,10 @@ export class Floor3dxRoomsCard extends HTMLElement {
   /** An icon colour (2.18.1): a CSS colour, or a template rendering to one; anything that is not a plain
    *  colour token (a name, #hex, rgb()/hsl()/var()) is ignored, so a template error cannot inject style. */
   private _cssColor(v: any): string {
+    const c0 = this._text(v).trim().toLowerCase();
+    // the theme's own colours by name (2.19): muted (an off tile's icon), on (a lit tile), accent (a selection), text
+    const named: Record<string, string> = { muted: 'var(--f3r-muted)', off: 'var(--f3r-muted)', on: 'rgb(var(--f3r-on))', lit: 'rgb(var(--f3r-on))', accent: 'rgb(var(--f3r-accent))', text: 'var(--f3r-ink)', ink: 'var(--f3r-ink)' };
+    if (named[c0]) return named[c0];
     const c = this._text(v).trim();
     return /^(#[0-9a-f]{3,8}|[a-z]+|(rgb|rgba|hsl|hsla)\([0-9.,%\s/]+\)|var\(--[a-z0-9-]+\))$/i.test(c) && c !== '…' ? c : '';
   }

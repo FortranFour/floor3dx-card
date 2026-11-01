@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.19.1
+
+### Added
+- Rooms Card: `icon_color` takes the theme's colours by name — `muted` (an off tile's icon), `on` (a lit tile), `accent`, `text` — so a template can say `{{ 'on' if running else 'muted' }}` and follow the panel theme. Harness: `test_readout_icons.py` (10).
+
 ## 2.19.0
 
 ### Added
