@@ -203,12 +203,33 @@ export class Tiles {
         parts.push(['', stepper('', t, t - step >= lo, t + step <= hi, 'setpoint')]);
       }
     }
-    const modes: string[] = (a.hvac_modes || []).filter((m: string) => m !== 'off' && HVAC[m]);
+    // `modes` (2.19.4): the modes offered, a list or a Jinja template rendering to one (names separated by
+    // commas or spaces, or a JSON list); the thermostat's own list otherwise. `off` is the power switch.
+    let allow: string[] | null = null;
+    if (Array.isArray(e.modes)) allow = e.modes.map((m: any) => String(m).trim().toLowerCase());
+    else if (typeof e.modes === 'string' && e.modes.trim()) {
+      const raw = /\{\{|\{%/.test(e.modes) ? this.host.template(e.modes) : e.modes;
+      if (raw && raw !== '…') { const t = raw.trim(); let list: string[] | null = null; try { const j = JSON.parse(t.replace(/'/g, '"')); if (Array.isArray(j)) list = j.map(String); } catch (_) { /* not JSON */ } allow = (list || t.replace(/[\[\]'"]/g, '').split(/[\s,]+/)).map((m) => m.trim().toLowerCase()).filter(Boolean); }
+    }
+    const modes: string[] = (a.hvac_modes || []).filter((m: string) => m !== 'off' && HVAC[m] && (!allow || allow.includes(m)));
     let html = parts.map(([label, h]) => (label ? `<div class="ctl"><span class="ctl-l">${label}</span>${h}</div>` : `<div class="ctl">${h}</div>`)).join('');
     if (level === 'full' && modes.length > 1) {
       html += `<div class="seg${modes.length > 5 ? ' wrap' : ''}" role="group" aria-label="Mode">${modes.map((m) => `<button data-action="hvac" data-mode="${m}" data-entity="${esc(id)}" data-focus="h-${esc(id)}-${m}" aria-pressed="${s.state === m}" aria-label="${HVAC[m][0]}" title="${HVAC[m][0]}" ${dis}>${icon(HVAC[m][1])}</button>`).join('')}</div>`;
     }
+    // heat_source (2.19.4): a switch that picks the heat source (a heat pump / aux furnace, say), as a
+    // pair of buttons under the modes: { entity, off: 'Heat Pump', on: 'Aux Gas', off_icon, on_icon }
+    const hs = this.heatSource(e);
+    if (level === 'full' && hs) {
+      const ss = this.s(hs.entity), sel = ss ? isOn(ss) : null, dd = !ss || !available(ss) || this.host.busy.has(hs.entity) ? 'disabled' : '';
+      const btn = (val: 'off' | 'on', label: string, ic: string) => `<button data-action="heat-source" data-value="${val}" data-entity="${esc(id)}" data-focus="hs-${esc(id)}-${val}" aria-pressed="${sel === (val === 'on')}" title="${esc(label)}" ${dd}>${ic ? icon(ic) : ''}${esc(label)}</button>`;
+      html += `<div class="seg" role="group" aria-label="Heat source">${btn('off', hs.off, hs.off_icon)}${btn('on', hs.on, hs.on_icon)}</div>`;
+    }
     return `<div class="tile ${on ? 'on' : ''}">${head(power ? 'climate-power' : null, power)}${html ? `<div class="extra">${html}</div>` : ''}</div>`;
+  }
+  private heatSource(e: any): { entity: string; off: string; on: string; off_icon: string; on_icon: string } | null {
+    const h = e.heat_source; if (!h) return null;
+    const o = typeof h === 'string' ? { entity: h } : h; if (!o || typeof o.entity !== 'string') return null;
+    return { entity: o.entity, off: String(o.off || 'Heat pump'), on: String(o.on || 'Aux heat'), off_icon: String(o.off_icon || 'mdi:heat-pump-outline'), on_icon: String(o.on_icon || 'mdi:fire') };
   }
 
   // ---- TVs and speakers ---------------------------------------------------------------------
@@ -330,6 +351,13 @@ export class Tiles {
       if (isOn(s)) f & 128 ? H.call(id, 'climate', 'turn_off') : H.call(id, 'climate', 'set_hvac_mode', { hvac_mode: 'off' });
       else if (f & 256) H.call(id, 'climate', 'turn_on');
       else { const m = this.resumeMode(s); if (m) H.call(id, 'climate', 'set_hvac_mode', { hvac_mode: m }); }
+    } else if (action === 'heat-source') {
+      if (this.thermoLevel() !== 'full') return true;
+      const e: any = H.entityConfig(id) || {}, hs = this.heatSource(e); if (!hs) return true;
+      const toOn = b.dataset.value === 'on';
+      // a furnace only heats: leave cool / auto before selecting it, so the thermostat never asks it to cool
+      if (toOn && ['cool', 'heat_cool', 'auto'].includes(s.state) && (s.attributes.hvac_modes || []).includes('heat')) H.call(id, 'climate', 'set_hvac_mode', { hvac_mode: 'heat' });
+      H.call(hs.entity, domainOf(hs.entity), toOn ? 'turn_on' : 'turn_off');
     } else if (action === 'hvac') {
       if (this.thermoLevel() !== 'full') return true;
       const m = b.dataset.mode as string; if ((s.attributes.hvac_modes || []).includes(m)) H.call(id, 'climate', 'set_hvac_mode', { hvac_mode: m });

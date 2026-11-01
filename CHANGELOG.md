@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.19.4
+
+### Added
+- Rooms Card: `modes` on a climate entity — a list or a Jinja template rendering to one — limits the thermostat tile's mode buttons (the thermostat's own list otherwise; `off` stays the power switch). Editor: *Modes offered* under a climate entity.
+- Rooms Card: `heat_source` on a climate entity — `{ entity, off, on, off_icon, on_icon }` — adds the switch that picks the heat source (heat pump / aux furnace) to the thermostat tile as a pair of buttons under the modes; selecting the furnace while cooling sets *Heat* first. Editor: *Heat source switch*. Harness: `test_climate_modes.py` (6).
+
 ## 2.19.3
 
 ### Added

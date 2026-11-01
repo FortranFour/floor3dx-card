@@ -630,7 +630,7 @@ rooms:
 | `hide_title_narrow` | `yes`: no title bar on a card under 700 px wide (phones); a subtitle item can be left off on its own with `hide_narrow` (2.19.3) | `no` |
 | `rooms[].description`, `rooms[].summary` | the panel's subtitle: your own text or a Jinja template, or the automatic one at `basic` / `full` (overrides `room_summary`) (2.19.2) | automatic |
 | `rooms[].floors` | floor object names; a room without one is reached from the Rooms menu | |
-| `rooms[].entities[]` | `entity` (an id, or a Jinja template — see below), `name`, `icon` (a tile's icon or, on a readout, the icon in place of its bullet — a name or a Jinja template, 2.18/2.19), `icon_color` (a CSS colour or a template, 2.18.1/2.19), `hide_narrow`, `summary` (`yes`: in the room's full subtitle) (2.19.2), `read_only`, `guest_hidden`, `break` (`yes`: a new line of readouts after this one; `rule`: a divider first), `status` (a Jinja template for a control tile's status line), `summary_only` (a door, lock or window only in the subtitle); `top_entity` (a top-down/bottom-up shade's top rail), `dimmer` (the light behind a switch), `remote`, `remote_commands`, `sources`, `controls` (`brightness`, `white`, `color`), as in the snapshot card | |
+| `rooms[].entities[]` | `entity` (an id, or a Jinja template — see below), `name`, `icon` (a tile's icon or, on a readout, the icon in place of its bullet — a name or a Jinja template, 2.18/2.19), `icon_color` (a CSS colour or a template, 2.18.1/2.19), `hide_narrow`, `summary` (`yes`: in the room's full subtitle) (2.19.2), `modes` (a climate tile's mode buttons: a list or a Jinja template rendering to one), `heat_source` (the switch that picks the heat source, as buttons in the tile) (2.19.4), `read_only`, `guest_hidden`, `break` (`yes`: a new line of readouts after this one; `rule`: a divider first), `status` (a Jinja template for a control tile's status line), `summary_only` (a door, lock or window only in the subtitle); `top_entity` (a top-down/bottom-up shade's top rail), `dimmer` (the light behind a switch), `remote`, `remote_commands`, `sources`, `controls` (`brightness`, `white`, `color`), as in the snapshot card | |
 | `pins` | `yes`, `no`: a pin per room, following the camera | `yes` |
 | `panel_lines` | `yes`: the theme's lines are drawn on text and picture panels too (2.4.2) | `no` |
 | `edge_skip` | the look's `edge_skip` list, replacing the default | `seams, floors, ceilings, texts, images` |
@@ -673,6 +673,20 @@ Entity-reference tokens (`[[entity:…]]`): see *Entity references* below.
 Home Assistant pushes a new result whenever an entity the template reads changes, so the readout is live. Type the template in the editor's *Entity* field. A template that fails shows `⚠ template` and the reason in the console; templates are readouts even with `sensor_tiles: yes`.
 
 **The room's subtitle** (2.19.2). Under the room's name the panel sums the room up. By default (`room_summary: basic`) that is the count of what is on and the doors, locks and windows, as before. `room_summary: full` on the card — or `summary: full` on a room, either way round — names what is on when it is three things or fewer (*Island Lights, Sink Light on*; past that *2 lights and 1 other on*), then reports media players playing, the thermostat (*Heating to 70°*), shades (*Shades down*, *1 of 2 shades up*), the alarm, any readout marked `summary: yes` (*Washer Running · 12.3 W*), and finally the doors, locks and windows. A room's `description` replaces all of that with your own text, and may be a Jinja template rendered live. Editor: *Full room subtitles* in Display; *Subtitle* and *Automatic subtitle* per room; *Also in the room's subtitle* under a readout. The room icon and the close button now sit on the name's line, so a long subtitle hangs below the name instead of pushing the icon down.
+
+**A thermostat's modes from a template** (2.19.4). `modes` on a climate entity limits the mode buttons the tile offers — a list (`[heat, cool, heat_cool]`) or a Jinja template that renders to one, so the choice can follow another entity: a heat-pump/aux-furnace switch, say, that leaves only *Heat* when the furnace is selected. `off` is never a button (the tile's power switch does that); with one mode left the row disappears and the setpoint stays. Editor: *Modes offered* under a climate entity.
+
+`heat_source` on the same entity puts the switch that picks the source into the tile as a pair of buttons under the modes — `{ entity, off, on, off_icon, on_icon }` (`off` is the label when the switch is off, `on` when it is on) — so one tile holds the setpoint, the modes and the source. Choosing the furnace while the thermostat is cooling sets it to *Heat* first, then flips the switch, so the furnace is never asked to cool. Editor: *Heat source switch* under a climate entity (labels and icons in YAML).
+
+```yaml
+- entity: climate.house
+  modes: "{{ ['heat'] if is_state('switch.aux_heat_only', 'on') else ['heat', 'cool', 'heat_cool'] }}"
+  heat_source:
+    entity: switch.aux_heat_only
+    off: Heat Pump
+    on: Aux Gas
+    on_icon: mdi:fire
+```
 
 **Hiding a readout on phones** (2.19.2). `hide_narrow: yes` on a readout or subtitle item leaves it out when the card is under 700 px wide — for a readout that is useful at a desk but crowds a phone. Editor: *Hide on a narrow card* under a readout.
 

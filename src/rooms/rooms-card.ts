@@ -999,7 +999,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
     const names = ['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest'];
     return names[Math.round(((deg + 360) % 360) / 45) % 8];
   }
-  private _roomEntities(): string[] { return (this._config?.rooms || []).flatMap((r: Room) => (r.entities || []).flatMap((e: any) => [e.entity, e.top_entity, e.dimmer, e.remote, this._config.guest_mode_entity].filter(Boolean))); }
+  private _roomEntities(): string[] { return (this._config?.rooms || []).flatMap((r: Room) => (r.entities || []).flatMap((e: any) => [e.entity, e.top_entity, e.dimmer, e.remote, typeof e.heat_source === 'string' ? e.heat_source : e.heat_source?.entity, this._config.guest_mode_entity].filter(Boolean))); }
   /** room_summary (2.19.2): `basic` (the count and the doors, as before) or `full` - the card's setting, a room's own `summary` overriding it. */
   private _summaryMode(room: Room): 'basic' | 'full' {
     const v = String(room.summary ?? this._config.room_summary ?? 'basic').toLowerCase();
@@ -1045,7 +1045,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
     const conn = this._hass?.connection;
     if (!conn || !this._config) return;
     const wanted = new Set<string>();
-    const want = (e: any) => { if (!e || typeof e !== 'object') return; for (const k of ['entity', 'status', 'icon', 'icon_color']) if (isTemplate(e[k])) wanted.add(e[k]); };
+    const want = (e: any) => { if (!e || typeof e !== 'object') return; for (const k of ['entity', 'status', 'icon', 'icon_color', 'modes']) if (isTemplate(e[k])) wanted.add(e[k]); };
     (this._config.rooms || []).forEach((r: Room) => (r.entities || []).forEach(want));
     // the card's title, icon and subtitle (2.18): templates, or a list of readouts
     const c = this._config; for (const k of ['title', 'icon', 'icon_color']) if (isTemplate(c[k])) wanted.add(c[k]);
