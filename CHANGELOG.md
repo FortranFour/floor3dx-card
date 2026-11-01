@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.19.2
+
+### Added
+- Rooms Card: **`room_summary: full`** (card) / `summary: full` (room): the panel's subtitle names what is on (a count by kind past three), then media playing, the thermostat's action and target, shades, the alarm, readouts marked `summary: yes`, and the doors, locks and windows. `basic` (default) is unchanged. A room's `description` may be a Jinja template. Editor: *Full room subtitles* in Display, *Subtitle* / *Automatic subtitle* per room, *Also in the room's subtitle* under a readout. Harness: `test_room_summary.py` (7).
+- Rooms Card: the room icon and the close button sit on the name's line (top-aligned) so a long subtitle hangs below the name instead of pushing the icon to the middle of the header.
+- Rooms Card: `hide_narrow: yes` on a readout or subtitle item leaves it out of a card under 700 px wide (phones); the readouts re-render when the card crosses that width. Editor: *Hide on a narrow card* checkbox under a readout. Harness: `test_readout_icons.py`.
+
 ## 2.19.1
 
 ### Added

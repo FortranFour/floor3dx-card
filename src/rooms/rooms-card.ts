@@ -100,7 +100,7 @@ const STYLE = `
 .menu .dl[aria-pressed=false] .n{fill:currentColor}
 :host(.narrow.models) .list{top:104px;max-height:calc(100% - 126px)}
 @keyframes f3r-up{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
-.panelhead{flex:none;display:flex;gap:12px;align-items:center;padding:14px 14px 10px}.roomicon{display:grid;place-items:center;width:42px;height:42px;border-radius:13px;background:rgba(var(--f3r-accent),.16);color:rgb(var(--f3r-accent))}
+.panelhead{flex:none;display:flex;gap:12px;align-items:flex-start;padding:14px 14px 10px}.panelhead .roomicon{margin-top:-9px}.panelhead .close{margin-top:-7px}.roomicon{display:grid;place-items:center;width:42px;height:42px;border-radius:13px;background:rgba(var(--f3r-accent),.16);color:rgb(var(--f3r-accent))}
 .panelhead h3{margin:0 0 2px;font-size:18px;font-weight:500}.panelhead p{margin:0;color:var(--f3r-muted);font-size:12px}.panelhead .grow{flex:1;min-width:0}
 .readouts.more{padding-top:0}.rule{flex:none;border:0;border-top:1px solid var(--f3r-line);margin:0 14px 8px}
 .readouts{flex:none;margin:0;padding:0 14px 10px;color:var(--f3r-ink);font-size:12px;display:flex;flex-wrap:wrap;gap:2px 0;line-height:1.5}.readouts em{font-style:normal;color:var(--f3r-muted)}.readouts span:before{content:"·";margin:0 6px 0 0;color:var(--f3r-muted)}.readouts span+span:before{margin:0 6px}.readouts .alert{color:rgb(var(--f3r-on))}.readouts span.ic:before{content:none;margin:0}.readouts span+span.ic{margin-left:8px}.readouts .ri{--mdc-icon-size:1.25em;width:1.25em;height:1.25em;display:inline-flex;align-items:center;vertical-align:-0.3em;margin-right:4px;color:var(--f3r-muted)}.readouts .alert .ri{color:inherit}
@@ -363,7 +363,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
   // ---- layout and theme --------------------------------------------------------------------
   private _layout(): void {
     const rect = this.getBoundingClientRect();
-    if (rect.width) this.classList.toggle('narrow', rect.width < 700);
+    if (rect.width) { const was = this.classList.contains('narrow'); this.classList.toggle('narrow', rect.width < 700); if (was !== this.classList.contains('narrow')) this._request(); }
     const h = this._config?.height;
     if (h) this.style.setProperty('--f3r-height', typeof h === 'number' ? h + 'px' : String(h));
     else if (this._inPanel()) {
@@ -1000,6 +1000,43 @@ export class Floor3dxRoomsCard extends HTMLElement {
     return names[Math.round(((deg + 360) % 360) / 45) % 8];
   }
   private _roomEntities(): string[] { return (this._config?.rooms || []).flatMap((r: Room) => (r.entities || []).flatMap((e: any) => [e.entity, e.top_entity, e.dimmer, e.remote, this._config.guest_mode_entity].filter(Boolean))); }
+  /** room_summary (2.19.2): `basic` (the count and the doors, as before) or `full` - the card's setting, a room's own `summary` overriding it. */
+  private _summaryMode(room: Room): 'basic' | 'full' {
+    const v = String(room.summary ?? this._config.room_summary ?? 'basic').toLowerCase();
+    return v === 'full' || v === 'yes' || v === 'true' ? 'full' : 'basic';
+  }
+  /** The full summary: what is on, by name when few (else by count and kind), the climate, the shades,
+   *  what is playing, the alarm, the readouts that ask for it (`summary: yes`), then the doors, locks and windows. */
+  private _fullSummary(room: Room, ents: any[], hasReadouts: boolean): string {
+    const parts: string[] = [], roomName = room.name || room.id;
+    const nameOf = (e: any) => this._tiles.name(e, roomName).replace(new RegExp('^' + roomName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s+', 'i'), '') || this._tiles.name(e, roomName);
+    const yes = (v: any) => v === true || /^(yes|true)$/i.test(String(v ?? ''));
+    // lights, switches, fans, input booleans: named when up to three are on, counted past that
+    const onOff = ents.filter((e) => ['light', 'switch', 'input_boolean', 'fan'].includes(domainOf(e.entity)));
+    const on = onOff.filter((e) => isOn(this._s(e.entity)));
+    if (on.length && on.length <= 3) parts.push(on.map(nameOf).join(', ') + ' on');
+    else if (on.length) { const lights = on.filter((e) => domainOf(e.entity) === 'light' || /light|lamp/i.test(nameOf(e))).length; parts.push(lights === on.length ? `${on.length} lights on` : lights ? `${lights} light${lights > 1 ? 's' : ''} and ${on.length - lights} other${on.length - lights > 1 ? 's' : ''} on` : `${on.length} on`); }
+    else if (onOff.length) parts.push('Everything is off');
+    // media players and remotes
+    for (const e of ents.filter((e) => ['media_player', 'remote'].includes(domainOf(e.entity)))) { const st = this._s(e.entity); if (!st) continue; if (st.state === 'playing' || st.state === 'paused') parts.push(`${nameOf(e)} ${st.state}`); else if (domainOf(e.entity) === 'remote' && isOn(st)) parts.push(`${nameOf(e)} on`); else if (domainOf(e.entity) === 'media_player' && isOn(st) && st.state !== 'idle' && st.state !== 'standby') parts.push(`${nameOf(e)} on`); }
+    // climate
+    for (const e of ents.filter((e) => domainOf(e.entity) === 'climate')) { const st = this._s(e.entity); if (!st) continue; const a = st.attributes || {}, act = String(a.hvac_action || ''), tgt = a.temperature ?? a.target_temp_high; if (act === 'heating' || act === 'cooling') parts.push(`${act.charAt(0).toUpperCase() + act.slice(1)}${tgt !== undefined ? ` to ${Math.round(Number(tgt))}°` : ''}`); else if (st.state !== 'off' && st.state !== 'unavailable') parts.push(`${st.state.charAt(0).toUpperCase() + st.state.slice(1).replace(/_/g, ' ')}${tgt !== undefined ? ` · ${Math.round(Number(tgt))}°` : ''}`); }
+    // covers that are not doors or gates (shades, blinds, awnings)
+    const cls = (e: any) => String(this._s(e.entity)?.attributes?.device_class || '');
+    const shades = ents.filter((e) => domainOf(e.entity) === 'cover' && !/^(garage|door|gate)$/.test(cls(e)));
+    if (shades.length) { const openS = shades.filter((e) => this._s(e.entity)?.state !== 'closed'); const w = /blind/i.test(cls(shades[0]) + nameOf(shades[0])) ? 'blind' : /awning/i.test(cls(shades[0])) ? 'awning' : /curtain/i.test(cls(shades[0])) ? 'curtain' : 'shade'; parts.push(!openS.length ? `${shades.length > 1 ? w.charAt(0).toUpperCase() + w.slice(1) + 's' : w.charAt(0).toUpperCase() + w.slice(1)} down` : openS.length === shades.length ? `${shades.length > 1 ? w.charAt(0).toUpperCase() + w.slice(1) + 's' : w.charAt(0).toUpperCase() + w.slice(1)} up` : `${openS.length} of ${shades.length} ${w}s up`); }
+    // alarm
+    for (const e of ents.filter((e) => domainOf(e.entity) === 'alarm_control_panel')) { const st = this._s(e.entity); if (st && st.state !== 'unavailable') parts.push(`Alarm ${st.state.replace(/_/g, ' ')}`); }
+    // readouts that ask to be summarised: their rendered text, with the label
+    for (const e of room.entities || []) {
+      if (!yes(e.summary) || this._tiles.hidden(e)) continue;
+      const text = isTemplate(e.entity) ? (this._templates.get(e.entity)?.text || '') : (() => { const st = this._s(e.entity); return st && st.state !== 'unavailable' && st.state !== 'unknown' ? `${st.state}${st.attributes?.unit_of_measurement ? (String(st.attributes.unit_of_measurement).startsWith('°') || st.attributes.unit_of_measurement === '%' ? '' : ' ') + st.attributes.unit_of_measurement : ''}` : ''; })();
+      if (text && text !== '…') parts.push(e.name ? `${e.name} ${text}` : text);
+    }
+    parts.push(...this._security(room));
+    if (!parts.length) return hasReadouts ? 'Readings only' : ents.length ? 'Everything is off' : 'Nothing to control here';
+    return parts.join(' · ');
+  }
   private _activeCount(room: Room): number { return (room.entities || []).filter((e) => ACTIVE_DOMAINS.has(domainOf(e.entity)) && isOn(this._s(e.entity))).length; }
   private _roomName(r: Room): string { return titleCase(r.name || r.id); }
   /** Subscribe to Home Assistant's rendering of every template readout in the configuration (and drop
@@ -1012,6 +1049,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
     (this._config.rooms || []).forEach((r: Room) => (r.entities || []).forEach(want));
     // the card's title, icon and subtitle (2.18): templates, or a list of readouts
     const c = this._config; for (const k of ['title', 'icon', 'icon_color']) if (isTemplate(c[k])) wanted.add(c[k]);
+    (this._config.rooms || []).forEach((r: Room) => { if (isTemplate((r as any).description)) wanted.add((r as any).description); });
     if (isTemplate(c.subtitle)) wanted.add(c.subtitle); else if (Array.isArray(c.subtitle)) c.subtitle.forEach(want);
     this._templates.forEach((t, template) => { if (!wanted.has(template)) { this._templates.delete(template); this._unsubTemplate(t); } });
     wanted.forEach((template) => {
@@ -1103,8 +1141,11 @@ export class Floor3dxRoomsCard extends HTMLElement {
       return `<ha-icon class="ri" icon="${esc(name)}" aria-hidden="true"${color ? ` style="color:${esc(color)}"` : ''}></ha-icon>`;
     };
     const span = (cls: string, e: any, body: string) => { const ic = iconOf(e); return `<span class="${[cls, ic ? 'ic' : ''].filter(Boolean).join(' ')}">${ic}${body}</span>`; };
+    const narrow = this.classList.contains('narrow'), yes = (v: any) => v === true || String(v).toLowerCase() === 'yes' || String(v).toLowerCase() === 'true';
     for (const e of entities) {
       if (!e || typeof e !== 'object' || this._tiles.hidden(e) || e.summary_only === true || e.summary_only === 'yes') continue;
+      // hide_narrow (2.19.2): a readout left off a phone-width card
+      if (yes(e.hide_narrow) && narrow) continue;
       if (e.text !== undefined && e.entity === undefined) {
         // a plain text item (the subtitle): shown as it is, with its icon
         const text = String(e.text ?? ''); if (text === '') continue;
@@ -1203,7 +1244,8 @@ export class Floor3dxRoomsCard extends HTMLElement {
     const roomName = room.name || room.id;
     // the entrance animation plays when the panel opens, not on every re-render while it is open
     const still = this._lastPanelRoom === room.id; this._lastPanelRoom = room.id;
-    return `<section class="panel${still ? ' still' : ''}" aria-label="${esc(this._roomName(room))}"><div class="panelhead"><div class="roomicon">${icon(room.icon || 'mdi:door-open')}</div><div class="grow"><h3>${esc(this._roomName(room))}</h3><p>${esc(room.description || [active ? `${active} on` : ents.length ? 'Everything is off' : readouts ? 'Readings only' : 'Nothing to control here', ...this._security(room)].join(' · '))}</p></div><button class="close" data-action="close" aria-label="Close">${icon('mdi:close')}</button></div><div class="body">${readouts}<div class="tiles">${ents.length ? ents.map((e) => this._tiles.tile(e, roomName)).join('') : readouts ? '' : '<div class="empty">No entities in this room. Add them in the card editor.</div>'}</div></div>${offable.length ? `<div class="foot"><button class="quiet" data-action="room-off" data-focus="room-off" ${offable.some((e) => isOn(this._s(e.entity))) ? '' : 'disabled'}>${icon('mdi:power')}All off in this room</button></div>` : ''}</section>`;
+    const description = room.description ? this._text(room.description) : (this._summaryMode(room) === 'full' ? this._fullSummary(room, ents, !!readouts) : [active ? `${active} on` : ents.length ? 'Everything is off' : readouts ? 'Readings only' : 'Nothing to control here', ...this._security(room)].join(' · '));
+    return `<section class="panel${still ? ' still' : ''}" aria-label="${esc(this._roomName(room))}"><div class="panelhead"><div class="roomicon">${icon(room.icon || 'mdi:door-open')}</div><div class="grow"><h3>${esc(this._roomName(room))}</h3><p>${esc(description)}</p></div><button class="close" data-action="close" aria-label="Close">${icon('mdi:close')}</button></div><div class="body">${readouts}<div class="tiles">${ents.length ? ents.map((e) => this._tiles.tile(e, roomName)).join('') : readouts ? '' : '<div class="empty">No entities in this room. Add them in the card editor.</div>'}</div></div>${offable.length ? `<div class="foot"><button class="quiet" data-action="room-off" data-focus="room-off" ${offable.some((e) => isOn(this._s(e.entity))) ? '' : 'disabled'}>${icon('mdi:power')}All off in this room</button></div>` : ''}</section>`;
   }
 
   // ---- actions ----------------------------------------------------------------------------

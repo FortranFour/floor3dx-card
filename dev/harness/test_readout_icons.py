@@ -15,7 +15,7 @@ JS = r"""async () => {
   const TR = "{{ states('sensor.h') }} % rh";
   const TC = "{{ 'red' if is_state('binary_sensor.d','on') else 'gray' }}";
   const mk = async (extra) => {
-    const rooms = [{id: 'r', name: 'Hall', floors: ['room_0_1'], entities: [{entity: 'light.l', icon: TLI, icon_color: TLC}, {entity: 'switch.w', icon_color: 'teal'}, {entity: 'light.m', icon_color: 'muted'}, {entity: 'light.o', icon_color: 'on'}, {entity: 'sensor.t'}, {entity: 'sensor.h', icon: 'mdi:water-percent', icon_color: '#2196f3'}, {entity: 'binary_sensor.d', icon: TI, icon_color: TC}, {entity: TR, name: 'Air', icon: 'mdi:weather-windy', icon_color: 'url(javascript:1)'}]}];
+    const rooms = [{id: 'r', name: 'Hall', floors: ['room_0_1'], entities: [{entity: 'light.l', icon: TLI, icon_color: TLC}, {entity: 'switch.w', icon_color: 'teal'}, {entity: 'light.m', icon_color: 'muted'}, {entity: 'light.o', icon_color: 'on'}, {entity: 'sensor.t'}, {entity: 'sensor.h', icon: 'mdi:water-percent', icon_color: '#2196f3'}, {entity: 'binary_sensor.d', icon: TI, icon_color: TC}, {entity: TR, name: 'Air', icon: 'mdi:weather-windy', icon_color: 'url(javascript:1)'}, {entity: 'sensor.t', name: 'Desk only', hide_narrow: 'yes'}, {entity: 'sensor.t', name: 'Phone too', hide_narrow: false}]}];
     const el = document.createElement('floor3dx-rooms-card'); el.setConfig(Object.assign({card, rooms, title: 'T', height: '560px'}, extra || {})); el.hass = hass;
     const d = document.createElement('div'); d.style.cssText = 'position:fixed;left:0;top:0;width:900px;height:560px;z-index:99'; document.body.appendChild(d); d.appendChild(el);
     const t = performance.now(); while (!(el._slots.length && el._slots.every(s => s.el && s.el._modelready)) && performance.now() - t < 240000) await sleep(200);
@@ -27,7 +27,8 @@ JS = r"""async () => {
   subs.forEach(s => s.cb({result: s.msg.template === TI ? 'mdi:door-open' : s.msg.template === TC ? 'red' : s.msg.template === TLI ? 'mdi:lightbulb-on' : s.msg.template === TLC ? 'gold' : '48 % rh'})); await sleep(300);
   el._select('r'); await sleep(300); el._render();
   const spans = () => Array.from(el._ui.querySelectorAll('.readouts span')).map(x => ({ic: x.classList.contains('ic'), icon: x.querySelector('ha-icon')?.getAttribute('icon') || null, text: x.textContent.trim(), bullet: getComputedStyle(x, ':before').content}));
-  out.rows = spans(); out.tiles = [...el._ui.querySelectorAll('.tile .ticon ha-icon')].map(x => ({icon: x.getAttribute('icon'), color: x.style.color})); out.colors = Array.from(el._ui.querySelectorAll('.readouts .ri')).map(x => x.style.color);
+  out.rows = spans().slice(0, 4); out.wideNames = spans().map(x => x.text.split(' ')[0] + ' ' + x.text.split(' ')[1]).filter(x => /Desk|Phone/.test(x));
+  d.style.width = '390px'; el._layout(); await sleep(300); el._render(); out.narrowNames = spans().map(x => x.text.split(' ')[0] + ' ' + x.text.split(' ')[1]).filter(x => /Desk|Phone/.test(x)); d.style.width = '900px'; el._layout(); await sleep(300); el._render(); out.tiles = [...el._ui.querySelectorAll('.tile .ticon ha-icon')].map(x => ({icon: x.getAttribute('icon'), color: x.style.color})); out.colors = Array.from(el._ui.querySelectorAll('.readouts .ri')).map(x => x.style.color);
   const icEl = el._ui.querySelector('.readouts .ri'); if (icEl) { const cs = getComputedStyle(icEl), fs = parseFloat(getComputedStyle(icEl.parentElement).fontSize); out.iconPx = parseFloat(cs.width); out.fontPx = fs; }
   // the template flips: the icon follows
   subs.find(s => s.msg.template === TI).cb({result: 'mdi:door-closed'}); await sleep(300); el._render();
@@ -53,6 +54,7 @@ if __name__ == '__main__':
     R = r.get('rows') or []
     check('an icon template is subscribed like a readout template', sorted(x for x in (r.get('subs') or []) if x != '?') == ['icon', 'readout'])
     check('tiles (2.19): an icon template and a colour template on a light; the entity icon kept with a plain colour on a switch', (r.get('tiles') or [])[:2] == [{'icon': 'mdi:lightbulb-on', 'color': 'gold'}, {'icon': 'mdi:valve', 'color': 'teal'}])
+    check('hide_narrow: left out under 700 px, back when wide; re-rendered when the width changes', r.get('wideNames') == ['Desk only', 'Phone too'] and r.get('narrowNames') == ['Phone too'])
     check('icon_color: muted / on name the theme colours', [t['color'] for t in (r.get('tiles') or [])[2:4]] == ['var(--f3r-muted)', 'rgb(var(--f3r-on))'])
     check('icon_color: a CSS colour, a template rendering to one; a non-colour is ignored', r.get('colors') == ['rgb(33, 150, 243)', 'red', ''])
     check('a plain readout keeps its bullet; one with icon: shows the icon and no bullet', len(R) == 4 and R[0]['ic'] is False and R[0]['icon'] is None and R[1]['ic'] is True and R[1]['icon'] == 'mdi:water-percent' and R[1]['bullet'] == 'none')
