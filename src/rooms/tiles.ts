@@ -45,6 +45,8 @@ export interface TilesHost {
   setConfirm(c: { entity: string; text: string } | null): void;
   /** The rendered text of a template (a tile's `status`), '…' while pending, null when unknown. */
   template(t: string): string | null;
+  /** A tile's icon colour (2.19): the entity's `icon_color`, a CSS colour or a template rendering to one; '' for none. */
+  iconColor(e: RoomEntity): string;
 }
 
 export const CSS_TILES = `
@@ -84,12 +86,20 @@ export class Tiles {
     if (r && n.toLowerCase().startsWith(r.toLowerCase() + ' ') && n.length > r.length + 2) n = n.slice(r.length + 1);
     return n.charAt(0).toUpperCase() + n.slice(1);
   }
-  private iconOf(e: RoomEntity): string { return e.icon || this.s(e.entity)?.attributes?.icon || DEFAULT_ICONS[domainOf(e.entity)] || 'mdi:circle-outline'; }
+  /** The tile's icon: the entity's `icon` - a name, or a Jinja template Home Assistant renders to one (2.19) -
+   *  else the entity's own icon, else the domain's. A template result that is not an icon name falls through. */
+  private iconOf(e: RoomEntity): string {
+    const ic: any = e.icon;
+    if (typeof ic === 'string' && /\{\{|\{%/.test(ic)) { const t = (this.host.template(ic) || '').trim(); if (/^[a-z][a-z0-9-]*:[a-z0-9-]+$/i.test(t)) return t; }
+    else if (typeof ic === 'string' && ic.trim()) return ic.trim();
+    return this.s(e.entity)?.attributes?.icon || DEFAULT_ICONS[domainOf(e.entity)] || 'mdi:circle-outline';
+  }
+  private iconHtml(e: RoomEntity): string { const c = this.host.iconColor(e); return `<ha-icon icon="${esc(this.iconOf(e))}" aria-hidden="true"${c ? ` style="color:${esc(c)}"` : ''}></ha-icon>`; }
 
   // ---- the tile ---------------------------------------------------------------------------
   tile(e: any, roomName: string): string {
     const id: string = e.entity, s = this.s(id), d = domainOf(id), a = s?.attributes || {}, g = this.guest();
-    const name = esc(this.name(e, roomName)), ic = icon(this.iconOf(e));
+    const name = esc(this.name(e, roomName)), ic = this.iconHtml(e);
     const H = this.host;
     const busy = H.busy.has(id) || H.seq.has(id) || (!!e.top_entity && (H.busy.has(e.top_entity) || H.seq.has(e.top_entity)));
     const dis = !available(s) || busy ? 'disabled' : '';

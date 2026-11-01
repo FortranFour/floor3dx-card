@@ -17,6 +17,8 @@ JS = r"""async (width) => {
   const out = {width};
   let {el, d} = await mk();
   out.compact = !!q(el, 'button.modelbtn'); out.segments = !!q(el, '.menu .seg');
+  if (out.segments) { out.segOrder = [...el.shadowRoot.querySelectorAll('.menu .seg button')].map(b => b.textContent.trim()); out.segIcons = el.shadowRoot.querySelectorAll('.menu .seg ha-icon').length; }
+  const rb = q(el, '.menu button[data-action="list"]'); out.roomsBtn = {text: rb?.textContent.trim(), icon: !!rb?.querySelector('ha-icon'), label: rb?.getAttribute('aria-label')};
   // the button is actually hit by a finger (its container passes pointer events through; 2.17.1)
   if (out.compact) { const r = q(el, 'button.modelbtn').getBoundingClientRect(); const hit = el.shadowRoot.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); out.hit = !!(hit && hit.closest('button.modelbtn')); const ic = q(el, 'button.modelbtn ha-icon'); out.iconStyle = getComputedStyle(ic).display; }
   // camera menu: open by a hold, closed by a tap on the chrome elsewhere
@@ -35,7 +37,7 @@ JS = r"""async (width) => {
   tap(q(el, '.menu button[data-action="list"]')); await sleep(100);
   if (out.compact) {
     // tap cycles House -> Garage -> Both -> House; hold lists
-    const label = () => q(el, 'button.modelbtn').textContent.trim();
+    const label = () => q(el, 'button.modelbtn .mn').textContent.trim();
     out.cycle = [label()]; for (let i = 0; i < 3; i++) { tap(q(el, 'button.modelbtn')); await sleep(200); out.cycle.push(label()); }
     await hold('button.modelbtn'); { const r = q(el, '.list.modelmenu').getBoundingClientRect(), h = el.getBoundingClientRect(); out.menuBox = {h: r.height, top: r.top - h.top, bottom: h.bottom - r.bottom}; } out.modelMenu = [...el.shadowRoot.querySelectorAll('.list.modelmenu button[data-action="model"] span:last-child')].map(s => s.textContent);
     el.shadowRoot.querySelector('.list.modelmenu button[data-model]:nth-of-type(2)') && el.shadowRoot.querySelectorAll('.list.modelmenu button[data-action="model"]')[1].click(); await sleep(200);
@@ -45,6 +47,10 @@ JS = r"""async (width) => {
   // forced modes
   ({el, d} = await mk({models_menu: 'segments'})); out.forcedSegments = !!q(el, '.menu .seg') && !q(el, 'button.modelbtn'); d.remove();
   ({el, d} = await mk({models_menu: 'compact'})); out.forcedCompact = !!q(el, 'button.modelbtn') && !q(el, '.menu .seg'); d.remove();
+  // the switcher style: icons (default icons from the names), both, and a model's own icon
+  ({el, d} = await mk({models_menu: 'segments', models_menu_style: 'icon'})); out.styleIcon = {icons: [...el.shadowRoot.querySelectorAll('.menu .seg ha-icon')].map(i => i.getAttribute('icon')), names: el.shadowRoot.querySelectorAll('.menu .seg .mn').length}; d.remove();
+  ({el, d} = await mk({models_menu: 'segments', models_menu_style: 'both'})); out.styleBoth = {icons: el.shadowRoot.querySelectorAll('.menu .seg ha-icon').length, names: [...el.shadowRoot.querySelectorAll('.menu .seg .mn')].map(x => x.textContent)}; d.remove();
+  ({el, d} = await mk({models_menu: 'compact', models_menu_style: 'both'})); out.compactBoth = {icon: q(el, 'button.modelbtn > ha-icon:first-child')?.getAttribute('icon'), name: q(el, 'button.modelbtn .mn')?.textContent}; d.remove();
   return out;
 }"""
 
@@ -67,10 +73,13 @@ if __name__ == '__main__':
     check('… and on a tap on the model', p.get('camClosedByModel') and w.get('camClosedByModel'))
     check('… and when a room opens', p.get('camClosedByRoom') and w.get('camClosedByRoom'))
     check('… and when another menu (Rooms) opens', p.get('camClosedByList') and w.get('camClosedByList'))
-    check('compact: a tap cycles House → Garage → Both → House', p.get('cycle') == ['House', 'Garage', 'Both', 'House'])
+    check('compact: a tap cycles House → Both → Garage → House (Both in the middle with two models)', p.get('cycle') == ['House', 'Both', 'Garage', 'House'])
     check('compact: the model menu is a short list above the button, not a column the height of the card', (p.get('menuBox') or {}).get('h', 999) < 200 and (p.get('menuBox') or {}).get('bottom', 0) > 40)
-    check('compact: a hold lists the models and Both; choosing applies and closes', p.get('modelMenu') == ['House', 'Garage', 'Both'] and p.get('chosen') == 'Garage' and p.get('menuGone') is True)
+    check('compact: a hold lists the models and Both; choosing applies and closes', p.get('modelMenu') == ['House', 'Both', 'Garage'] and p.get('chosen') == 'Both' and p.get('menuGone') is True)
     check('models_menu: segments / compact force either form', p.get('forcedSegments') is True and p.get('forcedCompact') is True)
+    check('segments run House · Both · Garage with two models; the Rooms button keeps its label', w.get('segOrder') == ['House', 'Both', 'Garage'] and w.get('segIcons') == 0 and (w.get('roomsBtn') or {}).get('text') == 'Rooms' and (w.get('roomsBtn') or {}).get('icon') is True)
+    check('models_menu_style: icon shows the default icons (home, both, garage) and no names', (p.get('styleIcon') or {}).get('icons') == ['mdi:home-outline', 'mdi:view-agenda-outline', 'mdi:garage-variant'] and (p.get('styleIcon') or {}).get('names') == 0)
+    check('models_menu_style: both shows icons and names; the compact button too', (p.get('styleBoth') or {}).get('icons') == 3 and (p.get('styleBoth') or {}).get('names') == ['House', 'Both', 'Garage'] and (p.get('compactBoth') or {}).get('icon') == 'mdi:home-outline' and (p.get('compactBoth') or {}).get('name') == 'House')
     check('no page errors', not errors)
     for e in errors[:5]: print('  error:', e[:300])
     sys.exit(1 if fails else 0)

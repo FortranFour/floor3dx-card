@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.19.0
+
+### Added
+- Rooms Card: `models_menu_style: name | icon | both` — what the model switcher (segments, compact button and its menu) shows for each model. Icons from `models[].icon`, else a default from the model's name (home, garage, barn, pool, office, floor); *Both/All* uses `all_icon` (`mdi:view-agenda-outline`). Editor: *Model switcher shows* in Display; an *Icon* field per model.
+- Rooms Card: control tiles take the readouts' `icon` (a name or a Jinja template rendering to one) and `icon_color` (a CSS colour or a template); defaults unchanged. Editor: both fields under every entity.
+
+### Changed
+- Rooms Card: with exactly two models the switcher runs *House · Both · Garage* (the combined view in the middle); the compact button cycles in the same order. Harness: `test_switcher_menus.py` (15), `test_readout_icons.py` (9).
+
 ## 2.18.1
 
 ### Added

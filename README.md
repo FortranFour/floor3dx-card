@@ -613,9 +613,10 @@ rooms:
 | Option | Values | Default |
 |---|---|---|
 | `theme` | `off`, the six looks, or any of the 34 named palettes of `look.theme` (see the look section above) | `neon` |
-| `models` | several models in one card (2.5): a list of `{id, name, width, card}`, each `card` a floor3d card configuration; replaces `card:`. `width` is the share of the width when all are shown | |
+| `models` | several models in one card (2.5): a list of `{id, name, width, icon, card}`, each `card` a floor3d card configuration; replaces `card:`. `width` is the share of the width when all are shown | |
 | `layout` | `row`, `column`: how the models are arranged when all are shown (2.5) | by the card's shape: side by side when wider than tall |
 | `models_menu` | the House / Garage / Both switcher: `auto` — the segmented control when the card is 700 px or wider, the compact corner button on a phone (2.16); `segments` or `compact` force one; `no` hides it (2.5) | `auto` |
+| `models_menu_style` | what the switcher shows for each model: `name` (default), `icon`, `both` (2.19). Icons come from `models[].icon`, else from the model's name (house → `mdi:home-outline`, garage → `mdi:garage-variant`…); *Both/All* uses `all_icon` (default `mdi:view-agenda-outline`) | `name` |
 | `default_model` | the model the card opens on: a model's `id` or name, or `all` (2.5.1); `#model=` in the URL overrides it | the first model |
 | `models_gap` | px between the models when all are shown (2.5) | `14` |
 | `model_labels` | `no`: no divider line and no name caption in each view when all are shown (2.5) | `yes` |
@@ -626,7 +627,7 @@ rooms:
 | `readout_icons` | `yes`: readouts without an `icon` of their own show the entity's icon in place of the bullet (2.18) | `no` |
 | `title`, `subtitle`, `icon`, `icon_color` | the card's title bar; each may be a Jinja template; `subtitle` may be a list of readouts (`entity` or `text`, `name`, `icon`, `icon_color`, `break`) (2.18) | |
 | `rooms[].floors` | floor object names; a room without one is reached from the Rooms menu | |
-| `rooms[].entities[]` | `entity` (an id, or a Jinja template — see below), `name`, `icon` (a tile's icon; on a readout, the icon in place of its bullet — a name or a Jinja template, 2.18), `icon_color` (a CSS colour or a template, 2.18.1), `read_only`, `guest_hidden`, `break` (`yes`: a new line of readouts after this one; `rule`: a divider first), `status` (a Jinja template for a control tile's status line), `summary_only` (a door, lock or window only in the subtitle); `top_entity` (a top-down/bottom-up shade's top rail), `dimmer` (the light behind a switch), `remote`, `remote_commands`, `sources`, `controls` (`brightness`, `white`, `color`), as in the snapshot card | |
+| `rooms[].entities[]` | `entity` (an id, or a Jinja template — see below), `name`, `icon` (a tile's icon or, on a readout, the icon in place of its bullet — a name or a Jinja template, 2.18/2.19), `icon_color` (a CSS colour or a template, 2.18.1/2.19), `read_only`, `guest_hidden`, `break` (`yes`: a new line of readouts after this one; `rule`: a divider first), `status` (a Jinja template for a control tile's status line), `summary_only` (a door, lock or window only in the subtitle); `top_entity` (a top-down/bottom-up shade's top rail), `dimmer` (the light behind a switch), `remote`, `remote_commands`, `sources`, `controls` (`brightness`, `white`, `color`), as in the snapshot card | |
 | `pins` | `yes`, `no`: a pin per room, following the camera | `yes` |
 | `panel_lines` | `yes`: the theme's lines are drawn on text and picture panels too (2.4.2) | `no` |
 | `edge_skip` | the look's `edge_skip` list, replacing the default | `seams, floors, ceilings, texts, images` |
@@ -689,6 +690,8 @@ subtitle:
 
 On a phone the title line itself still shortens with an ellipsis; the readout lines wrap. The visual editor edits a string title and subtitle; a list subtitle is edited in YAML.
 
+**Tile icons from templates, in colour** (2.19). The same `icon` and `icon_color` work on control tiles (lights, switches, covers, media players…): `icon` may be a Jinja template that renders to an icon name, `icon_color` a CSS colour or a template rendering to one. Without them a tile keeps its default — the entity's own icon, lit in the accent colour when on.
+
 **Icons in place of bullets** (2.18). A readout — a sensor, a binary sensor or a template readout — takes an `icon`: an `mdi:` name, or a Jinja template Home Assistant renders to one, and the icon stands where the `·` bullet was, scaled to the text and coloured with it (an open door's alert colour includes its icon). With `readout_icons: yes` on the card, readouts without an `icon` show the entity's own icon (its `icon` attribute, when it has one); the rest keep their bullet. `icon_color` (2.18.1) colours the icon — a CSS colour (`orange`, `#2196f3`, `rgb(…)`, `var(--…)`) or a Jinja template that renders to one; without it the icon takes the text's colour, muted grey or the alert colour. Editor: the *Icon in place of the bullet* field under a readout entity, and the *Readouts show each entity's own icon* box in *Display*.
 
 ```yaml
@@ -717,6 +720,8 @@ On a phone the title line itself still shortens with an ellipsis; the readout li
 ### Several models in one card (2.5)
 
 A house and a garage can share one rooms card: `models:` instead of `card:`, one entry per model, each with its own floor3d card configuration and its own rooms. Each model is rendered in its own view (its own camera, rotated on its own; they cannot collide), and a switcher at the top shows **House · Garage · Both** — one model filling the card, or all of them side by side (stacked when the card is taller than wide; `layout: row | column` forces one). Only the shown models render; the others stay loaded. One theme, one panel; the *Rooms* menu is grouped by model, and selecting a room of a hidden model shows that model.
+
+**Order and look of the switcher** (2.19). With exactly two models the switcher runs *House · Both · Garage* — the combined view in the middle, one step from either; with more, *All* comes last. `models_menu_style: name | icon | both` chooses what each entry shows; a model's icon is `models[].icon`, or a default picked from its name (home, garage, barn, pool, office, floor…), and *Both/All* is `all_icon` (a stack of two views by default). Editor: *Model switcher shows* in Display, an *Icon* field per model.
 
 **The compact switcher** (2.16). On a phone-width card (under 700 px) the segmented control gives way to one small button in the bottom-left corner that names the model shown — *House*, *Garage*, *Both*. A tap shows the next one round; a hold lists them. In *Both* the model captions sit at the right so the button does not cover them. `models_menu: segments | compact` forces either form at any width; `no` hides the switcher as before.
 

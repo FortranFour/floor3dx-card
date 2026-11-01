@@ -5,7 +5,7 @@
 import { THEMES } from './themes';
 import { Room, slug } from './rooms';
 import { esc } from './tiles';
-import { ROOMS_EDITOR_EVENT, ROOMS_PREVIEW_EVENT } from './rooms-card';
+import { ROOMS_EDITOR_EVENT, ROOMS_PREVIEW_EVENT, modelIcon } from './rooms-card';
 import { tokenRoles } from './references';
 import { scanDashboards, FoundCard } from './scan';
 import { normalizeConfig, cleanConfig } from '../config';
@@ -67,7 +67,7 @@ ha-icon{--mdc-icon-size:20px;width:20px;height:20px;color:var(--secondary-text-c
 `;
 
 /** The editor's view of the models: `models:` or the single `card:` as a one-item list. */
-interface ModelItem { id: string; name: string; width?: number; card: any }
+interface ModelItem { id: string; name: string; width?: number; icon?: string; card: any }
 
 class Floor3dxRoomsCardEditor extends HTMLElement {
   private _config: any;
@@ -137,7 +137,7 @@ class Floor3dxRoomsCardEditor extends HTMLElement {
     const c = this._config;
     if (Array.isArray(c.models) && c.models.length) {
       const taken = new Set<string>();
-      return c.models.map((m: any, i: number) => { const name = m?.name || `Model ${i + 1}`; const id = slug(m?.id || name, taken); taken.add(id); return { id, name, width: m?.width, card: m?.card }; });
+      return c.models.map((m: any, i: number) => { const name = m?.name || `Model ${i + 1}`; const id = slug(m?.id || name, taken); taken.add(id); return { id, name, width: m?.width, icon: m?.icon, card: m?.card }; });
     }
     return [{ id: 'model', name: c.title || 'Model', card: c.card }];
   }
@@ -149,7 +149,7 @@ class Floor3dxRoomsCardEditor extends HTMLElement {
       delete c.models;
       rooms.forEach((r) => delete r.model);
     } else {
-      c.models = list.map((m) => { const o: any = { id: m.id, name: m.name }; if (Number(m.width) > 0) o.width = Number(m.width); o.card = m.card; return o; });
+      c.models = list.map((m) => { const o: any = { id: m.id, name: m.name }; if (Number(m.width) > 0) o.width = Number(m.width); if (m.icon) o.icon = m.icon; o.card = m.card; return o; });
       delete c.card;
       rooms.forEach((r) => { if (!r.model || !list.some((m) => m.id === r.model)) r.model = list[0].id; });
     }
@@ -242,7 +242,7 @@ ${this._section('display', '4 · Display', '', '', this._displaySection())}`;
     const models = this._models(), found = this._found, many = models.length > 1;
     const target = models[Math.min(this._target, models.length - 1)];
     const modelItem = (m: ModelItem, i: number) => `<div class="item">
-${many ? `<div class="row"><label>Name<input type="text" data-model-field="name" data-i="${i}" value="${esc(m.name)}" data-key="mn${i}"></label><label>Width share (blank: equal)<input type="number" min="1" max="99" data-model-field="width" data-i="${i}" value="${esc(m.width ?? '')}" placeholder="50" data-key="mw${i}"></label></div>` : ''}
+${many ? `<div class="row"><label>Name<input type="text" data-model-field="name" data-i="${i}" value="${esc(m.name)}" data-key="mn${i}"></label><label>Width share (blank: equal)<input type="number" min="1" max="99" data-model-field="width" data-i="${i}" value="${esc(m.width ?? '')}" placeholder="50" data-key="mw${i}"></label><label>Icon<input type="text" data-model-field="icon" data-i="${i}" value="${esc(m.icon ?? '')}" placeholder="${esc(modelIcon(m.name))}" data-key="mi${i}"></label></div>` : ''}
 <div class="row">${m.card?.objfile ? `<span class="note" style="flex:1">Model: <code>${esc((m.card.path || '') + m.card.objfile)}</code> · ${(m.card.entities || []).length} entity rows${tokenRoles(m.card).length ? ` · ${tokenRoles(m.card).length} reference token${tokenRoles(m.card).length === 1 ? '' : 's'}` : ''}</span>` : `<span class="note warn" style="flex:1">No card yet: find one below and press Use.</span>`}${m.card?.objfile ? `<button data-act="model-edit" data-i="${i}" aria-pressed="${this._editing === i}">${this._editing === i ? 'Done with 3D settings' : 'Edit 3D settings'}</button>` : ''}${many ? `<button class="icon" data-act="model-remove" data-i="${i}">Remove</button>` : ''}</div>${this._editing === i ? `<div class="inline" data-inline="${i}"><div class="row" style="justify-content:space-between;align-items:center"><p class="note" style="flex:1;margin:0">The regular floor3dx card's editor, on this model's block: lamps, daylight, doors, text panels, the look. The preview is this model in the rooms card; <em>pick</em> an object by tapping it there.</p><button class="icon" data-act="model-code" data-i="${i}" aria-pressed="${this._inlineCode}">${this._inlineCode ? 'Show visual editor' : 'Show code editor'}</button></div><div class="inlinehost"></div></div>` : ''}</div>`;
     return `<p class="note">The rooms card shows the live 3D model of an existing floor3dx-card (or floor3d-card / floor3dpro-card), with all of that card's lights, text frames, pictures, doors and shades. Pick the card; its configuration is copied in here and the two cards stay independent afterwards. A second model (a garage) gets its own view and a switcher on the card.</p>
 ${models.map(modelItem).join('')}
@@ -285,9 +285,10 @@ ${ents.map((e: any, j) => `<div class="ent"><label>Entity<input type="text" list
     if (/^(binary_sensor|lock)\./.test(id) || /^cover\./.test(id)) html += `<label class="check small"><input type="checkbox" data-field="rooms.${i}.entities.${j}.summary_only" data-bool ${e.summary_only ? 'checked' : ''} data-key="rso${i}-${j}">Only in the room's subtitle (doors, locks and windows are summarised there; no readout line)</label>`;
     html += `<label class="check small"><input type="checkbox" data-field="rooms.${i}.entities.${j}.guest_hidden" data-bool ${e.guest_hidden ? 'checked' : ''} data-key="rg${i}-${j}">Hide in guest mode</label>`;
     // readouts can be grouped: a new line or a hairline after this one (sensors, binary sensors, templates)
-    if (/^(sensor|binary_sensor)\./.test(id) || /\{\{|\{%/.test(id)) {
-      html += f('icon', 'Icon in place of the bullet: mdi:… or a Jinja template that renders to one (optional)', '', "mdi:thermometer or {{ 'mdi:door-open' if is_state('binary_sensor.…','on') else 'mdi:door-closed' }}");
-      if (e.icon) html += f('icon_color', 'Icon colour: a CSS colour or a Jinja template that renders to one (optional)', '', "#2196f3, orange, or {{ 'red' if is_state('binary_sensor.…','on') else 'gray' }}");
+    const readout = /^(sensor|binary_sensor)\./.test(id) || /\{\{|\{%/.test(id);
+    html += f('icon', readout ? 'Icon in place of the bullet: mdi:… or a Jinja template that renders to one (optional)' : "Icon: mdi:… or a Jinja template that renders to one (optional; the entity's own otherwise)", '', "mdi:thermometer or {{ 'mdi:door-open' if is_state('binary_sensor.…','on') else 'mdi:door-closed' }}");
+    html += f('icon_color', 'Icon colour: a CSS colour or a Jinja template that renders to one (optional)', '', "#2196f3, orange, or {{ 'red' if is_state('binary_sensor.…','on') else 'gray' }}");
+    if (readout) {
       const cur = String(e.break ?? '').toLowerCase();
       html += `<label class="small">After this readout<select data-field="rooms.${i}.entities.${j}.break" data-key="rb${i}-${j}"><option value="" ${!cur || cur === 'no' ? 'selected' : ''}>Nothing</option><option value="yes" ${cur === 'yes' || cur === 'true' ? 'selected' : ''}>Start a new line</option><option value="rule" ${cur === 'rule' || cur === 'line' || cur === 'divider' ? 'selected' : ''}>A thin divider, then a new line</option></select></label>`;
     }
@@ -317,7 +318,7 @@ ${many ? `<div class="row">${sel('default_model', 'Opens on', [['', esc(this._mo
 <div class="row"><label class="check"><input type="checkbox" data-field="panel_lines" data-bool ${c.panel_lines ? 'checked' : ''}>Theme lines on text and picture panels</label><label>Edge lines skipped (<code>edge_skip</code>)<input type="text" data-field="edge_skip" value="${esc(c.edge_skip ?? '')}" placeholder="seams, floors, ceilings, texts, images" data-key="des"></label></div>
 <div class="row"><label class="check"><input type="checkbox" data-field="pins" data-bool data-default-true ${c.pins !== false ? 'checked' : ''}>Room pins on the model</label><label class="check"><input type="checkbox" data-field="labels" data-bool ${c.labels ? 'checked' : ''}>Pins always show the room's name</label><label class="check"><input type="checkbox" data-field="keep_panel" data-bool ${c.keep_panel ? 'checked' : ''}>A tap outside the rooms keeps the panel open</label></div>
 <div class="row"><label>Panel opacity: <span data-unit="">${Math.round(Number(c.panel_opacity ?? 0.55) * 100)}%</span><input type="range" min="0.2" max="0.95" step="0.05" data-field="panel_opacity" data-num data-pct value="${esc(c.panel_opacity ?? 0.55)}" data-key="dpo"></label></div>
-<div class="row"><label class="check"><input type="checkbox" data-field="tint_on" data-bool ${c.tint_on ? 'checked' : ''}>Tint the floor of rooms with something on (the lamps show it themselves)</label><label class="check"><input type="checkbox" data-field="sensor_tiles" data-bool ${c.sensor_tiles ? 'checked' : ''}>Sensors as tiles (instead of a line of readings under the room's name)</label><label class="check"><input type="checkbox" data-field="readout_icons" data-bool ${c.readout_icons === true || c.readout_icons === 'yes' ? 'checked' : ''}>Readouts show each entity's own icon in place of the bullet (an entity's <code>icon</code> always does)</label></div>
+<div class="row"><label class="check"><input type="checkbox" data-field="tint_on" data-bool ${c.tint_on ? 'checked' : ''}>Tint the floor of rooms with something on (the lamps show it themselves)</label><label class="check"><input type="checkbox" data-field="sensor_tiles" data-bool ${c.sensor_tiles ? 'checked' : ''}>Sensors as tiles (instead of a line of readings under the room's name)</label><label>Model switcher shows<select data-field="models_menu_style" data-key="dms"><option value="" ${!c.models_menu_style || c.models_menu_style === 'name' ? 'selected' : ''}>Names</option><option value="icon" ${c.models_menu_style === 'icon' ? 'selected' : ''}>Icons</option><option value="both" ${c.models_menu_style === 'both' ? 'selected' : ''}>Icons and names</option></select></label><label class="check"><input type="checkbox" data-field="readout_icons" data-bool ${c.readout_icons === true || c.readout_icons === 'yes' ? 'checked' : ''}>Readouts show each entity's own icon in place of the bullet (an entity's <code>icon</code> always does)</label></div>
 <div class="row"><label class="check"><input type="checkbox" data-field="brightness_slider" data-bool data-default-true ${c.brightness_slider !== false ? 'checked' : ''}>Brightness slider</label><label class="check"><input type="checkbox" data-field="white_slider" data-bool data-default-true ${c.white_slider !== false ? 'checked' : ''}>Warmth slider</label><label>Colour swatches<select data-field="color_swatches" data-key="dcs"><option value="" ${c.color_swatches === undefined ? 'selected' : ''}>Unless guest mode is on</option><option value="true" ${c.color_swatches === true ? 'selected' : ''}>Always</option><option value="false" ${c.color_swatches === false ? 'selected' : ''}>Never</option></select></label>${sel('color_control', 'Colour control', [['', 'Swatches'], ['slider', 'Hue slider'], ['both', 'Slider with the swatches as presets']], c.color_control || '', 'dcc')}</div>
 <label class="check"><input type="checkbox" data-field="guest_mode" data-bool data-default-true ${c.guest_mode !== false ? 'checked' : ''}>Guest mode: locks can only be locked, garage doors and gates only closed, alarms are read-only, TV volume is capped</label>
 <div class="row"><label>Guest mode follows this switch (optional)<input type="text" list="f3r-entities" data-field="guest_mode_entity" value="${esc(c.guest_mode_entity || '')}" placeholder="input_boolean.guest_mode" data-key="dge"></label><label>Thermostats in guest mode<select data-field="guest_thermostat" data-key="dgt">${[['', 'Setpoint and power'], ['setpoint', 'Setpoint only'], ['view', 'View only'], ['full', 'Everything']].map(([v, t]) => `<option value="${v}" ${(c.guest_thermostat || '') === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label></div>
@@ -349,6 +350,7 @@ ${many ? `<div class="row">${sel('default_model', 'Opens on', [['', esc(this._mo
     const list = this._models(), i = Number(el.dataset.i), m = list[i]; if (!m) return;
     if (el.dataset.modelField === 'name') { const name = el.value.trim() || `Model ${i + 1}`; const oldId = m.id; m.name = name; m.id = slug(name, new Set(list.filter((x) => x !== m).map((x) => x.id))); this._config.rooms.forEach((r: Room) => { if (r.model === oldId) r.model = m.id; }); if (this._used.has(i)) { /* keep */ } }
     if (el.dataset.modelField === 'width') m.width = el.value === '' ? undefined : Number(el.value);
+    if (el.dataset.modelField === 'icon') m.icon = el.value.trim() || undefined;
     this._setModels(list);
     this._emit();
   }

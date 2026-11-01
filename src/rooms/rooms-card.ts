@@ -60,7 +60,7 @@ const STYLE = `
 .menu .seg{display:inline-flex;border-radius:12px;border:1px solid var(--f3r-line);background:var(--f3r-panel);-webkit-backdrop-filter:blur(var(--f3r-blur));backdrop-filter:blur(var(--f3r-blur));overflow:hidden}
 .menu .seg button{border:0;border-radius:0;background:transparent;-webkit-backdrop-filter:none;backdrop-filter:none;min-width:44px}
 .menu .seg button[aria-pressed=true]{background:rgba(var(--f3r-accent),.18)}
-.menu .seg button + button{border-left:1px solid var(--f3r-line)}
+.menu .seg button + button{border-left:1px solid var(--f3r-line)}.menu .seg button ha-icon,.modelbtn > ha-icon:first-child{width:18px;height:18px;--mdc-icon-size:18px}.menu .seg button ha-icon + .mn,.modelbtn > ha-icon + .mn{margin-left:5px}.list.modelmenu button > ha-icon{width:18px;height:18px;--mdc-icon-size:18px;opacity:.8}
 /* the dividers either side of the pressed segment vanish, so its tint fills the slot edge to edge */
 .menu .seg button[aria-pressed=true] + button,.menu .seg button + button[aria-pressed=true]{border-left-color:transparent}
 .list{position:absolute;z-index:3;right:14px;top:58px;max-height:calc(100% - 80px);overflow:auto;padding:6px;border-radius:14px;background:var(--f3r-panel);-webkit-backdrop-filter:blur(var(--f3r-blur));backdrop-filter:blur(var(--f3r-blur));border:1px solid var(--f3r-line);display:flex;flex-direction:column;gap:2px;min-width:200px}
@@ -122,6 +122,7 @@ interface Tint { mesh: THREE.Mesh; room: Room }
 interface Slot {
   id: string;
   name: string;
+  icon: string;
   width: number;
   card: any;
   key: string; // the embedded configuration, to tell a change
@@ -132,7 +133,19 @@ interface Slot {
   home: { position: THREE.Vector3; target: THREE.Vector3 } | null;
   poll: any;
 }
-export interface ModelDef { id: string; name: string; width: number; card: any }
+export interface ModelDef { id: string; name: string; width: number; card: any; icon: string }
+/** A model's default icon, from its name: a house, a garage, a shed… (2.19). */
+export function modelIcon(name: string, icon?: any): string {
+  if (typeof icon === 'string' && icon.trim()) return icon.trim();
+  const n = String(name || '').toLowerCase();
+  if (/garage|carport|workshop/.test(n)) return 'mdi:garage-variant';
+  if (/shed|barn/.test(n)) return 'mdi:barn';
+  if (/pool/.test(n)) return 'mdi:pool';
+  if (/office|studio/.test(n)) return 'mdi:office-building-outline';
+  if (/floor|level|storey|story/.test(n)) return 'mdi:layers-outline';
+  return 'mdi:home-outline';
+}
+export const ALL_ICON = 'mdi:view-agenda-outline';
 
 /** The models of a configuration: `models:` or the single `card:`. */
 export function modelDefs(config: any): ModelDef[] {
@@ -141,10 +154,10 @@ export function modelDefs(config: any): ModelDef[] {
     return config.models.map((m: any, i: number) => {
       const name = (m && typeof m.name === 'string' && m.name) || `Model ${i + 1}`;
       const id = slug((m && m.id) || name, taken); taken.add(id);
-      return { id, name, width: Number(m?.width) || 0, card: m?.card };
+      return { id, name, width: Number(m?.width) || 0, card: m?.card, icon: modelIcon(name, m?.icon) };
     });
   }
-  return config?.card ? [{ id: 'model', name: config.title || 'Model', width: 0, card: config.card }] : [];
+  return config?.card ? [{ id: 'model', name: config.title || 'Model', width: 0, card: config.card, icon: modelIcon('') }] : [];
 }
 
 export class Floor3dxRoomsCard extends HTMLElement {
@@ -253,6 +266,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
       showToast: (t) => this._showToast(t),
       entityConfig: (id) => this._entityConfig(id),
       template: (t) => { const x = this._templates.get(t); return x ? x.text : null; },
+      iconColor: (e) => this._cssColor((e as any).icon_color),
       setConfirm: (c) => { this._confirm = c; clearTimeout(this._confirmTimer); if (c) this._confirmTimer = setTimeout(() => { this._confirm = null; this._request(); }, 3500); this._request(); },
     };
     this._tiles = new Tiles(host);
@@ -468,7 +482,7 @@ export class Floor3dxRoomsCard extends HTMLElement {
       host.className = 'model';
       host.dataset.model = def.id;
       const caption = document.createElement('div'); caption.className = 'caption'; caption.textContent = def.name; host.appendChild(caption);
-      const slot: Slot = { id: def.id, name: def.name, width: def.width, card: def.card, key, host, el: null, index: null, tints: [], home: null, poll: null };
+      const slot: Slot = { id: def.id, name: def.name, icon: def.icon, width: def.width, card: def.card, key, host, el: null, index: null, tints: [], home: null, poll: null };
       this._listen(slot);
       if (cfg) {
         const el: any = document.createElement(EMBEDDED_TAG);
@@ -876,7 +890,12 @@ export class Floor3dxRoomsCard extends HTMLElement {
     if (v === 'segments' || v === 'seg' || v === true || v === 'yes') return 'segments';
     return this.classList.contains('narrow') ? 'compact' : 'segments'; // auto: compact on a phone
   }
-  private _modelOrder(): string[] { return [...this._slots.map((s) => s.id), ALL]; }
+  /** The switcher's order: with exactly two models, Both sits between them (House · Both · Garage); otherwise All comes last. */
+  private _modelOrder(): string[] { const ids = this._slots.map((s) => s.id); return ids.length === 2 ? [ids[0], ALL, ids[1]] : [...ids, ALL]; }
+  private _modelEntries(): { id: string; name: string; icon: string }[] {
+    const c = this._config, allLabel = this._slots.length === 2 ? 'Both' : 'All', allIcon = (typeof c.all_icon === 'string' && c.all_icon.trim()) || ALL_ICON;
+    return this._modelOrder().map((id) => id === ALL ? { id: ALL, name: allLabel, icon: allIcon } : { id, name: this._slots.find((s) => s.id === id)?.name || id, icon: this._slots.find((s) => s.id === id)?.icon || modelIcon('') });
+  }
   private _nextModel(): string { const o = this._modelOrder(); return o[(o.indexOf(this._active) + 1) % o.length]; }
   /** Every pop-up menu shut (a tap elsewhere, a room opening, another menu opening). Returns whether one was open. */
   private _closeMenus(): boolean {
@@ -1124,10 +1143,16 @@ export class Floor3dxRoomsCard extends HTMLElement {
     const mode = this._switcherMode(), many = mode !== 'none';
     this.classList.toggle('models', many); this.classList.toggle('compact', mode === 'compact');
     const allLabel = this._slots.length === 2 ? 'Both' : 'All';
-    const switcher = mode === 'segments' ? `<div class="seg" role="group" aria-label="Model">${this._slots.map((s) => `<button data-action="model" data-model="${esc(s.id)}" aria-pressed="${this._active === s.id}">${esc(s.name)}</button>`).join('')}<button data-action="model" data-model="${ALL}" aria-pressed="${this._active === ALL}">${allLabel}</button></div>` : '';
-    const current = this._active === ALL ? allLabel : (this._slots.find((s) => s.id === this._active)?.name || this._slots[0]?.name || '');
-    const modelBtn = mode === 'compact' ? `<button class="modelbtn" data-action="model-cycle" aria-label="Model: ${esc(current)} · tap for the next, hold to choose" title="Model: ${esc(current)} · tap for the next, hold to choose">${esc(current)}${icon('mdi:chevron-right')}</button>` : '';
-    const modelMenu = this._modelMenu && mode === 'compact' ? `<div class="list modelmenu" role="menu"><div class="group">Model</div>${this._slots.map((s) => `<button data-action="model" data-model="${esc(s.id)}" aria-pressed="${this._active === s.id}"><span class="chk">${this._active === s.id ? '✓' : ''}</span><span>${esc(s.name)}</span></button>`).join('')}<button data-action="model" data-model="${ALL}" aria-pressed="${this._active === ALL}"><span class="chk">${this._active === ALL ? '✓' : ''}</span><span>${allLabel}</span></button></div>` : '';
+    // models_menu_style (2.19): name (default), icon, or both - what the switcher shows for each model
+    const st = String(c.models_menu_style ?? 'name').toLowerCase(), showIcon = st === 'icon' || st === 'both' || st === 'icons', showName = st !== 'icon' && st !== 'icons';
+    const lab = (name: string, ic: string) => `${showIcon ? icon(ic) : ''}${showName ? `<span class="mn">${esc(name)}</span>` : ''}`;
+    const allIcon = (typeof c.all_icon === 'string' && c.all_icon.trim()) || ALL_ICON;
+    const entries = this._modelEntries();
+    const switcher = mode === 'segments' ? `<div class="seg" role="group" aria-label="Model">${entries.map((m) => `<button data-action="model" data-model="${esc(m.id)}" aria-pressed="${this._active === m.id}" aria-label="${esc(m.name)}" title="${esc(m.name)}">${lab(m.name, m.icon)}</button>`).join('')}</div>` : '';
+    const curSlot = this._slots.find((s) => s.id === this._active) || this._slots[0];
+    const current = this._active === ALL ? allLabel : (curSlot?.name || ''), curIcon = this._active === ALL ? allIcon : (curSlot?.icon || modelIcon(''));
+    const modelBtn = mode === 'compact' ? `<button class="modelbtn" data-action="model-cycle" aria-label="Model: ${esc(current)} · tap for the next, hold to choose" title="Model: ${esc(current)} · tap for the next, hold to choose">${lab(current, curIcon)}${icon('mdi:chevron-right')}</button>` : '';
+    const modelMenu = this._modelMenu && mode === 'compact' ? `<div class="list modelmenu" role="menu"><div class="group">Model</div>${entries.map((m) => `<button data-action="model" data-model="${esc(m.id)}" aria-pressed="${this._active === m.id}"><span class="chk">${this._active === m.id ? '✓' : ''}</span>${showIcon ? icon(m.icon) : ''}<span>${esc(m.name)}</span></button>`).join('')}</div>` : '';
     const views = this._views();
     const reset = hasModel ? (views ? `<button data-action="views" aria-pressed="${this._viewsOpen}" aria-label="Views" title="Views · hold for perspective and lens">${icon('mdi:camera-outline')}</button>` : `<button data-action="reset" aria-label="Reset view" title="Reset view · hold for perspective and lens">${icon('mdi:camera-flip-outline')}</button>`) : '';
     const dl = this._daylightButton();
