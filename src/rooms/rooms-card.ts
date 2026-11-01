@@ -989,10 +989,10 @@ export class Floor3dxRoomsCard extends HTMLElement {
     const conn = this._hass?.connection;
     if (!conn || !this._config) return;
     const wanted = new Set<string>();
-    const want = (e: any) => { if (!e || typeof e !== 'object') return; if (isTemplate(e.entity)) wanted.add(e.entity); if (isTemplate(e.status)) wanted.add(e.status); if (isTemplate(e.icon)) wanted.add(e.icon); };
+    const want = (e: any) => { if (!e || typeof e !== 'object') return; for (const k of ['entity', 'status', 'icon', 'icon_color']) if (isTemplate(e[k])) wanted.add(e[k]); };
     (this._config.rooms || []).forEach((r: Room) => (r.entities || []).forEach(want));
     // the card's title, icon and subtitle (2.18): templates, or a list of readouts
-    const c = this._config; if (isTemplate(c.title)) wanted.add(c.title); if (isTemplate(c.icon)) wanted.add(c.icon);
+    const c = this._config; for (const k of ['title', 'icon', 'icon_color']) if (isTemplate(c[k])) wanted.add(c[k]);
     if (isTemplate(c.subtitle)) wanted.add(c.subtitle); else if (Array.isArray(c.subtitle)) c.subtitle.forEach(want);
     this._templates.forEach((t, template) => { if (!wanted.has(template)) { this._templates.delete(template); this._unsubTemplate(t); } });
     wanted.forEach((template) => {
@@ -1028,7 +1028,17 @@ export class Floor3dxRoomsCard extends HTMLElement {
   private _readoutsOpen(): boolean { if (this._readoutsFold !== null) return this._readoutsFold; return !this.classList.contains('narrow'); }
   /** A configured string, or the rendered result of a Jinja template Home Assistant renders (2.18). */
   private _text(v: any): string { if (!isTemplate(v)) return v === undefined || v === null ? '' : String(v); const t = this._templates.get(v); return t ? (t.error ? '⚠ template' : t.text) : '…'; }
-  private _titleIcon(): string { const name = this._text(this._config.icon).trim(); return /^[a-z][a-z0-9-]*:[a-z0-9-]+$/i.test(name) ? icon(name) : ''; }
+  private _titleIcon(): string {
+    const name = this._text(this._config.icon).trim(); if (!/^[a-z][a-z0-9-]*:[a-z0-9-]+$/i.test(name)) return '';
+    const color = this._cssColor(this._config.icon_color);
+    return `<ha-icon icon="${esc(name)}" aria-hidden="true"${color ? ` style="color:${esc(color)}"` : ''}></ha-icon>`;
+  }
+  /** An icon colour (2.18.1): a CSS colour, or a template rendering to one; anything that is not a plain
+   *  colour token (a name, #hex, rgb()/hsl()/var()) is ignored, so a template error cannot inject style. */
+  private _cssColor(v: any): string {
+    const c = this._text(v).trim();
+    return /^(#[0-9a-f]{3,8}|[a-z]+|(rgb|rgba|hsl|hsla)\([0-9.,%\s/]+\)|var\(--[a-z0-9-]+\))$/i.test(c) && c !== '…' ? c : '';
+  }
   /** The subtitle: a string (a template too), or a list of readouts - `{entity | text, name, icon, break}`
    *  as in a room - as lines of readouts with their icons; it may run to several lines. */
   private _subtitle(): string {
@@ -1065,7 +1075,9 @@ export class Floor3dxRoomsCard extends HTMLElement {
       if (isTemplate(e.icon)) { const t = this._templates.get(e.icon); name = t && !t.error ? t.text.trim() : ''; }
       else if (typeof e.icon === 'string' && e.icon) name = e.icon.trim();
       else if (iconsOn && !isTemplate(e.entity)) name = this._s(e.entity)?.attributes?.icon || '';
-      return /^[a-z][a-z0-9-]*:[a-z0-9-]+$/i.test(name) ? `<ha-icon class="ri" icon="${esc(name)}" aria-hidden="true"></ha-icon>` : '';
+      if (!/^[a-z][a-z0-9-]*:[a-z0-9-]+$/i.test(name)) return '';
+      const color = this._cssColor(e.icon_color);
+      return `<ha-icon class="ri" icon="${esc(name)}" aria-hidden="true"${color ? ` style="color:${esc(color)}"` : ''}></ha-icon>`;
     };
     const span = (cls: string, e: any, body: string) => { const ic = iconOf(e); return `<span class="${[cls, ic ? 'ic' : ''].filter(Boolean).join(' ')}">${ic}${body}</span>`; };
     for (const e of entities) {

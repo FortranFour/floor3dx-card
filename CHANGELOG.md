@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.18.1
+
+### Added
+- Rooms Card: `icon_color` on a readout (room or subtitle) and on the card (the title icon): a CSS colour — a name, `#hex`, `rgb()`/`hsl()`, `var(--…)` — or a Jinja template that renders to one; anything else is ignored. Editor fields next to the icon fields. Harness: `test_readout_icons.py`, `test_title_readouts.py` (+1 each).
+
 ## 2.18.0
 
 ### Added

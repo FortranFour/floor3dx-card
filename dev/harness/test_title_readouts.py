@@ -21,8 +21,8 @@ JS = r"""async (width) => {
   };
   const out = {width};
   // 1. templates in title, icon and a string subtitle
-  let {el, d} = await mk({title: TT, icon: TI, subtitle: TS});
-  out.one = {title: el._ui.querySelector('.title .t')?.textContent, icon: el._ui.querySelector('.title > ha-icon')?.getAttribute('icon'), sub: el._ui.querySelector('.title small')?.textContent, subs: subs.length};
+  let {el, d} = await mk({title: TT, icon: TI, subtitle: TS, icon_color: 'orange'});
+  out.one = {title: el._ui.querySelector('.title .t')?.textContent, icon: el._ui.querySelector('.title > ha-icon')?.getAttribute('icon'), color: el._ui.querySelector('.title > ha-icon')?.style.color, sub: el._ui.querySelector('.title small')?.textContent, subs: subs.length};
   d.remove(); subs.length = 0;
   // 2. a subtitle as readouts: a sensor, a template with an icon template, a text item, over two lines
   ({el, d} = await mk({title: 'Banks House', subtitle: [{entity: 'sensor.t', icon: 'mdi:thermometer', break: 'yes'}, {entity: TS, icon: TV}, {text: 'Guests welcome', icon: 'mdi:account-group'}]}));
@@ -54,6 +54,7 @@ if __name__ == '__main__':
     w, p = R.get('wide', {}), R.get('phone', {})
     o = w.get('one') or {}
     check('title, icon and a string subtitle render as templates (three subscriptions)', o.get('title') == '21.4 house' and o.get('icon') == 'mdi:home-flood' and o.get('sub') == 'Valve open' and o.get('subs') == 3)
+    check('the title icon takes icon_color', o.get('color') == 'orange')
     t = w.get('two') or {}; sp = t.get('spans') or []
     check('a readout-list subtitle: two lines after break: yes, no <small>', t.get('lines') == 2 and t.get('noSmall') is True and len(sp[0]) == 1 and len(sp[1]) == 2)
     check('sensor readout with its icon and no bullet; template readout with a template icon; a text item', sp and sp[0][0]['icon'] == 'mdi:thermometer' and sp[0][0]['text'] == 'Outside 21.4°C' and sp[0][0]['bullet'] == 'none' and sp[1][0]['icon'] == 'mdi:valve-open' and sp[1][0]['text'] == 'Valve open' and sp[1][1]['icon'] == 'mdi:account-group' and sp[1][1]['text'] == 'Guests welcome')
