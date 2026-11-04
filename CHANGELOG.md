@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.19.5
+
+### Added
+- Rooms Card: `height: fill` — in any view (a sections view with badges above the card, say) the card measures its own top edge and fills the window from there to the bottom, as it already did in a panel view; the dashboard's edit mode keeps its room under the card and a vertical drag still scrolls the page. The editor's Height field is a choice: *Automatic* / *Fill the window* / a custom height. Off unless set: a blank height outside a panel view is still 60vh. Harness: `test_height_fill.py` (8).
+
+### Fixed
+- Switching to the orthographic view (*Flat view*, `camera_projection`) scaled the frame for the orbit target's distance, which inside the model is often behind a wall or short of one — the room in front of the camera came out several times too large or too small from some viewpoints. The frame now keeps the size of what is in the middle of the view (the median depth of rays through the centre and a ring around it; the target distance only when nothing is hit), going both ways, and a plain toggle back returns to the same frame. Harness: `test_projection.py` (14).
+
 ## 2.19.4
 
 ### Added

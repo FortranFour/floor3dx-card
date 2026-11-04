@@ -365,8 +365,11 @@ export class Floor3dxRoomsCard extends HTMLElement {
     const rect = this.getBoundingClientRect();
     if (rect.width) { const was = this.classList.contains('narrow'); this.classList.toggle('narrow', rect.width < 700); if (was !== this.classList.contains('narrow')) this._request(); }
     const h = this._config?.height;
-    if (h) this.style.setProperty('--f3r-height', typeof h === 'number' ? h + 'px' : String(h));
-    else if (this._inPanel()) {
+    // `fill` asks for the panel view's measurement in any view (a sections view with badges above the
+    // card, 2.19.5); the card editor's preview keeps its own height
+    const fill = h === 'fill' ? !this._isPreview() : (!h && this._inPanel());
+    if (h && h !== 'fill') this.style.setProperty('--f3r-height', typeof h === 'number' ? h + 'px' : String(h));
+    else if (fill) {
       // what is left of the window below the card's top: 100vh counts the space behind a phone's
       // bars and HA's header, and left the card a little taller than the view, with a scroll
       const top = Math.min(Math.max(0, rect.top), window.innerHeight / 2);

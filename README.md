@@ -478,7 +478,7 @@ Two options in the editor's *Camera* section set how the camera draws the house;
 
 The correction is a shear folded into the projection matrix, recomputed as the camera turns; it fades out as the view goes straight down (nothing to straighten there). Picking, pins, shadows and the effects pipeline all go through the same matrix, so taps land where they look.
 
-**Orthographic** (2.15) drops perspective altogether: parallel walls stay parallel, every room is the same scale whatever its distance, pins and text panels keep one size — the floor plan as an architect draws it. Orbiting still turns the model; zooming changes the scale instead of the distance, so nothing ever clips through a wall when you come close. Switching keeps the framing (the orthographic frame is what a normal lens saw at that distance, and back again), and a saved `camera_position` still sets the view. The lens does not apply, and neither do the rendering effects (depth of field and ambient occlusion need a perspective camera; they return when you switch back). The same spot as above, orthographic, and the plan view from straight overhead:
+**Orthographic** (2.15) drops perspective altogether: parallel walls stay parallel, every room is the same scale whatever its distance, pins and text panels keep one size — the floor plan as an architect draws it. Orbiting still turns the model; zooming changes the scale instead of the distance, so nothing ever clips through a wall when you come close. Switching keeps the framing of what is in the middle of the view — the orthographic frame is what the lens showed at that depth, and back again (2.19.5: the depth of what the camera is looking at, not the orbit target's distance, which inside the model may sit behind a wall) — and a saved `camera_position` still sets the view. The lens does not apply, and neither do the rendering effects (depth of field and ambient occlusion need a perspective camera; they return when you switch back). The same spot as above, orthographic, and the plan view from straight overhead:
 
 ![Orthographic: parallel walls, one scale](docs/floor3dx-perspective-orthographic.jpg)
 ![Orthographic from straight overhead: the floor plan](docs/floor3dx-perspective-plan.jpg)
@@ -641,7 +641,7 @@ rooms:
 | `guest_mode_entity`, `guest_thermostat`, `brightness_slider`, `white_slider`, `color_swatches` | as in the snapshot card | |
 | `keep_panel` | `yes`: a tap outside the rooms leaves the panel open | `no` |
 | `guest_mode`, `max_volume`, `temperature_range` | as in the snapshot card | `yes`, 0.6 in guest mode, none |
-| `height` | CSS height | the panel view's height; in the card editor the preview column (2.4.5); else `60vh` |
+| `height` | CSS height, or `fill`: the card measures its own top edge and fills the window from there in any view — a sections view with badges above it, say — as it does by default in a panel view; the dashboard's edit mode keeps its room under the card (2.19.5) | the panel view's height; in the card editor the preview column (2.4.5); else `60vh` |
 | `accent` | `#rrggbb`, the overlay's accent | the theme's line colour |
 | `panel_theme` | a theme or palette name for the panel, switcher and buttons only; the model keeps `theme` (2.12) | the theme |
 | `panel_stage`, `panel_text` | `#rrggbb`: the panel's colour and its text colour; dark text brings the light-stage rules (2.12) | the panel theme's, text by contrast |

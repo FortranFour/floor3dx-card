@@ -42,9 +42,28 @@ JS = r"""async () => {
   out.ortho.lenFar = Math.hypot((b2.x - a2.x) * sz.width / 2, (b2.y - a2.y) * sz.height / 2);
   const pO = centre.clone().project(c._camera); const hitsO = c._getintersect({offsetX: (pO.x + 1) / 2 * W, offsetY: (1 - pO.y) / 2 * H});
   out.ortho.pick = hitsO[0]?.object?.name;
-  const spanO = len();
+  // the frame is kept for what is in the middle of the view (2.19.5): two points beside the centre ray's hit
+  const mid = c._getintersect({offsetX: W / 2, offsetY: H / 2})[0]?.point || t;
+  const lenAt = (pt) => { const right = new (lo.constructor)().setFromMatrixColumn(c._camera.matrixWorld, 0).normalize().multiplyScalar(100); const a = pt.clone().add(right).project(c._camera), b = pt.clone().sub(right).project(c._camera); return Math.hypot((a.x - b.x) * c._renderer.domElement.width / 2, (a.y - b.y) * c._renderer.domElement.height / 2); };
+  const spanO = lenAt(mid);
   c.setProjection({projection: 'three_point'}); c._render();
-  out.ortho.back = {isPersp: !!c._camera.isPerspectiveCamera, span: +len().toFixed(1), spanOrtho: +spanO.toFixed(1)};
+  out.ortho.back = {isPersp: !!c._camera.isPerspectiveCamera, span: +lenAt(mid).toFixed(1), spanOrtho: +spanO.toFixed(1)};
+  // inside the house, looking at a wall a short way off while the orbit target sits far beyond it: the
+  // middle of the view keeps its size in the flat view (the target distance would have magnified it)
+  const t0 = t.clone();
+  const medianDepth = () => { const ds = []; for (const [x, y] of [[0, 0], [0.25, 0], [-0.25, 0], [0, 0.25], [0, -0.25], [0.18, 0.18], [-0.18, 0.18], [0.18, -0.18], [-0.18, -0.18]]) { const h = c._getintersect({offsetX: (x + 1) / 2 * W, offsetY: (1 - y) / 2 * H})[0]; if (h) ds.push(h.distance + (c._camera.isOrthographicCamera ? c._camera.near : 0)); } ds.sort((a, b) => a - b); return ds.length ? ds[Math.floor(ds.length / 2)] : null; };
+  c._camera.position.set(t0.x + 150, t0.y + 120, t0.z + 150); c._controls.target.set(t0.x - 3000, t0.y, t0.z - 3000); c._controls.update(); c._render();
+  const depthIn = medianDepth();
+  if (depthIn) {
+    const fwd = new (lo.constructor)().setFromMatrixColumn(c._camera.matrixWorld, 2).normalize().multiplyScalar(-depthIn);
+    const pIn = c._camera.position.clone().add(fwd); const dTarget = c._camera.position.distanceTo(c._controls.target);
+    const before = lenAt(pIn);
+    c.setProjection({projection: 'orthographic'}); c._render();
+    const after = lenAt(pIn);
+    c.setProjection({projection: 'three_point'}); c._render();
+    out.inside = {depth: Math.round(depthIn), dTarget: Math.round(dTarget), before: +before.toFixed(1), after: +after.toFixed(1), back: +lenAt(pIn).toFixed(1), isPersp: !!c._camera.isPerspectiveCamera};
+  } else out.inside = {skipped: true};
+  c.setProjection({projection: 'three_point'}); c._controls.target.copy(t0); c._camera.position.set(t0.x + 900, t0.y + 1100, t0.z + 300); c._controls.update(); c._render();
   // the Rooms Card: the camera menu applies to both models and is remembered
   const card = Object.assign({}, c._config, {entities: [], object_groups: []}); delete card.style; delete card.type; delete card.look; delete card.daylight;
   const hass = {states: {}, language: 'en', themes: {}, config: {}, user: {}, callService() { return Promise.resolve(); }};
@@ -87,7 +106,9 @@ if __name__ == '__main__':
     O = r.get('ortho', {})
     check('orthographic: the camera is orthographic and equal verticals near and far have the same screen length', O.get('isOrtho') and O.get('state', {}).get('projection') == 'orthographic' and abs(O.get('lenNear', 0) - O.get('lenFar', 1)) < 0.02 * max(1, O.get('lenNear', 1)))
     check('orthographic: picking hits what is under the pointer', O.get('pick') == r.get('pick', {}).get('want'))
-    check('back to perspective: a perspective camera again, the span at the target kept within 5%', O.get('back', {}).get('isPersp') and abs(O.get('back', {}).get('span', 0) - O.get('back', {}).get('spanOrtho', 1)) < 0.05 * O.get('back', {}).get('spanOrtho', 1))
+    check('back to perspective: a perspective camera again, the span at the middle of the view kept within 5%', O.get('back', {}).get('isPersp') and abs(O.get('back', {}).get('span', 0) - O.get('back', {}).get('spanOrtho', 1)) < 0.05 * O.get('back', {}).get('spanOrtho', 1))
+    I = r.get('inside', {})
+    check('inside the house with the orbit target far beyond the wall: the wall keeps its size in the flat view (within 5%) and again back in perspective', I.get('skipped') or (I.get('dTarget', 0) > 3 * I.get('depth', 1) and abs(I.get('after', 0) - I.get('before', 1)) < 0.05 * I.get('before', 1) and abs(I.get('back', 0) - I.get('before', 1)) < 0.05 * I.get('before', 1) and I.get('isPersp')))
     check('long press on the camera button opens the menu', r.get('menu') is True)
     check('the menu applies two-point and the 35° lens to every model', all(p.get('projection') == 'two_point' and p.get('fov') == 35 for p in r.get('applied', [])) and len(r.get('applied', [])) == 2)
     check('Flat view makes every model orthographic and greys the lens rows', all(x.get('p') == 'orthographic' and x.get('ortho') for x in r.get('flat', [])) and r.get('lensDisabled') is True)

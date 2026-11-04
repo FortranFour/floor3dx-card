@@ -161,6 +161,7 @@ export class Floor3dCard extends LitElement {
   /** The lens and perspective in force. */
   public projectionState(): ProjectionSettings { return this._projection || projectionSettings(this._config); }
   private _orthoHalf = 500; // the orthographic frustum's half height at zoom 1 (model units)
+  private _swapMemo: { pos: THREE.Vector3; quat: THREE.Quaternion; zoom: number; depth: number } | null = null;
   /** Orthographic: the frustum follows the canvas's aspect; the scale is the half height times the zoom. */
   private _syncOrtho(): void {
     const cam: any = this._camera; if (!cam || !cam.isOrthographicCamera) return;
@@ -168,26 +169,52 @@ export class Floor3dCard extends LitElement {
     cam.top = this._orthoHalf; cam.bottom = -this._orthoHalf; cam.left = -this._orthoHalf * aspect; cam.right = this._orthoHalf * aspect;
     cam.updateProjectionMatrix();
   }
+  /** How far away what the viewer is looking at is: the median first hit of rays through the middle of the
+   *  view (the centre and a ring around it), measured from the camera's plane. The orbit target is only a
+   *  fallback: inside the model it is often behind a wall or short of one, and a frame scaled for that depth
+   *  shows the room in front of the camera far too large or too small (2.19.5). */
+  private _viewDepth(fallback: number): number {
+    const cam: any = this._camera;
+    if (!cam || !Array.isArray(this._raycasting) || !this._raycasting.length) return fallback;
+    const rc = new THREE.Raycaster(); rc.layers.enableAll();
+    const depths: number[] = [];
+    for (const [x, y] of [[0, 0], [0.25, 0], [-0.25, 0], [0, 0.25], [0, -0.25], [0.18, 0.18], [-0.18, 0.18], [0.18, -0.18], [-0.18, -0.18]]) {
+      rc.setFromCamera(new THREE.Vector2(x, y), cam);
+      const hit = rc.intersectObjects(this._raycasting, false)[0];
+      // an orthographic ray starts on the near plane, a perspective ray at the camera
+      if (hit && Number.isFinite(hit.distance)) depths.push(hit.distance + (cam.isOrthographicCamera ? cam.near : 0));
+    }
+    if (!depths.length) return fallback;
+    depths.sort((a, b) => a - b);
+    return depths[Math.floor(depths.length / 2)];
+  }
   /** Replace the camera with one of the other kind at the same place, framing the same view: orthographic
-   *  takes the perspective's visible half height at the target as its own; perspective moves to the distance
-   *  that shows the orthographic frame at its zoom. The controls, lights and effects follow. */
+   *  takes the perspective's visible half height at the depth of what is in the middle of the view as its
+   *  own; perspective moves to the distance that shows that depth at the orthographic frame's size. The
+   *  controls, lights and effects follow. */
   private _swapCamera(toOrtho: boolean, fov: number): void {
     const old: any = this._camera; if (!old) return;
     const target = this._controls ? this._controls.target.clone() : new THREE.Vector3();
-    const d = old.position.distanceTo(target);
+    // a plain toggle back and forth returns to the same frame: the depth of the last swap is reused while
+    // the camera has not moved since; after an orbit or a zoom it is measured again
+    const memo = this._swapMemo;
+    const still = memo && memo.pos.equals(old.position) && memo.quat.equals(old.quaternion) && memo.zoom === (old.zoom || 1);
+    const d = still ? memo.depth : this._viewDepth(old.position.distanceTo(target));
     let cam: any;
     if (toOrtho) {
       this._orthoHalf = d * Math.tan(THREE.MathUtils.degToRad((old.fov || fov) / 2));
       cam = new THREE.OrthographicCamera(-1, 1, 1, -1, old.near, old.far);
     } else {
       cam = new THREE.PerspectiveCamera(fov, 1, old.near, old.far);
-      // the orthographic frame at its zoom, seen from the distance a lens of this fov needs
+      // the orthographic frame at its zoom, seen from the distance a lens of this fov needs: the camera
+      // moves along its line of sight so what was at depth d is at that distance
       const half = this._orthoHalf / (old.zoom || 1);
       const dist = half / Math.tan(THREE.MathUtils.degToRad(fov / 2));
       const dir = old.position.clone().sub(target).normalize();
-      old.position.copy(target).add(dir.multiplyScalar(dist));
+      old.position.add(dir.multiplyScalar(dist - d));
     }
     cam.position.copy(old.position); cam.quaternion.copy(old.quaternion); cam.up.copy(old.up);
+    this._swapMemo = { pos: cam.position.clone(), quat: cam.quaternion.clone(), zoom: 1, depth: toOrtho ? d : this._orthoHalf / (old.zoom || 1) / Math.tan(THREE.MathUtils.degToRad(fov / 2)) };
     this._twoPoint?.release(); this._twoPoint = null;
     this._camera = cam;
     if (this._controls) { (this._controls as any).object = cam; this._controls.update(); }
